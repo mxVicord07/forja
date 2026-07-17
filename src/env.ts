@@ -90,4 +90,10 @@ export interface Env {
   // Token guarding POST /kb/reindex (header: X-Reindex-Token). Secret.
   // Set via `wrangler secret put KB_REINDEX_TOKEN`.
   KB_REINDEX_TOKEN: string;
+
+  // Control plane (hosted): glue para que un plano de control externo lea este
+  // bot self-hosted vía los endpoints /api/*. Ambos opcionales; sin el token,
+  // /api/* queda cerrado (fail-closed).
+  CONTROL_PLANE_TOKEN?: string;  // secret; Bearer que el control plane presenta para llamar /api/*
+  CONTROL_PLANE_URL?: string;    // base URL del control plane (para reportes / license check futuros)
 }

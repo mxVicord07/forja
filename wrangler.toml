@@ -53,6 +53,9 @@ DASHBOARD_BASE_URL = "https://horizontes-bot-{{BOT_SLUG}}.workers.dev"
 #   OWNER_TELEGRAM_CHAT_ID     handoff notification (default channel — owner /start's the bot)
 #   OWNER_WA_NUMBER            handoff WhatsApp DM recipient (Pro)
 #   TWILIO_HANDOFF_CONTENT_SID approved WhatsApp template SID for the handoff DM (Pro)
+#   CONTROL_PLANE_TOKEN        optional (secret) — Bearer the hosted control plane presents to call /api/*
+#                              set with: wrangler secret put CONTROL_PLANE_TOKEN
+#   CONTROL_PLANE_URL          optional (var) — base URL of the control plane (future reports / license check)
 
 [triggers]
 crons = ["0 3 * * *"]  # daily 3am UTC: purge old messages

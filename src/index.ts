@@ -14,16 +14,10 @@ import { Db } from "./db/client";
 import { SettingsRepo, SETTING_KEYS } from "./db/settings";
 import { detectKind } from "./learn/fieldPath";
 import { saveCapture, isLearnMode } from "./learn/mapping";
+import { tokensMatch } from "./http-auth";
+import { apiApp } from "./api";
 
 export { SupportAgent } from "./agent";
-
-/** Constant-time-ish comparison to avoid leaking the token via timing. */
-function tokensMatch(a: string, b: string): boolean {
-  if (a.length !== b.length) return false;
-  let diff = 0;
-  for (let i = 0; i < a.length; i++) diff |= a.charCodeAt(i) ^ b.charCodeAt(i);
-  return diff === 0;
-}
 
 const app = new Hono<{ Bindings: Env }>();
 
@@ -202,6 +196,10 @@ app.post("/webhooks/learn/:channel", async (c) => {
 
 // Admin dashboard — Basic Auth guarded sub-app mounted at /admin/*.
 app.route("/admin", adminApp);
+
+// Control-plane API — Bearer-guarded (CONTROL_PLANE_TOKEN) read-only sub-app
+// mounted at /api/* for a future hosted control plane (health + metrics).
+app.route("/api", apiApp);
 
 // KB reindex — embeds scripts/kb-fixtures.json into Vectorize. Guarded by the
 // KB_REINDEX_TOKEN secret via the X-Reindex-Token header. Trigger after deploy:
