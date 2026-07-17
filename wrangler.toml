@@ -1,0 +1,61 @@
+# Member replaces {{BOT_SLUG}} via the skill /configurar-mi-chatbot.
+# DO NOT commit member-specific values to git.
+
+name = "horizontes-bot-{{BOT_SLUG}}"
+main = "src/index.ts"
+compatibility_date = "2026-05-01"
+compatibility_flags = ["nodejs_compat"]
+
+[ai]
+binding = "AI"
+
+[[durable_objects.bindings]]
+name = "AGENT"
+class_name = "SupportAgent"
+
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["SupportAgent"]
+
+[[d1_databases]]
+binding = "DB"
+database_name = "horizontes_bot_db"
+database_id = "{{D1_DATABASE_ID}}"  # filled in by skill at deploy time
+
+[[vectorize]]
+binding = "KB"
+index_name = "horizontes_bot_kb"
+
+[[r2_buckets]]
+binding = "CATALOG"
+bucket_name = "horizontes-bot-catalog-{{BOT_SLUG}}"
+
+[vars]
+BOT_NAME = "{{BOT_NAME}}"
+BUSINESS_NAME = "{{BUSINESS_NAME}}"
+BOT_LANGUAGE = "{{BOT_LANGUAGE}}"
+BOT_TIER = "{{BOT_TIER}}"  # 'free' | 'pro'
+BUFFER_SECONDS = "15"
+DASHBOARD_BASE_URL = "https://horizontes-bot-{{BOT_SLUG}}.workers.dev"
+
+# Secrets (set with `wrangler secret put <NAME>` — never commit values):
+#   ANTHROPIC_API_KEY          required — Claude API
+#   DASHBOARD_PASSWORD         required (Pro) — HTTP Basic Auth for /admin (user: admin)
+#   KB_REINDEX_TOKEN           required — guards POST /kb/reindex (header: X-Reindex-Token)
+#                              set with: wrangler secret put KB_REINDEX_TOKEN
+#   TELEGRAM_BOT_TOKEN         per-channel — Telegram bot
+#   MANYCHAT_API_KEY           per-channel — ManyChat (Pro)
+#   TWILIO_ACCOUNT_SID / TWILIO_AUTH_TOKEN / TWILIO_WA_FROM   per-channel — Twilio WhatsApp (Pro)
+#   CALCOM_API_KEY             optional — scheduleAppointment (Pro)
+#   GOOGLE_SERVICE_ACCOUNT_JSON  optional — Sheets export (Pro)
+#   RESEND_API_KEY             optional — handoff email
+#   OWNER_EMAIL                handoff email recipient
+#   OWNER_TELEGRAM_CHAT_ID     handoff notification (default channel — owner /start's the bot)
+#   OWNER_WA_NUMBER            handoff WhatsApp DM recipient (Pro)
+#   TWILIO_HANDOFF_CONTENT_SID approved WhatsApp template SID for the handoff DM (Pro)
+
+[triggers]
+crons = ["0 3 * * *"]  # daily 3am UTC: purge old messages
+
+# DASHBOARD_PASSWORD  (secret) — HTTP Basic Auth password for the admin dashboard; username is always "admin".
+# Set it with: wrangler secret put DASHBOARD_PASSWORD
