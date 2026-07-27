@@ -1,0 +1,44 @@
+# Publica el CLI `forjabot` a npm CON PROCEDENCIA (provenance).
+#
+# Provenance = npm firma el paquete vía Sigstore y deja constancia pública de
+# QUÉ commit de ESTE repo lo construyó. En npmjs.com aparece el badge
+# "Provenance" con el enlace al commit y al workflow. Es la prueba más fuerte
+# de que lo que instalas es exactamente el código que puedes leer aquí.
+#
+# Cómo se dispara: manualmente desde la pestaña Actions ("Run workflow"), o
+# publicando un release/tag. Nunca se publica solo en cada push.
+#
+# Requisito único: el secret NPM_TOKEN del repo (Settings → Secrets → Actions),
+# con un token de npm tipo "Automation" — ese tipo no pide OTP.
+name: Publicar CLI en npm
+
+on:
+  workflow_dispatch:
+  release:
+    types: [published]
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write # imprescindible para la procedencia (OIDC)
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          registry-url: "https://registry.npmjs.org"
+
+      # El CLI no tiene dependencias: no hay install que hacer. Solo validamos
+      # que el archivo que se va a publicar sea JavaScript sintácticamente sano.
+      - name: Revisar el CLI
+        working-directory: cli
+        run: node --check bin/cli.js
+
+      - name: Publicar con procedencia
+        working-directory: cli
+        run: npm publish --provenance --access public
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
