@@ -129,3 +129,17 @@ npm view forjabot dist.tarball   # bájalo y léelo antes de ejecutarlo
 ```
 
 Y si prefieres no usar `npx`, clona este repo y corre `node cli/bin/cli.js init` directamente.
+
+### Por qué el CLI pide estos permisos
+
+Los escáneres de cadena de suministro (Socket y similares) marcan las *capacidades* de un paquete. Un instalador necesita varias por definición; aquí está para qué usa cada una, y puedes comprobarlo en [`bin/cli.js`](./bin/cli.js):
+
+| Capacidad | Para qué la usa | Cómo está acotada |
+|---|---|---|
+| **Red** (`node:http`) | Levanta un servidor **local en 127.0.0.1** que recibe el regreso del navegador al hacer `forjabot login`. | Solo escucha en tu propia máquina, en un puerto temporal, y se cierra al terminar. Las llamadas a internet van por `fetch` a nuestro servidor de licencias. |
+| **Shell** (`node:child_process`) | Descomprimir el bot (`tar`), abrir tu navegador en el login, y correr `wrangler` para guardar tus secretos en TU Cloudflare. | Siempre con `execFileSync` y **arreglo de argumentos**, nunca una cadena de shell: no hay forma de inyectar comandos. Cero `shell: true`. |
+| **Variables de entorno** | Únicamente las suyas: `FORJA_SERVER`, `FORJA_CLOUD`, `FORJA_GET_URL`, `FORJA_YES`, `FORJA_NO_ART`, `FORJA_NO_BROWSER`, `FORJA_NO_AGENT_SKILL`, `HORIZONTES_KEY`, `HORIZONTES_SERVER`, y `NO_COLOR` (estándar). | **No lee ninguna credencial del sistema.** Nada de tokens de nube, claves de npm ni variables ajenas. |
+| **Sistema de archivos** | Escribe la carpeta del bot que instalas y tu configuración en `~/.forja/`. | Nada fuera de eso. |
+| **Cadenas URL** | Los dominios propios: forjabots.com y el servidor de licencias. | No hay direcciones IP ni dominios de terceros. |
+
+Y lo más importante: **tu API key nunca pasa por el CLI**. Cuando toca guardarla, se hace con `wrangler secret put` contra *tu* cuenta de Cloudflare — el CLI nunca la recibe, ni la escribe en disco, ni la manda a ningún lado.
