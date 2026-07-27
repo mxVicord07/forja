@@ -110,9 +110,13 @@ export const manychatAdapter: ChannelAdapter = {
     // qué campos está mapeando el flow de ManyChat.
     console.log(
       "[manychat]",
-      JSON.stringify({ sub: String(subscriber), hasText: !!text, img: !!imageUrl, aud: !!audioUrl, atts: atts.map((a) => a.type) }),
+      JSON.stringify({ sub: `…${String(subscriber).slice(-4)}`, hasText: !!text, img: !!imageUrl, aud: !!audioUrl, atts: atts.map((a) => a.type) }),
     );
-    if (!text && !audioUrl && !imageUrl) console.log("[manychat] payload sin texto/media:", JSON.stringify(body).slice(0, 1500));
+    // Diagnóstico sin PII: solo QUÉ campos llegaron, nunca sus valores (el
+    // payload de ManyChat trae nombre, teléfono y correo del suscriptor).
+    if (!text && !audioUrl && !imageUrl) {
+      console.log("[manychat] payload sin texto/media, campos:", JSON.stringify(Object.keys(body ?? {})));
+    }
     return {
       channel: "manychat",
       channelUserId: String(subscriber),

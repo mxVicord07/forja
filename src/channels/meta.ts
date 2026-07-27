@@ -42,7 +42,14 @@ export function parseMetaEvents(body: MetaWebhookBody): IncomingMessage[] {
   for (const entry of body.entry ?? []) {
     for (const ev of entry.messaging ?? []) {
       const m = ev.message;
-      console.log("meta in:", JSON.stringify({ ch: channel, sender: ev.sender?.id, recipient: ev.recipient?.id, echo: m?.is_echo, text: m?.text?.slice(0, 24) }));
+      // Log SIN datos personales: nunca el texto del cliente ni su id completo
+      // (los últimos 4 dígitos bastan para correlacionar un evento en los logs).
+      console.log("meta in:", JSON.stringify({
+        ch: channel,
+        sender: ev.sender?.id ? `…${String(ev.sender.id).slice(-4)}` : undefined,
+        echo: m?.is_echo,
+        kind: m?.text ? "text" : m?.attachments?.[0]?.type ?? "other",
+      }));
       if (!m || m.is_echo) continue; // ignora echoes
       if (m.quick_reply) continue; // tap de botón (quick reply), no es texto para el LLM
       const sender = ev.sender?.id;

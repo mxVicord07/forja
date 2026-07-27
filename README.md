@@ -127,6 +127,20 @@ El Starter de este repo sirve para **cualquier negocio**. Si quieres ir más all
 
 ---
 
+## 🔒 Privacidad — quién ve los datos
+
+**Nadie más que tú.** Forja corre en TU cuenta de Cloudflare con TUS llaves: las conversaciones de tus clientes viven en tu base de datos y **el bot no envía telemetría ni datos de uso a Horizontes IA ni a nadie**. No hay ping de activación ni analíticas ocultas — puedes revisarlo tú mismo en `src/`.
+
+- Los **mensajes se borran solos a los 90 días** (cron diario). Los leads y tickets se quedan hasta que tú los borres.
+- **No se guardan audios ni imágenes**: se transcriben o describen y solo queda el texto.
+- Los links del bot cuentan clics, **sin IP ni navegador**.
+- El texto de la conversación sí viaja al **proveedor de IA que tú elegiste** (con tu llave) para poder responder.
+- Si preguntan si es un bot, **el bot lo admite**. No lo configures para negarlo.
+
+Como dueño del negocio, **tú eres el responsable** de esos datos: avisa a tus clientes que la atención es automatizada y que guardas la conversación, y atiende las solicitudes de borrado. Todo el detalle está en [`PRIVACY.md`](./PRIVACY.md).
+
+---
+
 ## 🤝 Contribuir
 
 Los PRs son bienvenidos. Lee [`CONTRIBUTING.md`](./CONTRIBUTING.md) para el flujo, y abre un issue si tienes una idea o encuentras un bug. Este repo es el **Starter** open source; los giros y comandos de Forja+ viven aparte.
