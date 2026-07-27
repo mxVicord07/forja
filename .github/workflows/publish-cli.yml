@@ -1,15 +1,18 @@
-# Publica el CLI `forjabot` a npm CON PROCEDENCIA (provenance).
+# Publica el CLI `forjabot` a npm con PROCEDENCIA (provenance), usando
+# Trusted Publishing: npm confía en este repositorio vía OIDC, así que NO hay
+# ningún token guardado en GitHub. Nada que robar, nada que rotar.
 #
-# Provenance = npm firma el paquete vía Sigstore y deja constancia pública de
+# Provenance = npm firma el paquete con Sigstore y deja constancia pública de
 # QUÉ commit de ESTE repo lo construyó. En npmjs.com aparece el badge
-# "Provenance" con el enlace al commit y al workflow. Es la prueba más fuerte
-# de que lo que instalas es exactamente el código que puedes leer aquí.
+# "Provenance" enlazando al commit y a la corrida que lo publicó.
 #
-# Cómo se dispara: manualmente desde la pestaña Actions ("Run workflow"), o
-# publicando un release/tag. Nunca se publica solo en cada push.
+# Configuración previa (una sola vez, en npmjs.com):
+#   Paquete forjabot → Settings → Trusted Publisher → GitHub Actions
+#     Organization or user: santmun
+#     Repository:           forja
+#     Workflow filename:    publish-cli.yml
 #
-# Requisito único: el secret NPM_TOKEN del repo (Settings → Secrets → Actions),
-# con un token de npm tipo "Automation" — ese tipo no pide OTP.
+# Cómo se dispara: a mano desde la pestaña Actions, o al publicar un release.
 name: Publicar CLI en npm
 
 on:
@@ -22,14 +25,18 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
-      id-token: write # imprescindible para la procedencia (OIDC)
+      id-token: write # imprescindible: es lo que prueba ante npm quién publica
     steps:
       - uses: actions/checkout@v4
 
       - uses: actions/setup-node@v4
         with:
-          node-version: "20"
+          node-version: "22"
           registry-url: "https://registry.npmjs.org"
+
+      # Trusted Publishing necesita npm 11.5.1 o superior.
+      - name: Actualizar npm
+        run: npm install -g npm@latest
 
       # El CLI no tiene dependencias: no hay install que hacer. Solo validamos
       # que el archivo que se va a publicar sea JavaScript sintácticamente sano.
@@ -37,8 +44,8 @@ jobs:
         working-directory: cli
         run: node --check bin/cli.js
 
-      - name: Publicar con procedencia
+      # Sin NODE_AUTH_TOKEN: npm obtiene la credencial del propio OIDC de
+      # GitHub y añade la procedencia automáticamente.
+      - name: Publicar
         working-directory: cli
-        run: npm publish --provenance --access public
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: npm publish --access public
