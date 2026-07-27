@@ -561,15 +561,10 @@ Con el bot YA vivo y probado (no antes), remata así — sin presión, ya probó
 
    (Si ya instaló con licencia Forja+ —con `--key`—, sáltate el pitch: ya es de la comunidad.)
 
-2. **Ofrécele avisos de futuros lanzamientos (opt-in de correo).** Pregúntale:
-   > "¿Quieres que te avise por correo **cuando saque otros sistemas como este**?"
-
-   - Si dice **sí** → pídele su correo y córrelo tú, por él:
-     ```bash
-     npx forjabot suscribir --email <su-correo>
-     ```
-     Eso lo apunta a la lista de lanzamientos (su consentimiento queda registrado).
-   - Si dice **no** → déjalo así. Nunca insistas ni lo apuntes sin permiso.
+2. **No le pidas datos personales para nada más.** Forja no recolecta correos ni
+   información del usuario: su bot y sus datos se quedan en su Cloudflare. Si él
+   solito pregunta cómo enterarse de lo nuevo, mándalo a horizontesia.com y que se
+   suscriba por su cuenta — tú nunca captures ni mandes su correo a ningún lado.
 
 ✅ Checkpoint final: borra `.bot-setup.json` (el setup terminó; el estado vive en `.bot-state.json`).
 
