@@ -6,10 +6,10 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
 const sendReplyMock = vi.fn();
-const pickAdapterMock = vi.fn((_channel: unknown) => ({ sendReply: sendReplyMock }));
+const pickAdapterMock = vi.fn((_channel: unknown, _env?: unknown) => ({ sendReply: sendReplyMock }));
 
 vi.mock("../../src/replies/sender", () => ({
-  pickAdapter: (channel: unknown) => pickAdapterMock(channel),
+  pickAdapter: (channel: unknown, env: unknown) => pickAdapterMock(channel, env),
 }));
 
 import { createTestMiniflare } from "../helpers/miniflareSetup";
@@ -120,7 +120,7 @@ describe("inbox — owner reply (takeover)", () => {
     expect(html).toContain('hx-swap-oob="innerHTML"'); // instant thread refresh
 
     // Sent through the right adapter with the raw text as a single chunk.
-    expect(pickAdapterMock).toHaveBeenCalledWith("telegram");
+    expect(pickAdapterMock).toHaveBeenCalledWith("telegram", expect.anything());
     expect(sendReplyMock).toHaveBeenCalledTimes(1);
     const [payload] = sendReplyMock.mock.calls[0];
     expect(payload.channelUserId).toBe("u3");

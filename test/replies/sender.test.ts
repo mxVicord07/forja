@@ -70,15 +70,36 @@ describe("chunkDelayMs", () => {
 });
 
 describe("pickAdapter", () => {
+  const env = {} as any;
+
   it("maps each channel to an adapter exposing sendReply", () => {
     for (const ch of ["telegram", "manychat", "twilio"] as const) {
-      const adapter = pickAdapter(ch);
+      const adapter = pickAdapter(ch, env);
       expect(typeof adapter.sendReply).toBe("function");
       expect(typeof adapter.parseIncoming).toBe("function");
     }
   });
 
   it("throws on an unknown channel", () => {
-    expect(() => pickAdapter("sms" as any)).toThrow(/unknown channel/);
+    expect(() => pickAdapter("sms" as any, env)).toThrow(/unknown channel/);
+  });
+
+  it("whatsapp usa el adapter de Meta por defecto", async () => {
+    const { whatsappAdapter } = await import("../../src/channels/whatsapp");
+    expect(pickAdapter("whatsapp", {} as any)).toBe(whatsappAdapter);
+    expect(pickAdapter("whatsapp", { WA_PROVIDER: "meta" } as any)).toBe(whatsappAdapter);
+  });
+
+  it("whatsapp usa YCloud cuando WA_PROVIDER=ycloud", async () => {
+    const { ycloudAdapter } = await import("../../src/channels/ycloud");
+    expect(pickAdapter("whatsapp", { WA_PROVIDER: "ycloud" } as any)).toBe(ycloudAdapter);
+  });
+
+  it("un WA_PROVIDER no reconocido cae a Meta pero deja rastro en el log", async () => {
+    const { whatsappAdapter } = await import("../../src/channels/whatsapp");
+    const spy = vi.spyOn(console, "error").mockImplementation(() => {});
+    expect(pickAdapter("whatsapp", { WA_PROVIDER: "yclod" } as any)).toBe(whatsappAdapter);
+    expect(spy).toHaveBeenCalled();
+    spy.mockRestore();
   });
 });

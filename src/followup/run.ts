@@ -174,7 +174,7 @@ Escribe UN solo mensaje de seguimiento MUY breve (máximo 2 líneas): retoma con
       await msgs.append(cand.id, "assistant", text, { modelUsed: modelId });
       await convs.touchLastMessage(cand.id, now);
 
-      const adapter = pickAdapter(cand.channel as ChannelId);
+      const adapter = pickAdapter(cand.channel as ChannelId, env);
       await adapter.sendReply(
         {
           channel: cand.channel as ChannelId,

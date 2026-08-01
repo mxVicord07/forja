@@ -103,7 +103,7 @@ export class SupportAgent extends Agent<Env, SupportAgentState> {
           await convs.setPausedUntil(conv.id, Date.now() + DAILY_CAP_SNOOZE_MS);
           await new MessagesRepo(db).append(conv.id, "assistant", DAILY_CAP_MESSAGE);
           const channel = payload.channel as ChannelId;
-          await pickAdapter(channel).sendReply(
+          await pickAdapter(channel, this.env).sendReply(
             { channel, channelUserId: payload.channelUserId, chunks: [DAILY_CAP_MESSAGE] },
             this.env,
           );
@@ -423,7 +423,7 @@ export class SupportAgent extends Agent<Env, SupportAgentState> {
     // Chunk + send via the channel adapter
     const chunks = chunkReply(assistantText, cfg.maxChunks);
     const channel = this.state.channel as ChannelId;
-    const adapter = pickAdapter(channel);
+    const adapter = pickAdapter(channel, this.env);
     await adapter.sendReply(
       {
         channel,

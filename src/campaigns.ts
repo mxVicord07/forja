@@ -141,7 +141,7 @@ export async function sendCampaign(
     try {
       if (useFreeform) {
         const channel = m.channel as ChannelId;
-        await pickAdapter(channel).sendReply(
+        await pickAdapter(channel, env).sendReply(
           { channel, channelUserId: m.channelUserId, chunks: [opts.freeformText!] },
           env,
         );

@@ -570,7 +570,7 @@ adminApp.post("/conversations/:id/reply", async (c) => {
   if (!conv) return c.html(`<span class="text-red-600">✗ Conversación no encontrada.</span>`);
 
   try {
-    const adapter = pickAdapter(conv.channel as ChannelId);
+    const adapter = pickAdapter(conv.channel as ChannelId, c.env);
     await adapter.sendReply(
       {
         channel: conv.channel as ChannelId,
