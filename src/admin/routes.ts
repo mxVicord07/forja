@@ -31,7 +31,7 @@ import {
 } from "./views/conversations";
 import { pickAdapter } from "../replies/sender";
 import { channelLabel } from "../channels/labels";
-import type { ChannelId } from "../channels/shared";
+import { isChannelId, type ChannelId } from "../channels/shared";
 import { renderInsights } from "./views/insights";
 import { analyzeConversations } from "../insights/analyzer";
 import { renderAgentePage, renderAgenteCanvas, renderNodeModal, toggleTool, toastOob } from "./views/agente";
@@ -61,11 +61,20 @@ export const adminApp = new Hono<{ Bindings: Env }>();
 
 // Guard every admin route with Basic Auth. The middleware factory needs the
 // request-scoped Env to read DASHBOARD_PASSWORD, so build it per request here.
-// DASHBOARD_PUBLIC="1" (wrangler.toml de esta instancia) apaga el guard —
-// el panel es público a propósito (decisión de diseño de la instancia).
-// Para volver a protegerlo: quitar esa var y redeploy.
+// DASHBOARD_PUBLIC="1" apaga el guard para exponer un panel de solo lectura
+// (NO está seteada en el wrangler.toml de este repo — PRIVACY.md advierte
+// explícitamente de no usarla salvo que el dueño lo decida a propósito).
+// /admin/learn/* queda SIEMPRE fuera del bypass: es el interruptor que
+// habilita /webhooks/learn/:channel, un endpoint sin verificación de firma
+// que escribe payloads crudos a D1 — un panel "público de solo lectura"
+// jamás debe incluir ese interruptor.
+// El match usa una regex (no startsWith) porque c.req.path trae el prefijo
+// "/admin" cuando esta sub-app está montada en index.ts, pero NO lo trae en
+// los tests que llaman a adminApp.request(...) directamente — el patrón
+// /learn/:channel/(start|stop) al final del path cubre ambos casos.
+const LEARN_PATH_RE = /\/learn\/[^/]+\/(start|stop)$/;
 adminApp.use("*", (c, next) => {
-  if (c.env.DASHBOARD_PUBLIC === "1") return next();
+  if (c.env.DASHBOARD_PUBLIC === "1" && !LEARN_PATH_RE.test(c.req.path)) return next();
   return adminAuth(c.env)(c, next);
 });
 
@@ -665,17 +674,43 @@ adminApp.post("/conversations/:id/suggest", async (c) => {
 // /webhooks/learn/:channel era inalcanzable en producción (siempre 409).
 // Protegidas por el Basic Auth que ya cubre /admin/*: el endpoint de captura
 // no valida firma, así que encenderlo debe requerir credenciales.
+//
+// Tope de duración: sin límite, un `minutes` gigante (ej. 1e9) anula la
+// "expiración automática" como mitigación — 60 min es más que suficiente
+// para capturar un payload real de un webhook externo.
+const LEARN_MAX_MINUTES = 60;
+const LEARN_DEFAULT_MINUTES = 15;
+
+/** Content-Type: application/json en ambas rutas de learn fuerza el preflight
+ * CORS — sin esto, el POST es una "simple request" cross-origin (sin
+ * preflight) y una página hostil visitada por el operador con Basic Auth
+ * cacheado podría dispararlo sin que el navegador consulte al servidor
+ * primero. No depende de que DASHBOARD_BASE_URL esté configurada (a
+ * diferencia de validar Origin), así que funciona igual en cualquier deploy. */
+function requireJson(c: { req: { header: (name: string) => string | undefined } }): boolean {
+  const ct = c.req.header("Content-Type") ?? "";
+  return ct.toLowerCase().includes("application/json");
+}
+
 adminApp.post("/learn/:channel/start", async (c) => {
+  if (!requireJson(c)) return c.json({ ok: false, error: "requiere Content-Type: application/json" }, 415);
   const channel = c.req.param("channel");
+  if (!isChannelId(channel)) return c.json({ ok: false, error: `canal desconocido: ${channel}` }, 400);
   const body = await c.req.json<{ minutes?: number }>().catch(() => ({}) as { minutes?: number });
-  const minutes = Number(body.minutes) > 0 ? Number(body.minutes) : 15;
+  const rawMinutes = Number(body.minutes);
+  const minutes =
+    Number.isFinite(rawMinutes) && rawMinutes > 0
+      ? Math.min(rawMinutes, LEARN_MAX_MINUTES)
+      : LEARN_DEFAULT_MINUTES;
   const repo = new SettingsRepo(new Db(c.env.DB));
   await startLearnMode(repo, channel, minutes);
   return c.json({ ok: true, channel, minutes }, 200);
 });
 
 adminApp.post("/learn/:channel/stop", async (c) => {
+  if (!requireJson(c)) return c.json({ ok: false, error: "requiere Content-Type: application/json" }, 415);
   const channel = c.req.param("channel");
+  if (!isChannelId(channel)) return c.json({ ok: false, error: `canal desconocido: ${channel}` }, 400);
   const repo = new SettingsRepo(new Db(c.env.DB));
   await stopLearnMode(repo, channel);
   return c.json({ ok: true, channel }, 200);

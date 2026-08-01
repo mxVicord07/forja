@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, afterEach } from "vitest";
-import { parseWhatsAppEvents, whatsappAdapter } from "../../src/channels/whatsapp";
+import { parseWhatsAppEvents, whatsappAdapter, serveWhatsAppMedia } from "../../src/channels/whatsapp";
+import { hmacHex } from "../../src/channels/shared";
 
 const ORIGIN = "https://bot.example.workers.dev";
 const env = { WHATSAPP_APP_SECRET: "s3cr3t" } as any;
@@ -111,5 +112,66 @@ describe("whatsappAdapter.sendReply", () => {
     await expect(
       whatsappAdapter.sendReply({ channel: "whatsapp", channelUserId: "x", chunks: ["hi"] }, {} as any),
     ).rejects.toThrow(/WHATSAPP_PHONE_NUMBER_ID/);
+  });
+});
+
+// serveWhatsAppMedia es uno de los dos consumidores de timingSafeEqual que un
+// refactor reciente movió a shared.ts (el otro es YCloud) — cobertura de
+// no-regresión de ese refactor, antes ausente para el lado de WhatsApp.
+describe("serveWhatsAppMedia", () => {
+  afterEach(() => vi.restoreAllMocks());
+
+  const SECRET = "app-secret";
+  const mediaEnv = { WHATSAPP_APP_SECRET: SECRET, WHATSAPP_ACCESS_TOKEN: "TOKEN" } as any;
+
+  it("firma válida: sirve los bytes con el content-type resuelto", async () => {
+    const exp = String(Date.now() + 60_000);
+    const sig = await hmacHex(SECRET, `MEDIA_ID.${exp}`);
+    const fetchMock = vi.fn(async (url: string) => {
+      if (url.includes("graph.facebook.com")) {
+        return new Response(JSON.stringify({ url: "https://cdn.example/file", mime_type: "image/jpeg" }), {
+          status: 200,
+        });
+      }
+      return new Response("bytes-de-la-imagen", { status: 200 });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const res = await serveWhatsAppMedia("MEDIA_ID", exp, sig, mediaEnv);
+    expect(res.status).toBe(200);
+    expect(res.headers.get("Content-Type")).toBe("image/jpeg");
+    expect(await res.text()).toBe("bytes-de-la-imagen");
+  });
+
+  it("firma inválida: 403 y no llega a llamar a Graph", async () => {
+    const exp = String(Date.now() + 60_000);
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+
+    const res = await serveWhatsAppMedia("MEDIA_ID", exp, "firma-falsa", mediaEnv);
+    expect(res.status).toBe(403);
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("URL expirada: 410 y no llega a llamar a Graph", async () => {
+    const exp = String(Date.now() - 1_000);
+    const sig = await hmacHex(SECRET, `MEDIA_ID.${exp}`);
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+
+    const res = await serveWhatsAppMedia("MEDIA_ID", exp, sig, mediaEnv);
+    expect(res.status).toBe(410);
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("sin configuración (falta secret o token): 404", async () => {
+    const exp = String(Date.now() + 60_000);
+    const sig = await hmacHex(SECRET, `MEDIA_ID.${exp}`);
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+
+    const res = await serveWhatsAppMedia("MEDIA_ID", exp, sig, {} as any);
+    expect(res.status).toBe(404);
+    expect(fetchMock).not.toHaveBeenCalled();
   });
 });

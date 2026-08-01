@@ -1,5 +1,22 @@
 export type ChannelId = "manychat" | "telegram" | "twilio" | "messenger" | "instagram" | "whatsapp";
 
+// El union de arriba es solo de tipos — no existe en runtime. Esta constante
+// es la lista real para validar un `:channel` que llega como string (params
+// de ruta, body, etc.) contra los valores válidos.
+export const CHANNEL_IDS: readonly ChannelId[] = [
+  "manychat",
+  "telegram",
+  "twilio",
+  "messenger",
+  "instagram",
+  "whatsapp",
+];
+
+/** Type guard en runtime: ¿`value` es uno de los ChannelId válidos? */
+export function isChannelId(value: string): value is ChannelId {
+  return (CHANNEL_IDS as readonly string[]).includes(value);
+}
+
 export interface IncomingMessage {
   channel: ChannelId;
   channelUserId: string;
