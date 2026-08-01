@@ -12,7 +12,7 @@
 // tocarlas, lo servimos por un proxy FIRMADO (/webhooks/whatsapp/media/:id): la
 // URL es pública pero con HMAC + expiración, y el token queda del lado del server.
 import type { ChannelAdapter, IncomingMessage, OutgoingReply } from "./shared";
-import { hmacHex, timingSafeEqual } from "./shared";
+import { hmacHex, timingSafeEqual, normalizePhone } from "./shared";
 import type { Env } from "../env";
 
 const GRAPH_VERSION = "v21.0";
@@ -102,7 +102,12 @@ export async function parseWhatsAppEvents(
         if (!text && !audioUrl && !imageUrl) continue; // tipo no soportado / vacío
         out.push({
           channel: "whatsapp",
-          channelUserId: String(from),
+          // normalizePhone (shared.ts): YCloud entrega el `from` en E.164 con
+          // "+" y Meta sin él. Ambos adapters DEBEN producir el mismo formato
+          // canónico acá — es lo que direcciona el Durable Object
+          // (`whatsapp:<channelUserId>`) y la búsqueda en D1, y por eso
+          // conservan el historial el día que se migre de YCloud a Meta.
+          channelUserId: normalizePhone(from),
           displayName: nameByWaId.get(from),
           text,
           audioUrl,

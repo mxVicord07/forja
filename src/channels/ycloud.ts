@@ -14,8 +14,14 @@
 //  • Teléfono: E.164 con "+". Se normaliza a dígitos pelones, que es el
 //    formato que ya produce whatsapp.ts.
 import type { ChannelAdapter, IncomingMessage, OutgoingReply } from "./shared";
-import { hmacHex, timingSafeEqual } from "./shared";
+import { hmacHex, timingSafeEqual, normalizePhone } from "./shared";
 import type { Env } from "../env";
+
+// Re-exportado por compatibilidad: este módulo definía `normalizePhone`
+// localmente y hay tests que la importan desde acá. La definición real vive
+// en shared.ts (ver comentario ahí) porque whatsapp.ts (Meta Cloud API)
+// también la necesita, para producir el mismo `channelUserId` que YCloud.
+export { normalizePhone };
 
 /** Ventana anti-replay de la firma entrante. */
 const SIGNATURE_TOLERANCE_MS = 5 * 60 * 1000;
@@ -46,16 +52,6 @@ interface YCloudEvent {
   id?: string;
   type?: string;
   whatsappInboundMessage?: YCloudInboundMessage;
-}
-
-/**
- * Formato canónico interno del teléfono: solo dígitos. YCloud entrega E.164
- * con "+" y Meta Cloud API sin él; si no unificáramos, el Durable Object
- * `whatsapp:<id>` sería distinto en cada proveedor y el corte de YCloud a
- * Cloud API directo haría que cada cliente perdiera su historial.
- */
-export function normalizePhone(raw: string): string {
-  return raw.replace(/\D/g, "");
 }
 
 /** URL firmada del proxy de media (o null si falta secret/base). */

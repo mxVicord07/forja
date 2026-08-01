@@ -71,3 +71,18 @@ export function timingSafeEqual(a: string, b: string): boolean {
   for (let i = 0; i < a.length; i++) diff |= a.charCodeAt(i) ^ b.charCodeAt(i);
   return diff === 0;
 }
+
+/**
+ * Formato canónico interno del teléfono para `channelUserId`: solo dígitos.
+ * TODOS los adapters de WhatsApp (YCloud y Meta Cloud API) deben pasar el
+ * `from` entrante por acá antes de usarlo como `channelUserId`. Ambos emiten
+ * `channel:"whatsapp"` a propósito — el Durable Object se direcciona
+ * `whatsapp:<channelUserId>` y la conversación en D1 se busca por
+ * (channel, channelUserId) — para que el historial sobreviva el día que se
+ * migre de YCloud a Cloud API directo. Si cada proveedor normalizara el
+ * teléfono a su manera (YCloud entrega E.164 con "+", Meta sin él), esa
+ * garantía se rompe y cada cliente arrancaría de cero tras la migración.
+ */
+export function normalizePhone(raw: string): string {
+  return raw.replace(/\D/g, "");
+}

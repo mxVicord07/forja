@@ -87,7 +87,13 @@ describe("parseWhatsAppEvents", () => {
 });
 
 describe("whatsappAdapter.sendReply", () => {
-  afterEach(() => vi.restoreAllMocks());
+  // vi.restoreAllMocks() NO deshace vi.stubGlobal: con pool "forks" y
+  // singleFork:true (vitest.config.ts) el globalThis.fetch pisado quedaría
+  // filtrado a los archivos de test que corren después en el mismo proceso.
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    vi.restoreAllMocks();
+  });
 
   it("hace POST al endpoint de Cloud API con el formato correcto", async () => {
     const fetchMock = vi.fn(async () => new Response("{}", { status: 200 }));
@@ -119,7 +125,10 @@ describe("whatsappAdapter.sendReply", () => {
 // refactor reciente movió a shared.ts (el otro es YCloud) — cobertura de
 // no-regresión de ese refactor, antes ausente para el lado de WhatsApp.
 describe("serveWhatsAppMedia", () => {
-  afterEach(() => vi.restoreAllMocks());
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    vi.restoreAllMocks();
+  });
 
   const SECRET = "app-secret";
   const mediaEnv = { WHATSAPP_APP_SECRET: SECRET, WHATSAPP_ACCESS_TOKEN: "TOKEN" } as any;
