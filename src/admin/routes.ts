@@ -55,6 +55,7 @@ import { SettingsRepo, SETTING_KEYS, type SettingKey } from "../db/settings";
 import { CONTROLS, levelToValue } from "./control-levels";
 import { systemPromptFromEnv } from "../system-prompt";
 import { renderBusinessContext } from "../businessContext";
+import { startLearnMode, stopLearnMode } from "../learn/mapping";
 
 export const adminApp = new Hono<{ Bindings: Env }>();
 
@@ -657,6 +658,27 @@ adminApp.post("/conversations/:id/suggest", async (c) => {
   });
   // HTMX swaps this into #suggestion-box; the "Usar" button fills the composer.
   return c.html(renderSuggestionBox(result.text));
+});
+
+// Learn-mode: enciende/apaga la captura de payloads crudos por canal. Las
+// funciones existían desde el inicio pero NINGUNA ruta las llamaba, así que
+// /webhooks/learn/:channel era inalcanzable en producción (siempre 409).
+// Protegidas por el Basic Auth que ya cubre /admin/*: el endpoint de captura
+// no valida firma, así que encenderlo debe requerir credenciales.
+adminApp.post("/learn/:channel/start", async (c) => {
+  const channel = c.req.param("channel");
+  const body = await c.req.json<{ minutes?: number }>().catch(() => ({}) as { minutes?: number });
+  const minutes = Number(body.minutes) > 0 ? Number(body.minutes) : 15;
+  const repo = new SettingsRepo(new Db(c.env.DB));
+  await startLearnMode(repo, channel, minutes);
+  return c.json({ ok: true, channel, minutes }, 200);
+});
+
+adminApp.post("/learn/:channel/stop", async (c) => {
+  const channel = c.req.param("channel");
+  const repo = new SettingsRepo(new Db(c.env.DB));
+  await stopLearnMode(repo, channel);
+  return c.json({ ok: true, channel }, 200);
 });
 
 // --- Fallback ---------------------------------------------------------------
