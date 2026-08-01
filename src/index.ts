@@ -6,6 +6,8 @@ import { manychatAdapter } from "./channels/manychat";
 import { twilioAdapter } from "./channels/twilio";
 import { parseMetaEvents, verifyMetaSignature } from "./channels/meta";
 import { parseWhatsAppEvents, serveWhatsAppMedia } from "./channels/whatsapp";
+import { parseYCloudEvent, serveYCloudMedia, verifyYCloudSignature } from "./channels/ycloud";
+import { resolveWaProvider } from "./replies/sender";
 import { adminApp } from "./admin/routes";
 import { purgeOldMessages } from "./crons/purgeOldMessages";
 import { reindexKb } from "./kb/reindex";
@@ -130,7 +132,12 @@ app.post("/webhooks/meta", async (c) => {
 // --- WhatsApp OFICIAL (Cloud API de Meta, sin Twilio/BSP) -------------------
 // GET = handshake de verificación (igual que Meta). Acepta el WHATSAPP_VERIFY_TOKEN
 // propio o, si no se configuró, cae al META_VERIFY_TOKEN (misma app de Meta).
+// YCloud no hace handshake (valida cada POST por firma), así que con
+// WA_PROVIDER=ycloud este GET no aplica — 404. resolveWaProvider es el mismo
+// helper que usa sender.ts para la salida: así entrada y salida nunca pueden
+// discrepar sobre qué proveedor está activo.
 app.get("/webhooks/whatsapp", (c) => {
+  if (resolveWaProvider(c.env) === "ycloud") return c.notFound();
   const mode = c.req.query("hub.mode");
   const token = c.req.query("hub.verify_token");
   const challenge = c.req.query("hub.challenge");
@@ -141,10 +148,38 @@ app.get("/webhooks/whatsapp", (c) => {
   return c.text("forbidden", 403);
 });
 
-// POST = mensajes entrantes. Firma X-Hub-Signature-256 con el App Secret de
-// WhatsApp (o el de Meta si comparten app). Un POST puede traer varios mensajes.
+// POST = mensajes entrantes. Con YCloud (BSP alterno mientras la Verificación
+// de Negocio ante Meta esté pendiente): firma propia YCloud-Signature y un
+// evento = un mensaje. Con Meta (default, comportamiento original e intacto):
+// X-Hub-Signature-256 y un POST puede traer varios mensajes.
 app.post("/webhooks/whatsapp", async (c) => {
   const raw = await c.req.text();
+  const origin = c.env.DASHBOARD_BASE_URL || new URL(c.req.url).origin;
+
+  if (resolveWaProvider(c.env) === "ycloud") {
+    const ok = await verifyYCloudSignature(
+      raw,
+      c.req.header("YCloud-Signature"),
+      c.env.YCLOUD_WEBHOOK_SECRET ?? "",
+    );
+    if (!ok) return c.text("bad signature", 403);
+    let body: unknown;
+    try {
+      body = JSON.parse(raw);
+    } catch {
+      return c.text("bad json", 400);
+    }
+    // Un evento = un mensaje (YCloud no batchea). null = recibo de estado o
+    // tipo no soportado: 200 igual, o YCloud reintenta.
+    const msg = await parseYCloudEvent(body, c.env, origin);
+    if (msg) {
+      const doId = c.env.AGENT.idFromName(`${msg.channel}:${msg.channelUserId}`);
+      await c.env.AGENT.get(doId).ingest(msg);
+    }
+    return c.text("EVENT_RECEIVED", 200);
+  }
+
+  // --- Cloud API directo de Meta (comportamiento original) ---
   const sig = c.req.header("x-hub-signature-256");
   const secret = c.env.WHATSAPP_APP_SECRET || c.env.META_APP_SECRET;
   const valid = !!secret && (await verifyMetaSignature(raw, sig, secret));
@@ -155,7 +190,6 @@ app.post("/webhooks/whatsapp", async (c) => {
   } catch {
     return c.text("bad json", 400);
   }
-  const origin = c.env.DASHBOARD_BASE_URL || new URL(c.req.url).origin;
   for (const msg of await parseWhatsAppEvents(body as any, c.env, origin)) {
     const doId = c.env.AGENT.idFromName(`${msg.channel}:${msg.channelUserId}`);
     await c.env.AGENT.get(doId).ingest(msg);
@@ -167,6 +201,13 @@ app.post("/webhooks/whatsapp", async (c) => {
 // media públicamente fetchable (para transcribe/vision) sin exponer el token.
 app.get("/webhooks/whatsapp/media/:id", (c) =>
   serveWhatsAppMedia(c.req.param("id"), c.req.query("exp") ?? null, c.req.query("sig") ?? null, c.env),
+);
+
+// Proxy firmado del media de YCloud. Ruta separada de la de Meta porque allá
+// se firma un media_id opaco (/media/:id) y acá una URL (?u=...) — no
+// colisionan en Hono porque una tiene segmento de path y la otra no.
+app.get("/webhooks/whatsapp/media", (c) =>
+  serveYCloudMedia(c.req.query("u") ?? null, c.req.query("exp") ?? null, c.req.query("sig") ?? null, c.env),
 );
 
 // Universal webhook LEARN endpoint. When learn mode is ON for `:channel`, this

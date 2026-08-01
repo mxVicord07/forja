@@ -53,16 +53,24 @@ export function pickAdapter(channel: ChannelId, env: Env): ChannelAdapter {
 }
 
 /**
- * Default "meta": no altera a quien ya opera con Cloud API directo. Un valor
- * no reconocido (typo) cae a Meta igual, pero lo registra — degradarse en
- * silencio por una variable mal escrita es peor que ser ruidoso, y lanzar
- * tumbaría el turno completo.
+ * Única función que interpreta WA_PROVIDER — la usan tanto el webhook de
+ * ENTRADA (src/index.ts) como el resolver de SALIDA de acá abajo. Si cada
+ * lado normalizara distinto (mayúsculas, espacios), un mensaje podría entrar
+ * por un proveedor y la respuesta intentar salir por el otro: el bot
+ * recibiría el mensaje y jamás contestaría. Default "meta": no altera a quien
+ * ya opera con Cloud API directo. Un valor no reconocido (typo) cae a Meta
+ * igual, pero lo registra — degradarse en silencio por una variable mal
+ * escrita es peor que ser ruidoso, y lanzar tumbaría el turno completo.
  */
-function pickWhatsAppAdapter(env: Env): ChannelAdapter {
-  const provider = env.WA_PROVIDER ?? "meta";
-  if (provider === "ycloud") return ycloudAdapter;
+export function resolveWaProvider(env: Env): "ycloud" | "meta" {
+  const provider = (env.WA_PROVIDER ?? "meta").trim().toLowerCase();
+  if (provider === "ycloud") return "ycloud";
   if (provider !== "meta") {
     console.error(`WA_PROVIDER no reconocido: ${provider} — usando "meta".`);
   }
-  return whatsappAdapter;
+  return "meta";
+}
+
+function pickWhatsAppAdapter(env: Env): ChannelAdapter {
+  return resolveWaProvider(env) === "ycloud" ? ycloudAdapter : whatsappAdapter;
 }
