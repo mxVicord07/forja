@@ -30,8 +30,58 @@
       }
     }
   },
-  "_pendiente_de_verificar": {
-    "image": "Forma segun docs de YCloud: whatsappInboundMessage.image = {link, caption, id}. NO verificada contra payload real.",
-    "audio": "Forma segun docs de YCloud: whatsappInboundMessage.audio = {link, id}. NO verificada contra payload real."
+  "image": {
+    "_fuente": "D1 settings, key learn:whatsapp:image. Capturado 2026-08-01T23:37 via el endpoint dedicado de Forja en YCloud (LEARN_MODE_ENABLED temporal), apuntando a /webhooks/learn/whatsapp. Foto real con caption enviada por el usuario al +52 444 423 7875.",
+    "id": "evt_6a6e832a62e5d53b4897f955",
+    "type": "whatsapp.inbound_message.received",
+    "apiVersion": "v2",
+    "createTime": "2026-08-01T23:37:14.498Z",
+    "whatsappInboundMessage": {
+      "id": "6a6e832abf3eb30b80f08168",
+      "wamid": "wamid.HBgNNTIxNDQ0MTc5Njc5MxUCABIYFDNBQTk0NjJDMERCNjIyOTEyMjQ5AA==",
+      "wabaId": "1298715852276116",
+      "from": "+524441796793",
+      "fromUserId": "MX.1419791446497941",
+      "customerProfile": { "name": "Victor M. Cordero" },
+      "to": "+524444237875",
+      "sendTime": "2026-08-01T23:37:11.000Z",
+      "type": "image",
+      "image": {
+        "link": "https://api.ycloud.com/v2/whatsapp/media/download/2912703685746258?sig=t%3D1785627431%2Cs%3D455e8ee110de2a40209b40dc44b3f4b9f0cf2546a108be86b391331d1904f427&payload=eyJpZCI6IjI5MTI3MDM2ODU3NDYyNTgiLCJ3YWJhSWQiOiIxMjk4NzE1ODUyMjc2MTE2Iiwid2FtaWQiOiJ3YW1pZC5IQmdOTlRJeE5EUTBNVGM1TmpjNU14VUNBQklZRkROQlFUazBOakpETUVSQ05qSXlPVEV5TWpRNUFBPT0iLCJtaW1lVHlwZSI6ImltYWdlL2pwZWciLCJzaGEyNTYiOiI4MEpJMTZUVUlLWk1zMjFka29kTDF3dUt5SHExVEl4alBjOURyK3V5MVRRPSJ9",
+        "caption": "te comparto la SSD que llegó hoy",
+        "id": "2912703685746258",
+        "sha256": "80JI16TUIKZMs21dkodL1wuKyHq1TIxjPc9Dr+uy1TQ=",
+        "mime_type": "image/jpeg"
+      }
+    }
+  },
+  "audio": {
+    "_fuente": "D1 settings, key learn:whatsapp:audio. Capturado 2026-08-01T23:37 via el endpoint dedicado de Forja en YCloud (LEARN_MODE_ENABLED temporal), apuntando a /webhooks/learn/whatsapp. Nota de voz real (~11s) enviada por el usuario al +52 444 423 7875.",
+    "id": "evt_6a6e833eaff1a13d35f9476a",
+    "type": "whatsapp.inbound_message.received",
+    "apiVersion": "v2",
+    "createTime": "2026-08-01T23:37:34.761Z",
+    "whatsappInboundMessage": {
+      "id": "6a6e833e7b423e0988eae728",
+      "wamid": "wamid.HBgNNTIxNDQ0MTc5Njc5MxUCABIYFDNBRDFCRkE0NjdCQjFDQ0NCMkQxAA==",
+      "wabaId": "1298715852276116",
+      "from": "+524441796793",
+      "fromUserId": "MX.1419791446497941",
+      "customerProfile": { "name": "Victor M. Cordero" },
+      "to": "+524444237875",
+      "sendTime": "2026-08-01T23:37:31.000Z",
+      "type": "audio",
+      "audio": {
+        "link": "https://api.ycloud.com/v2/whatsapp/media/download/3178357809021733?sig=t%3D1785627451%2Cs%3D3b73385f1f118577edf14ba72f5b9e36607a5d397537555b4f87b3695671d8d4&payload=eyJpZCI6IjMxNzgzNTc4MDkwMjE3MzMiLCJ3YWJhSWQiOiIxMjk4NzE1ODUyMjc2MTE2Iiwid2FtaWQiOiJ3YW1pZC5IQmdOTlRJeE5EUTBNVGM1TmpjNU14VUNBQklZRkROQlJERkNSa0UwTmpkQ1FqRkRRME5DTWtReEFBPT0iLCJtaW1lVHlwZSI6ImF1ZGlvL29nZzsgY29kZWNzPW9wdXMiLCJzaGEyNTYiOiJQYVNHQVREWGdqNGVWMWdaT0s5T2tRTEdOOU5HdllPbnpDWUpZZTZFZVhVPSJ9",
+        "id": "3178357809021733",
+        "sha256": "PaSGATDXgj4eV1gZOK9OkQLGN9NGvYOnzCYJYe6EeXU=",
+        "mime_type": "audio/ogg; codecs=opus",
+        "voice": true
+      }
+    }
+  },
+  "_verificacion_2026-08-01": {
+    "resultado": "RESUELTO. La forma de image/audio coincide con la hipotesis original basada en la documentacion de YCloud: image={link,caption,id,...}, audio={link,id,...}. Campos extra (mime_type, sha256, voice) no se usan y no rompen el parser.",
+    "proxy_de_media": "El link trae su propio query string (?sig=...&payload=...) URL-encoded. Se verifico con un script Node que el ciclo completo (encodeURIComponent del proxy -> c.req.query() de Hono decodifica -> new URL().host para la allowlist) reproduce el link original byte a byte. No hizo falta ningun cambio en signedMediaUrl/serveYCloudMedia."
   }
 }

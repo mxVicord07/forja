@@ -93,16 +93,17 @@ export async function parseYCloudEvent(
   if (m.type === "text") {
     text = m.text?.body || undefined;
   } else if (m.type === "image" && m.image?.link) {
-    // Forma según la documentación de YCloud (image: {link, caption, id}), NO
-    // verificada contra un payload real: no hay ninguna muestra de media en
-    // las 19 ejecuciones capturadas. Si el primer media real difiere, la
-    // fuente de verdad es rawPayload en los logs.
+    // Forma verificada contra tráfico real de YCloud (foto con caption,
+    // 2026-08-01): image: {link, caption, id, ...}. Coincide con la hipótesis
+    // original basada en la documentación. Ver
+    // docs/superpowers/specs/ycloud-payloads-capturados.json para el payload
+    // completo capturado.
     imageUrl = (await signedMediaUrl(m.image.link, env, origin)) ?? undefined;
     text = m.image.caption || undefined;
   } else if (m.type === "audio" && m.audio?.link) {
-    // Igual que arriba: forma solo documentada (audio: {link, id}), no
-    // verificada contra tráfico real. Ver rawPayload en los logs cuando
-    // llegue el primer audio real para confirmar/corregir esta forma.
+    // Igual que arriba: forma verificada contra tráfico real (nota de voz
+    // ~11s, 2026-08-01): audio: {link, id, ...}. Coincide con la hipótesis
+    // original. Ver docs/superpowers/specs/ycloud-payloads-capturados.json.
     audioUrl = (await signedMediaUrl(m.audio.link, env, origin)) ?? undefined;
   }
 

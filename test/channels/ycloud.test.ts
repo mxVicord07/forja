@@ -73,10 +73,11 @@ describe("parseYCloudEvent", () => {
     expect(out!.displayName).toBe("Victor M. Cordero");
   });
 
-  // La forma de image/audio abajo sale de la documentación de YCloud, NO de un
-  // payload real (no hay ninguno en las 19 muestras capturadas) — ver
-  // docs/superpowers/specs/ycloud-payloads-capturados.json → _pendiente_de_verificar.
-  it("parsea imagen con caption y firma la URL de media", async () => {
+  // Casos sintéticos: cubren formas mínimas (sin "id", sin campos extra) que
+  // el payload real de abajo no ejercita. La forma en sí ya está verificada
+  // contra tráfico real — ver los tests siguientes y
+  // docs/superpowers/specs/ycloud-payloads-capturados.json.
+  it("parsea imagen con caption y firma la URL de media (forma mínima)", async () => {
     const out = await parseYCloudEvent(
       evt({
         from: "+525512345678", type: "image",
@@ -90,7 +91,7 @@ describe("parseYCloudEvent", () => {
     expect(out!.imageUrl).toMatch(/[?&]exp=/);
   });
 
-  it("parsea nota de voz", async () => {
+  it("parsea nota de voz (forma mínima, sin id)", async () => {
     const out = await parseYCloudEvent(
       evt({ from: "+525512345678", type: "audio",
             audio: { link: "https://api.ycloud.com/v2/whatsapp/media/download/xyz" } }),
@@ -98,6 +99,30 @@ describe("parseYCloudEvent", () => {
     );
     expect(out!.audioUrl).toContain(`${ORIGIN}/webhooks/whatsapp/media?`);
     expect(out!.text).toBeUndefined();
+  });
+
+  it("parsea imagen con caption (payload real capturado de producción)", async () => {
+    const out = await parseYCloudEvent(ycloudPayloads.image, env, ORIGIN);
+    expect(out).not.toBeNull();
+    expect(out!.channel).toBe("whatsapp");
+    expect(out!.channelUserId).toBe("524441796793"); // sin "+", de from: "+524441796793"
+    expect(out!.text).toBe("te comparto la SSD que llegó hoy");
+    expect(out!.imageUrl).toContain(`${ORIGIN}/webhooks/whatsapp/media?`);
+    expect(out!.imageUrl).toMatch(/[?&]sig=/);
+    expect(out!.imageUrl).toMatch(/[?&]exp=/);
+    expect(out!.audioUrl).toBeUndefined();
+  });
+
+  it("parsea nota de voz (payload real capturado de producción)", async () => {
+    const out = await parseYCloudEvent(ycloudPayloads.audio, env, ORIGIN);
+    expect(out).not.toBeNull();
+    expect(out!.channel).toBe("whatsapp");
+    expect(out!.channelUserId).toBe("524441796793"); // sin "+", de from: "+524441796793"
+    expect(out!.audioUrl).toContain(`${ORIGIN}/webhooks/whatsapp/media?`);
+    expect(out!.audioUrl).toMatch(/[?&]sig=/);
+    expect(out!.audioUrl).toMatch(/[?&]exp=/);
+    expect(out!.text).toBeUndefined();
+    expect(out!.imageUrl).toBeUndefined();
   });
 
   it("ignora eventos que no son mensajes entrantes", async () => {
@@ -120,7 +145,7 @@ describe("parseYCloudEvent", () => {
     expect(await parseYCloudEvent(evt({ type: "text", text: { body: "x" } }), env, ORIGIN)).toBeNull();
   });
 
-  it("es defensiva si image/audio llegan sin link (forma no verificada)", async () => {
+  it("es defensiva si image/audio llegan sin link", async () => {
     expect(
       await parseYCloudEvent(evt({ from: "+525512345678", type: "image", image: { caption: "sin link" } }), env, ORIGIN),
     ).toBeNull();

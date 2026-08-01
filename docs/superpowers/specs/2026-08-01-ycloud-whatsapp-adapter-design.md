@@ -134,16 +134,20 @@ Meta que el código debe respetar:
 
 - `channel: "whatsapp"`, `isOwnerMessage: false`, `rawPayload` = el evento.
 - **Estado real post-implementación (ver Ejecución):** no hizo falta la
-  ventana de captura de la Etapa A — el payload de **texto** se confirmó
-  contra 19 ejecuciones reales del historial de n8n del webhook de LIA (ver
-  `docs/superpowers/specs/ycloud-payloads-capturados.json` y
+  ventana de captura de la Etapa A para el texto — el payload de **texto** se
+  confirmó contra 19 ejecuciones reales del historial de n8n del webhook de
+  LIA (ver `docs/superpowers/specs/ycloud-payloads-capturados.json` y
   `docs/canales/learn-mode.md`), y la fila `text` de la tabla de arriba sale
-  de ahí, no de la documentación. **`image` y `audio` siguen sin verificar**:
-  el historial retenido de n8n no tenía ningún mensaje con media, así que esas
-  dos filas siguen siendo la hipótesis original sacada de la documentación de
-  YCloud (`whatsappInboundMessage.image = {link, caption, id}` y
-  `.audio = {link, id}`), no verdad confirmada. `test/channels/ycloud.test.ts`
-  lo deja explícito en los tests de imagen/audio.
+  de ahí, no de la documentación. **`image` y `audio`: verificados el
+  2026-08-01.** Se encendió `LEARN_MODE_ENABLED` temporalmente, se mandó una
+  foto con caption y una nota de voz (~11s) al número de producción, y se
+  leyeron los payloads capturados directo de D1 (`learn:whatsapp:image`,
+  `learn:whatsapp:audio`). La forma coincide con la hipótesis original
+  (`whatsappInboundMessage.image = {link, caption, id}` y
+  `.audio = {link, id}`) — ver
+  `docs/superpowers/specs/ycloud-payloads-capturados.json` para los payloads
+  completos y `test/channels/ycloud.test.ts` para los tests que los usan como
+  fixtures.
 
 **Proxy de media: `signedMediaUrl()` + `serveYCloudMedia()`**
 YCloud entrega `link` como URL directa, pero su descarga exige el header
@@ -308,12 +312,16 @@ limpio.
    y de ahí salió el único payload real disponible — ver
    `docs/superpowers/specs/ycloud-payloads-capturados.json`. LIA **nunca se
    pausó** porque nunca se le compitió por el endpoint. Imagen y audio no
-   aparecían en el historial retenido, así que quedaron sin verificar (se
-   construyeron contra la documentación de YCloud, marcados como hipótesis en
-   `ycloud.ts` y en sus tests). Se documentó esta vía como precedente para
-   cuándo SÍ conviene usar learn-mode en `docs/canales/learn-mode.md`.
+   aparecían en el historial retenido, así que en ese momento quedaron sin
+   verificar (se construyeron contra la documentación de YCloud, marcados
+   como hipótesis en `ycloud.ts` y en sus tests). Se documentó esta vía como
+   precedente para cuándo SÍ conviene usar learn-mode en
+   `docs/canales/learn-mode.md`. **Actualización 2026-08-01:** sí se usó
+   learn-mode para cerrar ese hueco — foto con caption + nota de voz reales,
+   ver arriba.
 3. Construir el parser de texto contra el payload real; imagen/audio contra
-   la documentación (hipótesis, sin verificar).
+   la documentación (hipótesis, luego verificada contra tráfico real el
+   2026-08-01 — ver punto 2).
 4. Implementar el adapter completo + tests. Suite verde + typecheck limpio.
 5. **Parar.** La Etapa B (corte) no se ejecuta hasta que la auditoría de LIA
    esté hecha desde el workspace "Consultor BIRevX AAIA".
@@ -324,19 +332,21 @@ limpio.
       Verificado en `test/admin/learn-routes.test.ts` (start/stop con Basic
       Auth, 401 sin credenciales, CSRF/Content-Type, gate `LEARN_MODE_ENABLED`
       agregado en el commit `a6714d5` de esta rama).
-- [ ] Los 3 payloads reales de YCloud capturados y archivados.
-      Solo **texto** está confirmado contra tráfico real (19 ejecuciones del
-      historial de n8n, commit `c807552`,
-      `docs/superpowers/specs/ycloud-payloads-capturados.json`). Imagen y
-      audio NO tienen payload real — el historial retenido de n8n no incluía
-      ningún mensaje con media. No lo marco porque solo 1 de 3 formas está
-      verificada.
-- [ ] `ycloud.ts` parsea texto, imagen y audio de payloads reales.
-      Texto sí (mismo respaldo que el punto anterior). Imagen y audio se
-      parsean contra la **hipótesis** sacada de la documentación de YCloud,
-      no contra un payload real — así lo dejan explícito los tests
-      "forma no verificada" en `test/channels/ycloud.test.ts`. No lo marco
-      por la misma razón que el punto anterior.
+- [x] Los 3 payloads reales de YCloud capturados y archivados.
+      **Texto** confirmado contra tráfico real (19 ejecuciones del historial
+      de n8n, commit `c807552`). **Imagen y audio** confirmados el
+      2026-08-01: foto con caption + nota de voz (~11s) enviadas al número de
+      producción, capturadas vía `POST /webhooks/learn/whatsapp`
+      (`LEARN_MODE_ENABLED` temporal) y leídas de D1 (`learn:whatsapp:image`,
+      `learn:whatsapp:audio`). Los 3 payloads están en
+      `docs/superpowers/specs/ycloud-payloads-capturados.json`.
+- [x] `ycloud.ts` parsea texto, imagen y audio de payloads reales.
+      Texto: mismo respaldo que el punto anterior. Imagen y audio: verificado
+      con los payloads reales del 2026-08-01 — la forma coincide con la
+      hipótesis original de la documentación de YCloud. Cobertura en
+      `test/channels/ycloud.test.ts` ("payload real capturado de producción"
+      para imagen y audio); comentarios en `ycloud.ts` actualizados para
+      reflejar que ya no es hipótesis.
 - [x] Firma verificada fail-closed, con ventana anti-replay.
       `test/channels/ycloud.test.ts::describe("verifyYCloudSignature")`:
       firma vieja/futura fuera de ventana, header malformado, y fail-closed
