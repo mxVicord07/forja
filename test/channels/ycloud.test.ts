@@ -139,7 +139,7 @@ async function signMedia(link: string, exp: number) {
 describe("serveYCloudMedia", () => {
   const link = "https://api.ycloud.com/v2/whatsapp/media/download/abc";
 
-  it("sirve los bytes con firma válida y manda la API key", async () => {
+  it("sirve los bytes con firma válida y manda la API key, sin seguir redirects", async () => {
     const exp = Date.now() + 60_000;
     const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(
       new Response("BYTES", { status: 200, headers: { "Content-Type": "audio/ogg" } }),
@@ -147,32 +147,55 @@ describe("serveYCloudMedia", () => {
     const res = await serveYCloudMedia(link, String(exp), await signMedia(link, exp), env);
     expect(res.status).toBe(200);
     expect(await res.text()).toBe("BYTES");
-    const headers = (fetchMock.mock.calls[0][1] as any).headers;
-    expect(headers["X-API-Key"]).toBe("key");
+    const opts = fetchMock.mock.calls[0][1] as any;
+    expect(opts.headers["X-API-Key"]).toBe("key");
+    expect(opts.redirect).toBe("manual");
   });
 
-  it("rechaza firma inválida con 403", async () => {
+  it("rechaza firma inválida con 403 sin llegar a golpear la red", async () => {
     const exp = Date.now() + 60_000;
+    const fetchMock = vi.spyOn(globalThis, "fetch");
     const res = await serveYCloudMedia(link, String(exp), "firmamala", env);
     expect(res.status).toBe(403);
+    expect(fetchMock).not.toHaveBeenCalled();
   });
 
-  it("rechaza una URL expirada con 410", async () => {
+  it("rechaza una URL expirada con 410 sin llegar a golpear la red", async () => {
     const exp = Date.now() - 1000;
+    const fetchMock = vi.spyOn(globalThis, "fetch");
     const res = await serveYCloudMedia(link, String(exp), await signMedia(link, exp), env);
     expect(res.status).toBe(410);
+    expect(fetchMock).not.toHaveBeenCalled();
   });
 
-  it("rechaza un host fuera de api.ycloud.com aunque la firma sea válida", async () => {
+  it("rechaza un host fuera de api.ycloud.com aunque la firma sea válida, sin llegar a golpear la red", async () => {
     const evil = "https://evil.example.com/robar";
     const exp = Date.now() + 60_000;
+    const fetchMock = vi.spyOn(globalThis, "fetch");
     const res = await serveYCloudMedia(evil, String(exp), await signMedia(evil, exp), env);
     expect(res.status).toBe(403);
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("rechaza un esquema distinto de https aunque el host sea válido, sin llegar a golpear la red", async () => {
+    const ftpLink = "ftp://api.ycloud.com/v2/whatsapp/media/download/abc";
+    const exp = Date.now() + 60_000;
+    const fetchMock = vi.spyOn(globalThis, "fetch");
+    const res = await serveYCloudMedia(ftpLink, String(exp), await signMedia(ftpLink, exp), env);
+    expect(res.status).toBe(403);
+    expect(fetchMock).not.toHaveBeenCalled();
   });
 
   it("404 si no está configurado", async () => {
     const exp = Date.now() + 60_000;
     const res = await serveYCloudMedia(link, String(exp), await signMedia(link, exp), {} as any);
     expect(res.status).toBe(404);
+  });
+
+  it("devuelve 502 si el fetch saliente lanza (DNS, TLS, conexión)", async () => {
+    const exp = Date.now() + 60_000;
+    vi.spyOn(globalThis, "fetch").mockRejectedValue(new TypeError("network error"));
+    const res = await serveYCloudMedia(link, String(exp), await signMedia(link, exp), env);
+    expect(res.status).toBe(502);
   });
 });

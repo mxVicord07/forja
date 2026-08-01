@@ -191,15 +191,34 @@ export async function serveYCloudMedia(
   const expected = await hmacHex(secret, `${u}.${exp}`);
   if (!timingSafeEqual(expected, sig)) return new Response("bad signature", { status: 403 });
 
-  let host: string;
+  let parsed: URL;
   try {
-    host = new URL(u).hostname;
+    parsed = new URL(u);
   } catch {
     return new Response("bad url", { status: 400 });
   }
-  if (host !== YCLOUD_MEDIA_HOST) return new Response("host not allowed", { status: 403 });
+  // `.host` (no `.hostname`) para que un puerto explícito distinto también
+  // rebote — mismo host "de verdad" con :9999 no debería colarse.
+  if (parsed.host !== YCLOUD_MEDIA_HOST) return new Response("host not allowed", { status: 403 });
+  // Solo https: el hostname correcto con otro esquema (ftp:, blob:) pasaría la
+  // allowlist de host y haría explotar el fetch en vez de devolver un código
+  // determinístico.
+  if (parsed.protocol !== "https:") return new Response("scheme not allowed", { status: 403 });
 
-  const res = await fetch(u, { headers: { "X-API-Key": apiKey } });
+  let res: Response;
+  try {
+    // redirect: "manual" — la allowlist de host solo protege el primer salto.
+    // Con "follow" (el default), el X-API-Key se reenviaría tal cual a
+    // cualquier destino de un 3xx (a diferencia de Authorization, que algunos
+    // clientes sí despojan cross-origin), rompiendo la promesa de que la key
+    // nunca sale del servidor. Si YCloud alguna vez redirige a un CDN, hay
+    // que seguir el Location con un segundo fetch SIN el header.
+    res = await fetch(u, { headers: { "X-API-Key": apiKey }, redirect: "manual" });
+  } catch {
+    // fetch lanza TypeError ante fallo de DNS, TLS o conexión cortada. El
+    // contrato de este proxy es no explotar nunca — se traduce a 502.
+    return new Response("media download failed", { status: 502 });
+  }
   if (!res.ok) return new Response("media download failed", { status: 502 });
   const contentType = res.headers.get("content-type") || "application/octet-stream";
   return new Response(res.body, { status: 200, headers: { "Content-Type": contentType } });
