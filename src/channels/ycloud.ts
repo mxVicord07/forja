@@ -223,3 +223,49 @@ export async function serveYCloudMedia(
   const contentType = res.headers.get("content-type") || "application/octet-stream";
   return new Response(res.body, { status: 200, headers: { "Content-Type": contentType } });
 }
+
+const SEND_URL = "https://api.ycloud.com/v2/whatsapp/messages";
+
+export const ycloudAdapter: ChannelAdapter = {
+  // Existe por la interfaz ChannelAdapter; el webhook usa parseYCloudEvent
+  // directamente, porque puede devolver null (eventos de estado) y la
+  // interfaz obliga a devolver un IncomingMessage.
+  async parseIncoming(request: Request, env: Env): Promise<IncomingMessage> {
+    const body = await request.json();
+    const origin = new URL(request.url).origin;
+    const msg = await parseYCloudEvent(body, env, origin);
+    if (!msg) throw new Error("evento de YCloud sin mensaje procesable");
+    return msg;
+  },
+
+  async sendReply(reply: OutgoingReply, env: Env): Promise<void> {
+    const apiKey = env.YCLOUD_API_KEY;
+    const from = env.YCLOUD_WA_FROM;
+    if (!apiKey || !from) {
+      throw new Error("YCloud: falta YCLOUD_API_KEY o YCLOUD_WA_FROM.");
+    }
+    // Internamente el teléfono viaja sin "+", pero YCloud exige E.164.
+    const to = `+${normalizePhone(reply.channelUserId)}`;
+    for (let i = 0; i < reply.chunks.length; i++) {
+      const delay = i === 0 ? 0 : reply.interChunkDelayMs ?? 1000;
+      if (delay > 0) await new Promise((r) => setTimeout(r, delay));
+      const res = await fetch(SEND_URL, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "X-API-Key": apiKey },
+        body: JSON.stringify({
+          from,
+          to,
+          type: "text",
+          text: { body: reply.chunks[i], preview_url: false },
+        }),
+      });
+      // Fuera de la ventana de 24h Meta rechaza texto libre (pide plantilla
+      // HSM). No lo tragues en silencio, pero tampoco tumbes el turno. Sin
+      // PII: el teléfono destino no va en el log (commit 1934d25).
+      if (!res.ok) {
+        const errBody = await res.text().catch(() => "");
+        console.error(`ycloud sendReply ${res.status}: ${errBody}`);
+      }
+    }
+  },
+};

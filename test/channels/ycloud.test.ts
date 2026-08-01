@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, afterEach } from "vitest";
-import { verifyYCloudSignature, parseYCloudEvent, normalizePhone, serveYCloudMedia } from "../../src/channels/ycloud";
+import { verifyYCloudSignature, parseYCloudEvent, normalizePhone, serveYCloudMedia, ycloudAdapter } from "../../src/channels/ycloud";
 import { hmacHex } from "../../src/channels/shared";
 // Payload real capturado de tráfico de producción de LIA (n8n, 19 muestras,
 // confirmado también en el panel de webhooks de YCloud). Es la fuente de
@@ -197,5 +197,46 @@ describe("serveYCloudMedia", () => {
     vi.spyOn(globalThis, "fetch").mockRejectedValue(new TypeError("network error"));
     const res = await serveYCloudMedia(link, String(exp), await signMedia(link, exp), env);
     expect(res.status).toBe(502);
+  });
+});
+
+describe("ycloudAdapter.sendReply", () => {
+  const sendEnv = { YCLOUD_API_KEY: "key", YCLOUD_WA_FROM: "+524444237875" } as any;
+
+  it("manda cada chunk con X-API-Key y el + de vuelta en el destinatario", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response("{}", { status: 200 }));
+    await ycloudAdapter.sendReply(
+      { channel: "whatsapp", channelUserId: "525512345678", chunks: ["uno", "dos"], interChunkDelayMs: 0 },
+      sendEnv,
+    );
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    const [url, init] = fetchMock.mock.calls[0] as any;
+    expect(url).toBe("https://api.ycloud.com/v2/whatsapp/messages");
+    expect(init.headers["X-API-Key"]).toBe("key");
+    expect(JSON.parse(init.body)).toEqual({
+      from: "+524444237875",
+      to: "+525512345678",
+      type: "text",
+      text: { body: "uno", preview_url: false },
+    });
+  });
+
+  it("no lanza si YCloud responde error (fuera de la ventana de 24h)", async () => {
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response("nope", { status: 400 }));
+    await expect(
+      ycloudAdapter.sendReply(
+        { channel: "whatsapp", channelUserId: "525512345678", chunks: ["x"], interChunkDelayMs: 0 },
+        sendEnv,
+      ),
+    ).resolves.toBeUndefined();
+  });
+
+  it("lanza si falta configuración", async () => {
+    await expect(
+      ycloudAdapter.sendReply(
+        { channel: "whatsapp", channelUserId: "5", chunks: ["x"] },
+        {} as any,
+      ),
+    ).rejects.toThrow(/YCLOUD/);
   });
 });
