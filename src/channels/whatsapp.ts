@@ -12,6 +12,7 @@
 // tocarlas, lo servimos por un proxy FIRMADO (/webhooks/whatsapp/media/:id): la
 // URL es pública pero con HMAC + expiración, y el token queda del lado del server.
 import type { ChannelAdapter, IncomingMessage, OutgoingReply } from "./shared";
+import { hmacHex, timingSafeEqual } from "./shared";
 import type { Env } from "../env";
 
 const GRAPH_VERSION = "v21.0";
@@ -46,25 +47,6 @@ interface WaWebhookBody {
 /** Secret para firmar el webhook y las URLs de media (Cloud usa el App Secret). */
 function appSecret(env: Env): string {
   return env.WHATSAPP_APP_SECRET || env.META_APP_SECRET || "";
-}
-
-async function hmacHex(secret: string, message: string): Promise<string> {
-  const key = await crypto.subtle.importKey(
-    "raw",
-    new TextEncoder().encode(secret),
-    { name: "HMAC", hash: "SHA-256" },
-    false,
-    ["sign"],
-  );
-  const sig = await crypto.subtle.sign("HMAC", key, new TextEncoder().encode(message));
-  return [...new Uint8Array(sig)].map((b) => b.toString(16).padStart(2, "0")).join("");
-}
-
-function timingSafeEqual(a: string, b: string): boolean {
-  if (a.length !== b.length) return false;
-  let diff = 0;
-  for (let i = 0; i < a.length; i++) diff |= a.charCodeAt(i) ^ b.charCodeAt(i);
-  return diff === 0;
 }
 
 /** Construye la URL firmada del proxy para un media_id (o null si no hay secret/base). */

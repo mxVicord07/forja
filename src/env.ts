@@ -67,6 +67,16 @@ export interface Env {
   WHATSAPP_APP_SECRET?: string;       // firma X-Hub-Signature-256 (si falta, usa META_APP_SECRET)
   XAI_API_KEY?: string;             // xAI (Grok) — proveedor LLM alterno (ver src/llm/provider.ts)
 
+  // Proveedor del canal WhatsApp. "meta" = Cloud API directo (WHATSAPP_*),
+  // "ycloud" = YCloud como BSP (YCLOUD_*). Default "meta": cambiarlo rompería
+  // en silencio a quien ya opera con Cloud API directo — la firma de YCloud
+  // rechazaría todos los payloads de Meta con 403 y el bot dejaría de
+  // responder sin un error visible.
+  WA_PROVIDER?: "ycloud" | "meta";
+  YCLOUD_API_KEY?: string;         // header X-API-Key (envío y descarga de media)
+  YCLOUD_WEBHOOK_SECRET?: string;  // whsec_… del endpoint: firma entrante + URLs de media
+  YCLOUD_WA_FROM?: string;         // número emisor en E.164, p.ej. +524444237875
+
   // ── Cal.com (agenda real para scheduleAppointment) ───────────────────────
   // Con estas vars, el bot consulta disponibilidad real y reserva en Cal.com.
   // Sin ellas, scheduleAppointment solo registra la cita para que el dueño la confirme.
