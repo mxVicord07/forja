@@ -20,6 +20,112 @@ import type { Env } from "../env";
 /** Ventana anti-replay de la firma entrante. */
 const SIGNATURE_TOLERANCE_MS = 5 * 60 * 1000;
 
+/** TTL de la URL firmada del proxy de media entrante. */
+const MEDIA_TTL_MS = 10 * 60 * 1000;
+
+/**
+ * Único tipo de evento que representa un mensaje entrante procesable. La
+ * documentación de YCloud llama al envelope "whatsappMessage" en algunas
+ * páginas, pero el tráfico real (19 muestras capturadas en producción,
+ * confirmadas también en el panel de webhooks de YCloud) usa
+ * "whatsappInboundMessage" — ver docs/superpowers/specs/ycloud-payloads-capturados.json.
+ */
+const INBOUND_EVENT = "whatsapp.inbound_message.received";
+
+interface YCloudInboundMessage {
+  from?: string;
+  id?: string;
+  type?: string;
+  customerProfile?: { name?: string };
+  text?: { body?: string };
+  image?: { link?: string; caption?: string; id?: string };
+  audio?: { link?: string; id?: string };
+}
+
+interface YCloudEvent {
+  id?: string;
+  type?: string;
+  whatsappInboundMessage?: YCloudInboundMessage;
+}
+
+/**
+ * Formato canónico interno del teléfono: solo dígitos. YCloud entrega E.164
+ * con "+" y Meta Cloud API sin él; si no unificáramos, el Durable Object
+ * `whatsapp:<id>` sería distinto en cada proveedor y el corte de YCloud a
+ * Cloud API directo haría que cada cliente perdiera su historial.
+ */
+export function normalizePhone(raw: string): string {
+  return raw.replace(/\D/g, "");
+}
+
+/** URL firmada del proxy de media (o null si falta secret/base). */
+async function signedMediaUrl(link: string, env: Env, origin: string): Promise<string | null> {
+  const secret = env.YCLOUD_WEBHOOK_SECRET;
+  const base = (origin || env.DASHBOARD_BASE_URL || "").replace(/\/$/, "");
+  if (!secret || !base) return null;
+  const exp = Date.now() + MEDIA_TTL_MS;
+  const sig = await hmacHex(secret, `${link}.${exp}`);
+  return `${base}/webhooks/whatsapp/media?u=${encodeURIComponent(link)}&exp=${exp}&sig=${sig}`;
+}
+
+/**
+ * Convierte un evento de YCloud en un IncomingMessage, o null si no hay nada
+ * que procesar (recibos de entrega, tipos no soportados, evento sin remitente).
+ * Devuelve null en vez de lanzar: al mismo endpoint llegan eventos de estado
+ * perfectamente normales, y lanzar obligaría a envolver cada llamada en
+ * try/catch para no contestarle 500 a YCloud (que reintentaría).
+ */
+export async function parseYCloudEvent(
+  body: unknown,
+  env: Env,
+  origin: string,
+): Promise<IncomingMessage | null> {
+  const event = body as YCloudEvent;
+  if (event?.type !== INBOUND_EVENT) return null;
+
+  const m = event.whatsappInboundMessage;
+  const from = m?.from;
+  if (!m || !from) return null;
+
+  let text: string | undefined;
+  let audioUrl: string | undefined;
+  let imageUrl: string | undefined;
+
+  if (m.type === "text") {
+    text = m.text?.body || undefined;
+  } else if (m.type === "image" && m.image?.link) {
+    // Forma según la documentación de YCloud (image: {link, caption, id}), NO
+    // verificada contra un payload real: no hay ninguna muestra de media en
+    // las 19 ejecuciones capturadas. Si el primer media real difiere, la
+    // fuente de verdad es rawPayload en los logs.
+    imageUrl = (await signedMediaUrl(m.image.link, env, origin)) ?? undefined;
+    text = m.image.caption || undefined;
+  } else if (m.type === "audio" && m.audio?.link) {
+    // Igual que arriba: forma solo documentada (audio: {link, id}), no
+    // verificada contra tráfico real. Ver rawPayload en los logs cuando
+    // llegue el primer audio real para confirmar/corregir esta forma.
+    audioUrl = (await signedMediaUrl(m.audio.link, env, origin)) ?? undefined;
+  }
+
+  console.log(
+    "ycloud in:",
+    JSON.stringify({ type: m.type, hasText: !!text, hasAudio: !!audioUrl, hasImage: !!imageUrl }),
+  );
+  if (!text && !audioUrl && !imageUrl) return null;
+
+  return {
+    channel: "whatsapp",
+    channelUserId: normalizePhone(from),
+    displayName: m.customerProfile?.name,
+    text,
+    audioUrl,
+    imageUrl,
+    isOwnerMessage: false,
+    receivedAt: Date.now(),
+    rawPayload: event,
+  };
+}
+
 /**
  * Verifica el header `YCloud-Signature: t=<unix_segundos>,s=<hmac_hex>`, donde
  * el HMAC-SHA256 se calcula sobre `${t}.${raw}`.
