@@ -1,0 +1,37 @@
+{
+  "_fuente": "n8n execution 8239 del workflow 8E0Y7ap8iMBxWREA (webhook 66aac0b3...), 2026-08-01T09:57:07",
+  "_metodo": "Historial de ejecuciones de n8n via API REST. NO se envio ningun mensaje de prueba; son datos de trafico real de LIA.",
+  "_muestras_revisadas": "19 ejecuciones, todas type=text. No hay image/audio en el historial retenido.",
+  "_headers_relevantes": {
+    "user-agent": "Go-http-client/1.1",
+    "content-type": "application/json",
+    "x-webhook-endpoint-id": "69be0bd818d8af1b4032a878",
+    "ycloud-signature": "t=1785578227,s=7f8143da19f7c4e0c2b83bdec6353ce3b32aed8de52552f5120ab53ceb384e6c"
+  },
+  "text": {
+    "id": "evt_6a6dc2f34223092dfc8dfd29",
+    "type": "whatsapp.inbound_message.received",
+    "apiVersion": "v2",
+    "createTime": "2026-08-01T09:57:07.128Z",
+    "whatsappInboundMessage": {
+      "id": "6a6dc2f34223092dfc8dfd23",
+      "wamid": "wamid.HBgNNTIxNDQ0MTc5Njc5MxUCABIYFDNBOTE1NTQzOEFFRDk5NTFCNkI3AA==",
+      "wabaId": "1298715852276116",
+      "from": "+524441796793",
+      "fromUserId": "MX.1419791446497941",
+      "customerProfile": {
+        "name": "Victor M. Cordero"
+      },
+      "to": "+524444237875",
+      "sendTime": "2026-08-01T09:57:05.000Z",
+      "type": "text",
+      "text": {
+        "body": "gracias"
+      }
+    }
+  },
+  "_pendiente_de_verificar": {
+    "image": "Forma segun docs de YCloud: whatsappInboundMessage.image = {link, caption, id}. NO verificada contra payload real.",
+    "audio": "Forma segun docs de YCloud: whatsappInboundMessage.audio = {link, id}. NO verificada contra payload real."
+  }
+}
