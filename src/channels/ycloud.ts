@@ -11,8 +11,11 @@
 //  • Entrante: un evento = un mensaje (Meta batchea varios por POST).
 //  • Media: viene como URL directa, no como media_id, pero su descarga exige
 //    X-API-Key — o sea que igual necesita proxy firmado.
-//  • Teléfono: E.164 con "+". Se normaliza a dígitos pelones, que es el
-//    formato que ya produce whatsapp.ts.
+//  • Teléfono: E.164 con "+". Se normaliza a dígitos pelones vía
+//    `normalizePhone` (shared.ts) — la misma función que usa whatsapp.ts, así
+//    ambos producen idéntico channelUserId (unificado en el commit 90dd6a0;
+//    antes de ese fix whatsapp.ts NO normalizaba, así que este comentario
+//    habría sido falso).
 import type { ChannelAdapter, IncomingMessage, OutgoingReply } from "./shared";
 import { hmacHex, timingSafeEqual, normalizePhone } from "./shared";
 import type { Env } from "../env";

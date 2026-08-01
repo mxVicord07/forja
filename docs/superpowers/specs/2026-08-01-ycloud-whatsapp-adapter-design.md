@@ -133,9 +133,17 @@ Meta que el código debe respetar:
   | `audioUrl` | proxy firmado sobre `audio.link` |
 
 - `channel: "whatsapp"`, `isOwnerMessage: false`, `rawPayload` = el evento.
-- Las rutas exactas se **confirman contra los payloads reales capturados en la
-  Etapa A** antes de escribir el parser (ver Ejecución). La tabla de arriba sale
-  de la documentación de YCloud y se trata como hipótesis, no como verdad.
+- **Estado real post-implementación (ver Ejecución):** no hizo falta la
+  ventana de captura de la Etapa A — el payload de **texto** se confirmó
+  contra 19 ejecuciones reales del historial de n8n del webhook de LIA (ver
+  `docs/superpowers/specs/ycloud-payloads-capturados.json` y
+  `docs/canales/learn-mode.md`), y la fila `text` de la tabla de arriba sale
+  de ahí, no de la documentación. **`image` y `audio` siguen sin verificar**:
+  el historial retenido de n8n no tenía ningún mensaje con media, así que esas
+  dos filas siguen siendo la hipótesis original sacada de la documentación de
+  YCloud (`whatsappInboundMessage.image = {link, caption, id}` y
+  `.audio = {link, id}`), no verdad confirmada. `test/channels/ycloud.test.ts`
+  lo deja explícito en los tests de imagen/audio.
 
 **Proxy de media: `signedMediaUrl()` + `serveYCloudMedia()`**
 YCloud entrega `link` como URL directa, pero su descarga exige el header
@@ -292,32 +300,78 @@ limpio.
 ## Ejecución
 
 1. Implementar el fix de learn-mode (rutas admin) + `pnpm test` + deploy.
-2. **Pausar LIA en n8n** (acción manual del usuario, workflow
-   `8E0Y7ap8iMBxWREA`) para que la ventana de captura no genere respuestas.
-3. Encender learn-mode para `whatsapp`; agregar en YCloud un 2º endpoint
-   apuntando a `https://birevx-support-bot.victor-m-426.workers.dev/webhooks/learn/whatsapp`.
-4. Enviar al número un texto, una imagen y una nota de voz. Apagar learn-mode.
-5. Leer los 3 payloads capturados y **construir el parser contra ellos**,
-   corrigiendo la tabla de mapeo si la documentación de YCloud difiere.
-6. Reactivar LIA. Quitar el endpoint de captura.
-7. Implementar el adapter completo + tests. Verificar 446+ verdes y typecheck.
-8. **Parar.** La Etapa B (corte) no se ejecuta hasta que la auditoría de LIA
+2. ~~Pausar LIA en n8n, encender learn-mode, mandar texto/imagen/audio de
+   prueba, apagar learn-mode~~ — **no se ejecutó así.** En la práctica no hizo
+   falta abrir la ventana de captura: el webhook de LIA venía recibiendo
+   tráfico real desde hace meses y n8n conserva el historial de ejecuciones.
+   Se leyó ese historial vía API REST de n8n (19 ejecuciones, todas de texto)
+   y de ahí salió el único payload real disponible — ver
+   `docs/superpowers/specs/ycloud-payloads-capturados.json`. LIA **nunca se
+   pausó** porque nunca se le compitió por el endpoint. Imagen y audio no
+   aparecían en el historial retenido, así que quedaron sin verificar (se
+   construyeron contra la documentación de YCloud, marcados como hipótesis en
+   `ycloud.ts` y en sus tests). Se documentó esta vía como precedente para
+   cuándo SÍ conviene usar learn-mode en `docs/canales/learn-mode.md`.
+3. Construir el parser de texto contra el payload real; imagen/audio contra
+   la documentación (hipótesis, sin verificar).
+4. Implementar el adapter completo + tests. Suite verde + typecheck limpio.
+5. **Parar.** La Etapa B (corte) no se ejecuta hasta que la auditoría de LIA
    esté hecha desde el workspace "Consultor BIRevX AAIA".
 
 ## Criterios de aceptación
 
-- [ ] Learn-mode encendible y apagable desde una ruta autenticada.
+- [x] Learn-mode encendible y apagable desde una ruta autenticada.
+      Verificado en `test/admin/learn-routes.test.ts` (start/stop con Basic
+      Auth, 401 sin credenciales, CSRF/Content-Type, gate `LEARN_MODE_ENABLED`
+      agregado en el commit `a6714d5` de esta rama).
 - [ ] Los 3 payloads reales de YCloud capturados y archivados.
+      Solo **texto** está confirmado contra tráfico real (19 ejecuciones del
+      historial de n8n, commit `c807552`,
+      `docs/superpowers/specs/ycloud-payloads-capturados.json`). Imagen y
+      audio NO tienen payload real — el historial retenido de n8n no incluía
+      ningún mensaje con media. No lo marco porque solo 1 de 3 formas está
+      verificada.
 - [ ] `ycloud.ts` parsea texto, imagen y audio de payloads reales.
-- [ ] Firma verificada fail-closed, con ventana anti-replay.
-- [ ] Proxy de media sirve audio e imagen sin exponer la API key, y rechaza
+      Texto sí (mismo respaldo que el punto anterior). Imagen y audio se
+      parsean contra la **hipótesis** sacada de la documentación de YCloud,
+      no contra un payload real — así lo dejan explícito los tests
+      "forma no verificada" en `test/channels/ycloud.test.ts`. No lo marco
+      por la misma razón que el punto anterior.
+- [x] Firma verificada fail-closed, con ventana anti-replay.
+      `test/channels/ycloud.test.ts::describe("verifyYCloudSignature")`:
+      firma vieja/futura fuera de ventana, header malformado, y fail-closed
+      sin header o sin secret.
+- [x] Proxy de media sirve audio e imagen sin exponer la API key, y rechaza
       hosts fuera de `api.ycloud.com`.
-- [ ] `channelUserId` normalizado a dígitos, idéntico al que produciría
+      `test/channels/ycloud.test.ts::describe("serveYCloudMedia")`: sirve
+      bytes con X-API-Key sin exponerla al cliente, rechaza host fuera de
+      `api.ycloud.com` y esquema distinto de https, sin llegar a golpear la
+      red.
+- [x] `channelUserId` normalizado a dígitos, idéntico al que produciría
       `whatsapp.ts`.
-- [ ] `WA_PROVIDER` conmuta proveedor **de entrada y de salida** sin cambios de
+      `test/channels/shared.test.ts::"paridad de channelUserId entre
+      adapters de WhatsApp"` — arreglado en el commit `90dd6a0` (antes,
+      `whatsapp.ts` no normalizaba y el comentario de `ycloud.ts` que
+      afirmaba lo contrario era falso; ver corrección de ese comentario en
+      esta misma rama).
+- [x] `WA_PROVIDER` conmuta proveedor **de entrada y de salida** sin cambios de
       código (`pickAdapter` incluido).
-- [ ] Suite completa en verde + typecheck limpio.
+      `test/replies/sender.test.ts` (`pickAdapter`/envío) y
+      `test/webhooks/whatsapp-dispatch.test.ts` (despacho del webhook
+      entrante), commits `5f9c3ca` y `6be98bc`.
+- [x] Suite completa en verde + typecheck limpio.
+      `pnpm test` → 526 passed (69 archivos) · `pnpm typecheck` → limpio.
+      Salida completa en
+      `.superpowers/sdd/2026-08-01-ycloud-whatsapp-adapter/learn-gate-report.md`.
 - [ ] LIA reactivada y endpoint de captura retirado.
+      No aplica tal como estaba escrito: LIA **nunca se pausó** (ver
+      "Ejecución" arriba — el payload se obtuvo del historial de n8n, no de
+      una ventana de captura en vivo), así que no hubo nada que reactivar. El
+      endpoint de captura tampoco se "retiró": sigue en el código pero ahora
+      gateado por `LEARN_MODE_ENABLED` (apagado por defecto), ver
+      `docs/canales/learn-mode.md`. Dejo sin marcar porque el criterio,
+      literalmente, no ocurrió — quedó obsoleto por el cambio de método en la
+      Task 2.
 
 ## Contribución upstream
 
