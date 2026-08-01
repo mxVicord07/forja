@@ -190,6 +190,43 @@ se firma es distinto (Meta firma un `media_id` opaco; YCloud firma una URL):
 No colisionan en Hono (una tiene segmento de path, la otra no), y cada adapter
 genera solo la suya, así que ambas pueden coexistir registradas.
 
+### 3b. `src/replies/sender.ts` — `pickAdapter` necesita `env`
+
+Consecuencia directa del channel id compartido, detectada al planear: el
+despacho de `index.ts` solo cubre la **entrada**. La **salida** pasa por
+`pickAdapter(channel)` (`src/replies/sender.ts:38`), que resuelve
+`"whatsapp"` → `whatsappAdapter` (Meta) mirando únicamente el channel id.
+
+Con `WA_PROVIDER=ycloud` eso produce el peor síntoma posible: el mensaje entra
+bien por YCloud, el LLM responde, y el envío falla contra Meta por falta de
+`WHATSAPP_PHONE_NUMBER_ID`. El bot recibe y nunca contesta.
+
+**Cambio:** `pickAdapter(channel: ChannelId, env: Env): ChannelAdapter`. Para
+`"whatsapp"` devuelve `ycloudAdapter` o `whatsappAdapter` según
+`env.WA_PROVIDER`; el resto de canales no cambia.
+
+Los 5 call sites de producción ya tienen `env` en el scope inmediato, así que es
+mecánico:
+
+| Sitio | Variable disponible |
+|---|---|
+| `src/agent.ts:106` | `this.env` |
+| `src/agent.ts:426` | `this.env` |
+| `src/campaigns.ts:144` | `env` |
+| `src/followup/run.ts:177` | `env` |
+| `src/admin/routes.ts:563` | `c.env` |
+
+Tests afectados que hay que actualizar: `test/replies/sender.test.ts` (llama
+`pickAdapter(ch)` directo) y `test/admin/inbox.test.ts:123`
+(`expect(pickAdapterMock).toHaveBeenCalledWith("telegram")` pasa a esperar dos
+argumentos). Los demás mockean `pickAdapter` con firma variádica y no se
+inmutan.
+
+**Valor no reconocido:** si `WA_PROVIDER` trae algo que no es `"ycloud"` ni
+`"meta"` (typo tipo `"yclod"`), se registra `console.error` y se cae a `"meta"`.
+No se lanza — tumbar el turno por una var mal escrita es peor que responder por
+el proveedor por defecto — pero tampoco se degrada en silencio.
+
 ### 4. `src/env.ts`
 
 ```ts
@@ -277,7 +314,8 @@ limpio.
       hosts fuera de `api.ycloud.com`.
 - [ ] `channelUserId` normalizado a dígitos, idéntico al que produciría
       `whatsapp.ts`.
-- [ ] `WA_PROVIDER` conmuta proveedor sin cambios de código.
+- [ ] `WA_PROVIDER` conmuta proveedor **de entrada y de salida** sin cambios de
+      código (`pickAdapter` incluido).
 - [ ] Suite completa en verde + typecheck limpio.
 - [ ] LIA reactivada y endpoint de captura retirado.
 
