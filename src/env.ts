@@ -101,6 +101,16 @@ export interface Env {
   // Set via `wrangler secret put KB_REINDEX_TOKEN`.
   KB_REINDEX_TOKEN: string;
 
+  // Gate global de learn-mode: "1" | "true" (insensible a mayúsculas, con
+  // trim) prende; cualquier otra cosa, incluida la ausencia, apaga (default
+  // OFF). La feature está incompleta — el lado de escritura funciona pero
+  // saveLearnedMapping/loadCapture (src/learn/mapping.ts) no tienen ningún
+  // llamador y ninguna vista del panel expone lo capturado — y su endpoint
+  // de captura (POST /webhooks/learn/:channel) no valida firma. Encenderla
+  // sin uso real es solo superficie de ataque, así que se mantiene apagada
+  // salvo que alguien la prenda a propósito. Ver docs/canales/learn-mode.md.
+  LEARN_MODE_ENABLED?: string;
+
   // Control plane (hosted): glue para que un plano de control externo lea este
   // bot self-hosted vía los endpoints /api/*. Ambos opcionales; sin el token,
   // /api/* queda cerrado (fail-closed).

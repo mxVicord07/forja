@@ -15,7 +15,7 @@ import { analyzeConversations } from "./insights/analyzer";
 import { Db } from "./db/client";
 import { SettingsRepo, SETTING_KEYS } from "./db/settings";
 import { detectKind } from "./learn/fieldPath";
-import { saveCapture, isLearnMode } from "./learn/mapping";
+import { saveCapture, isLearnMode, isLearnModeEnabled } from "./learn/mapping";
 import { tokensMatch } from "./http-auth";
 import { apiApp } from "./api";
 
@@ -216,6 +216,14 @@ app.get("/webhooks/whatsapp/media", (c) =>
 // runs the LLM; it only observes. When learn mode is OFF it returns 409 so the
 // caller knows nothing was captured.
 app.post("/webhooks/learn/:channel", async (c) => {
+  // Gate global primero: apagado por defecto (ver src/env.ts). Corta ANTES de
+  // tocar D1 o leer settings — este endpoint no valida firma, así que ni
+  // siquiera queremos que un estado remanente de learn:<channel>:until en D1
+  // (de cuando el gate sí estaba prendido) pueda reactivar la captura.
+  if (!isLearnModeEnabled(c.env)) {
+    return c.json({ ok: false, error: "learn mode off" }, 409);
+  }
+
   const channel = c.req.param("channel");
   let payload: unknown;
   try {

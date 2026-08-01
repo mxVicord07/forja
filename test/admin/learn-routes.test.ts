@@ -18,7 +18,10 @@ let repo: SettingsRepo;
 beforeEach(async () => {
   const mf = await createTestMiniflare();
   const d1 = (await mf.getD1Database("DB")) as any;
-  env = { DB: d1, DASHBOARD_PASSWORD: PASSWORD } as unknown as Env;
+  // Estos tests ejercitan el comportamiento "feature encendida" (existente
+  // antes del gate). El gate en sí (apagado por defecto, 403) se prueba en
+  // el describe de más abajo con su propio env.
+  env = { DB: d1, DASHBOARD_PASSWORD: PASSWORD, LEARN_MODE_ENABLED: "1" } as unknown as Env;
   repo = new SettingsRepo(new Db(d1));
 });
 
@@ -177,5 +180,61 @@ describe("rutas admin de learn-mode", () => {
       const res = await adminApp.request(`/learn/${ch}/start`, { method: "POST", headers: JSON_HEADERS }, env);
       expect(res.status).toBe(200);
     }
+  });
+});
+
+describe("gate LEARN_MODE_ENABLED (apagado por defecto)", () => {
+  let offEnv: Env;
+  let onEnv: Env;
+  let offRepo: SettingsRepo;
+
+  beforeEach(async () => {
+    const mf = await createTestMiniflare();
+    const d1 = (await mf.getD1Database("DB")) as any;
+    // Sin LEARN_MODE_ENABLED -> apagado por defecto.
+    offEnv = { DB: d1, DASHBOARD_PASSWORD: PASSWORD } as unknown as Env;
+    onEnv = { DB: d1, DASHBOARD_PASSWORD: PASSWORD, LEARN_MODE_ENABLED: "1" } as unknown as Env;
+    offRepo = new SettingsRepo(new Db(d1));
+  });
+
+  it("start responde 403 cuando el gate está apagado (default) y no enciende nada", async () => {
+    const res = await adminApp.request("/learn/whatsapp/start", { method: "POST", headers: JSON_HEADERS }, offEnv);
+    expect(res.status).toBe(403);
+    expect(await isLearnMode(offRepo, "whatsapp")).toBe(false);
+  });
+
+  it("start funciona igual que antes cuando el gate está prendido", async () => {
+    const res = await adminApp.request("/learn/whatsapp/start", { method: "POST", headers: JSON_HEADERS }, onEnv);
+    expect(res.status).toBe(200);
+    expect(await isLearnMode(offRepo, "whatsapp")).toBe(true);
+  });
+
+  it("con el gate apagado, sin Basic Auth sigue respondiendo 401 (la auth corre antes)", async () => {
+    const res = await adminApp.request(
+      "/learn/whatsapp/start",
+      { method: "POST", headers: { "Content-Type": "application/json" } },
+      offEnv,
+    );
+    expect(res.status).toBe(401);
+  });
+
+  it("stop funciona con el gate apagado (kill switch siempre disponible)", async () => {
+    // Se prende con el gate activo…
+    await adminApp.request("/learn/whatsapp/start", { method: "POST", headers: JSON_HEADERS }, onEnv);
+    expect(await isLearnMode(offRepo, "whatsapp")).toBe(true);
+    // …y se puede apagar aunque el request llegue con el gate desactivado.
+    const res = await adminApp.request("/learn/whatsapp/stop", { method: "POST", headers: JSON_HEADERS }, offEnv);
+    expect(res.status).toBe(200);
+    expect(await isLearnMode(offRepo, "whatsapp")).toBe(false);
+  });
+
+  it("valores raros del gate (\"0\", \"yes\", \" TRUE \") se interpretan correctamente en start", async () => {
+    const zeroEnv = { ...offEnv, LEARN_MODE_ENABLED: "0" } as unknown as Env;
+    const yesEnv = { ...offEnv, LEARN_MODE_ENABLED: "yes" } as unknown as Env;
+    const trueSpacedEnv = { ...offEnv, LEARN_MODE_ENABLED: " TRUE " } as unknown as Env;
+
+    expect((await adminApp.request("/learn/whatsapp/start", { method: "POST", headers: JSON_HEADERS }, zeroEnv)).status).toBe(403);
+    expect((await adminApp.request("/learn/whatsapp/start", { method: "POST", headers: JSON_HEADERS }, yesEnv)).status).toBe(403);
+    expect((await adminApp.request("/learn/whatsapp/start", { method: "POST", headers: JSON_HEADERS }, trueSpacedEnv)).status).toBe(200);
   });
 });

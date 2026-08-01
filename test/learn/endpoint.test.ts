@@ -78,6 +78,9 @@ describe("POST /webhooks/learn/:channel", () => {
       BUFFER_SECONDS: "15",
       DASHBOARD_BASE_URL: "https://test.workers.dev",
       DB: d1,
+      // Estos tests ejercitan el comportamiento de la feature ya encendida;
+      // el gate en sí (apagado por defecto) tiene su propio describe abajo.
+      LEARN_MODE_ENABLED: "1",
     };
   });
 
@@ -160,5 +163,66 @@ describe("POST /webhooks/learn/:channel", () => {
       {} as any,
     );
     expect(res.status).toBe(200);
+  });
+});
+
+describe("POST /webhooks/learn/:channel — gate LEARN_MODE_ENABLED (apagado por defecto)", () => {
+  let offEnv: any;
+  let repo: SettingsRepo;
+
+  beforeEach(async () => {
+    const mf = await createTestMiniflare();
+    const d1 = await mf.getD1Database("DB");
+    repo = new SettingsRepo(new Db(d1 as any));
+    offEnv = {
+      BOT_NAME: "Testi",
+      BUSINESS_NAME: "Test",
+      BOT_LANGUAGE: "es",
+      BOT_TIER: "pro",
+      BUFFER_SECONDS: "15",
+      DASHBOARD_BASE_URL: "https://test.workers.dev",
+      DB: d1,
+      // LEARN_MODE_ENABLED ausente -> gate apagado.
+    };
+  });
+
+  function post(env: any, channel: string, payload: unknown) {
+    return worker.fetch(
+      new Request(`https://test/webhooks/learn/${channel}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      }),
+      env,
+      {} as any,
+    );
+  }
+
+  it("rechaza con 409 sin capturar, aunque learn-mode esté prendido en settings", async () => {
+    // Prende learn-mode directo en el repo (bypaseando el admin), simulando
+    // estado remanente de cuando el gate sí estaba activo. Con el gate
+    // apagado, el handler debe cortar por env ANTES de siquiera consultar
+    // isLearnMode/settings, así que este estado remanente no debe importar.
+    await startLearnMode(repo, "instagram", 15);
+    const res = await post(offEnv, "instagram", { body: { id: "1" }, last_input_text: "hola" });
+    expect(res.status).toBe(409);
+    expect(await res.json()).toEqual({ ok: false, error: "learn mode off" });
+    expect(await loadCapture(repo, "instagram", "text")).toBeNull();
+  });
+
+  it("valores raros del gate (\"0\") siguen apagados", async () => {
+    const zeroEnv = { ...offEnv, LEARN_MODE_ENABLED: "0" };
+    await startLearnMode(repo, "instagram", 15);
+    const res = await post(zeroEnv, "instagram", { body: { id: "1" }, last_input_text: "hola" });
+    expect(res.status).toBe(409);
+  });
+
+  it("con el gate prendido (\" true \") vuelve a capturar", async () => {
+    const onEnv = { ...offEnv, LEARN_MODE_ENABLED: " true " };
+    await startLearnMode(repo, "instagram", 15);
+    const payload = { body: { id: "1" }, last_input_text: "hola" };
+    const res = await post(onEnv, "instagram", payload);
+    expect(res.status).toBe(200);
+    expect(await loadCapture(repo, "instagram", "text")).toEqual(payload);
   });
 });

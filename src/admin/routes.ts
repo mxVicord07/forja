@@ -55,7 +55,7 @@ import { SettingsRepo, SETTING_KEYS, type SettingKey } from "../db/settings";
 import { CONTROLS, levelToValue } from "./control-levels";
 import { systemPromptFromEnv } from "../system-prompt";
 import { renderBusinessContext } from "../businessContext";
-import { startLearnMode, stopLearnMode } from "../learn/mapping";
+import { startLearnMode, stopLearnMode, isLearnModeEnabled } from "../learn/mapping";
 
 export const adminApp = new Hono<{ Bindings: Env }>();
 
@@ -698,7 +698,21 @@ function requireJson(c: { req: { header: (name: string) => string | undefined } 
   return ct.split(";")[0].trim().toLowerCase() === "application/json";
 }
 
+// Gate global (LEARN_MODE_ENABLED, ver src/env.ts): apagado por defecto. Esta
+// ruta ya vive detrás del Basic Auth wildcard de arriba, así que quien llega
+// hasta acá ya se autenticó como admin — un 404 ("no existe") no compraría
+// nada de seguridad extra sobre un 403 ("existe pero está apagada"), y sí le
+// quitaría al dueño la señal de qué encender. Por eso 403 con mensaje claro
+// en vez de 404.
+//
+// `stop` NO respeta el gate: es el kill switch. Si se prendió learn-mode con
+// el gate activo y luego se apaga el gate (nuevo deploy), el estado en D1
+// (learn:<channel>:until) debe poder limpiarse igual sin depender de volver
+// a prender la feature completa solo para poder apagarla.
 adminApp.post("/learn/:channel/start", async (c) => {
+  if (!isLearnModeEnabled(c.env)) {
+    return c.json({ ok: false, error: "learn mode deshabilitado (LEARN_MODE_ENABLED)" }, 403);
+  }
   if (!requireJson(c)) return c.json({ ok: false, error: "requiere Content-Type: application/json" }, 415);
   const channel = c.req.param("channel");
   if (!isChannelId(channel)) return c.json({ ok: false, error: `canal desconocido: ${channel}` }, 400);

@@ -101,3 +101,14 @@ export async function stopLearnMode(
 ): Promise<void> {
   await repo.set(learnUntilKey(channel), "0");
 }
+
+// ---- Gate global (LEARN_MODE_ENABLED) --------------------------------------
+
+// La feature está incompleta (ver comentario en src/env.ts): esto es el
+// interruptor maestro, apagado por defecto. Mismo criterio de normalización
+// que `resolveWaProvider` (src/replies/sender.ts): trim + lowercase, "1" o
+// "true" prenden, cualquier otra cosa (incluida la ausencia) apaga.
+export function isLearnModeEnabled(env: { LEARN_MODE_ENABLED?: string }): boolean {
+  const v = (env.LEARN_MODE_ENABLED ?? "").trim().toLowerCase();
+  return v === "1" || v === "true";
+}

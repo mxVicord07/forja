@@ -11,6 +11,7 @@ import {
   isLearnMode,
   startLearnMode,
   stopLearnMode,
+  isLearnModeEnabled,
 } from "../../src/learn/mapping";
 
 let repo: SettingsRepo;
@@ -142,5 +143,35 @@ describe("learn mode (auto-expiration by injected timestamp)", () => {
     await startLearnMode(repo, "instagram", 15, start);
     expect(await isLearnMode(repo, "instagram", start + 1)).toBe(true);
     expect(await isLearnMode(repo, "messenger", start + 1)).toBe(false);
+  });
+});
+
+describe("isLearnModeEnabled (gate global, apagado por defecto)", () => {
+  it("apagado cuando la var no está seteada", () => {
+    expect(isLearnModeEnabled({})).toBe(false);
+  });
+
+  it("apagado con undefined explícito", () => {
+    expect(isLearnModeEnabled({ LEARN_MODE_ENABLED: undefined })).toBe(false);
+  });
+
+  it("prendido con \"1\"", () => {
+    expect(isLearnModeEnabled({ LEARN_MODE_ENABLED: "1" })).toBe(true);
+  });
+
+  it("prendido con \"true\" en cualquier capitalización y con espacios", () => {
+    expect(isLearnModeEnabled({ LEARN_MODE_ENABLED: "true" })).toBe(true);
+    expect(isLearnModeEnabled({ LEARN_MODE_ENABLED: "TRUE" })).toBe(true);
+    expect(isLearnModeEnabled({ LEARN_MODE_ENABLED: " TRUE " })).toBe(true);
+  });
+
+  it("prendido con \"1\" con espacios alrededor", () => {
+    expect(isLearnModeEnabled({ LEARN_MODE_ENABLED: " 1 " })).toBe(true);
+  });
+
+  it("apagado con valores raros: \"0\", \"yes\", string vacío", () => {
+    expect(isLearnModeEnabled({ LEARN_MODE_ENABLED: "0" })).toBe(false);
+    expect(isLearnModeEnabled({ LEARN_MODE_ENABLED: "yes" })).toBe(false);
+    expect(isLearnModeEnabled({ LEARN_MODE_ENABLED: "" })).toBe(false);
   });
 });
