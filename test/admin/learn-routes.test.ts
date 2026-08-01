@@ -97,6 +97,40 @@ describe("rutas admin de learn-mode", () => {
     expect(await isLearnMode(repo, "whatsapp")).toBe(true); // no se apagó
   });
 
+  // Re-review: comparar con `includes` sobre el header ENTERO deja pasar
+  // "text/plain;charset=application/json" — la essence real es text/plain
+  // (CORS-safelisted), así que el navegador NO manda preflight: justo la
+  // propiedad en la que se apoya esta mitigación. Con `includes`, ese ataque
+  // pasaba el gate (c.req.json() fallaba, el .catch(() => ({})) lo tapaba, y
+  // seguía el camino feliz con minutes=15). Este es el vector real.
+  it("rechaza el vector de essence falsa (text/plain con 'application/json' en el charset)", async () => {
+    const res = await adminApp.request(
+      "/learn/whatsapp/start",
+      { method: "POST", headers: { ...AUTH, "Content-Type": "text/plain;charset=application/json" } },
+      env,
+    );
+    expect(res.status).toBe(415);
+    expect(await isLearnMode(repo, "whatsapp")).toBe(false);
+  });
+
+  it("acepta application/json con charset y espacios (caso legítimo)", async () => {
+    const res = await adminApp.request(
+      "/learn/whatsapp/start",
+      { method: "POST", headers: { ...AUTH, "Content-Type": "application/json; charset=utf-8" } },
+      env,
+    );
+    expect(res.status).toBe(200);
+  });
+
+  it("acepta el media type en mayúsculas", async () => {
+    const res = await adminApp.request(
+      "/learn/whatsapp/start",
+      { method: "POST", headers: { ...AUTH, "Content-Type": "APPLICATION/JSON" } },
+      env,
+    );
+    expect(res.status).toBe(200);
+  });
+
   // Hallazgo 4: minutes sin tope anula la "expiración automática" (1e9 min ≈
   // 1900 años encendido). Topamos a 60; default 15 se mantiene.
   it("topa minutes a 60 aunque pidan más", async () => {

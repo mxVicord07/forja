@@ -689,7 +689,13 @@ const LEARN_DEFAULT_MINUTES = 15;
  * diferencia de validar Origin), así que funciona igual en cualquier deploy. */
 function requireJson(c: { req: { header: (name: string) => string | undefined } }): boolean {
   const ct = c.req.header("Content-Type") ?? "";
-  return ct.toLowerCase().includes("application/json");
+  // Comparar la ESSENCE (el media type antes del primer ";"), no hacer
+  // substring sobre el header entero: con `includes` un header como
+  // "text/plain;charset=application/json" pasaba el gate — su essence real es
+  // text/plain, que es CORS-safelisted, así que el navegador NO manda
+  // preflight y la mitigación completa quedaba eludida. Comparar solo la
+  // essence además cubre gratis "; charset=utf-8" y mayúsculas/espacios.
+  return ct.split(";")[0].trim().toLowerCase() === "application/json";
 }
 
 adminApp.post("/learn/:channel/start", async (c) => {

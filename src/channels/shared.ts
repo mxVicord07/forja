@@ -3,14 +3,20 @@ export type ChannelId = "manychat" | "telegram" | "twilio" | "messenger" | "inst
 // El union de arriba es solo de tipos — no existe en runtime. Esta constante
 // es la lista real para validar un `:channel` que llega como string (params
 // de ruta, body, etc.) contra los valores válidos.
-export const CHANNEL_IDS: readonly ChannelId[] = [
-  "manychat",
-  "telegram",
-  "twilio",
-  "messenger",
-  "instagram",
-  "whatsapp",
-];
+//
+// `satisfies Record<ChannelId, 1>` obliga a que el objeto tenga una key por
+// cada miembro del union: si mañana se agrega un canal a ChannelId y se
+// olvida acá, tsc falla en vez de dejar que ese canal quede huérfano
+// (aceptado por el tipo pero rechazado en runtime con 400).
+const CHANNEL_ID_SET = {
+  manychat: 1,
+  telegram: 1,
+  twilio: 1,
+  messenger: 1,
+  instagram: 1,
+  whatsapp: 1,
+} satisfies Record<ChannelId, 1>;
+export const CHANNEL_IDS: readonly ChannelId[] = Object.keys(CHANNEL_ID_SET) as ChannelId[];
 
 /** Type guard en runtime: ¿`value` es uno de los ChannelId válidos? */
 export function isChannelId(value: string): value is ChannelId {
