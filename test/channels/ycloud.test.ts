@@ -1,5 +1,5 @@
-import { describe, it, expect } from "vitest";
-import { verifyYCloudSignature, parseYCloudEvent, normalizePhone } from "../../src/channels/ycloud";
+import { describe, it, expect, vi, afterEach } from "vitest";
+import { verifyYCloudSignature, parseYCloudEvent, normalizePhone, serveYCloudMedia } from "../../src/channels/ycloud";
 import { hmacHex } from "../../src/channels/shared";
 // Payload real capturado de tráfico de producción de LIA (n8n, 19 muestras,
 // confirmado también en el panel de webhooks de YCloud). Es la fuente de
@@ -127,5 +127,52 @@ describe("parseYCloudEvent", () => {
     expect(
       await parseYCloudEvent(evt({ from: "+525512345678", type: "audio", audio: {} }), env, ORIGIN),
     ).toBeNull();
+  });
+});
+
+afterEach(() => vi.restoreAllMocks());
+
+async function signMedia(link: string, exp: number) {
+  return hmacHex("whsec_test", `${link}.${exp}`);
+}
+
+describe("serveYCloudMedia", () => {
+  const link = "https://api.ycloud.com/v2/whatsapp/media/download/abc";
+
+  it("sirve los bytes con firma válida y manda la API key", async () => {
+    const exp = Date.now() + 60_000;
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response("BYTES", { status: 200, headers: { "Content-Type": "audio/ogg" } }),
+    );
+    const res = await serveYCloudMedia(link, String(exp), await signMedia(link, exp), env);
+    expect(res.status).toBe(200);
+    expect(await res.text()).toBe("BYTES");
+    const headers = (fetchMock.mock.calls[0][1] as any).headers;
+    expect(headers["X-API-Key"]).toBe("key");
+  });
+
+  it("rechaza firma inválida con 403", async () => {
+    const exp = Date.now() + 60_000;
+    const res = await serveYCloudMedia(link, String(exp), "firmamala", env);
+    expect(res.status).toBe(403);
+  });
+
+  it("rechaza una URL expirada con 410", async () => {
+    const exp = Date.now() - 1000;
+    const res = await serveYCloudMedia(link, String(exp), await signMedia(link, exp), env);
+    expect(res.status).toBe(410);
+  });
+
+  it("rechaza un host fuera de api.ycloud.com aunque la firma sea válida", async () => {
+    const evil = "https://evil.example.com/robar";
+    const exp = Date.now() + 60_000;
+    const res = await serveYCloudMedia(evil, String(exp), await signMedia(evil, exp), env);
+    expect(res.status).toBe(403);
+  });
+
+  it("404 si no está configurado", async () => {
+    const exp = Date.now() + 60_000;
+    const res = await serveYCloudMedia(link, String(exp), await signMedia(link, exp), {} as any);
+    expect(res.status).toBe(404);
   });
 });

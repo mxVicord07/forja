@@ -158,3 +158,49 @@ export async function verifyYCloudSignature(
   const expected = await hmacHex(secret, `${t}.${raw}`);
   return timingSafeEqual(expected, s);
 }
+
+/** Único host del que el proxy acepta descargar. */
+const YCLOUD_MEDIA_HOST = "api.ycloud.com";
+
+/**
+ * Sirve el media entrante de YCloud: valida firma + expiración + host, y
+ * descarga con la API key del lado del server. Público pero firmado — la key
+ * nunca sale. Lo usa GET /webhooks/whatsapp/media (ver index.ts).
+ *
+ * A diferencia del proxy de Meta, aquí se firma una URL y no un media_id
+ * opaco. Por eso se valida además que el host sea api.ycloud.com: sin ese
+ * chequeo, quien obtuviera el secret podría convertir el Worker en un SSRF
+ * que descarga cualquier URL de internet.
+ */
+export async function serveYCloudMedia(
+  u: string | null,
+  exp: string | null,
+  sig: string | null,
+  env: Env,
+): Promise<Response> {
+  const secret = env.YCLOUD_WEBHOOK_SECRET;
+  const apiKey = env.YCLOUD_API_KEY;
+  if (!secret || !apiKey) return new Response("not configured", { status: 404 });
+
+  const expNum = Number(exp);
+  if (!u || !exp || !sig || !Number.isFinite(expNum)) {
+    return new Response("bad request", { status: 400 });
+  }
+  if (Date.now() > expNum) return new Response("expired", { status: 410 });
+
+  const expected = await hmacHex(secret, `${u}.${exp}`);
+  if (!timingSafeEqual(expected, sig)) return new Response("bad signature", { status: 403 });
+
+  let host: string;
+  try {
+    host = new URL(u).hostname;
+  } catch {
+    return new Response("bad url", { status: 400 });
+  }
+  if (host !== YCLOUD_MEDIA_HOST) return new Response("host not allowed", { status: 403 });
+
+  const res = await fetch(u, { headers: { "X-API-Key": apiKey } });
+  if (!res.ok) return new Response("media download failed", { status: 502 });
+  const contentType = res.headers.get("content-type") || "application/octet-stream";
+  return new Response(res.body, { status: 200, headers: { "Content-Type": contentType } });
+}
