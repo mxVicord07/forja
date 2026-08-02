@@ -17,7 +17,7 @@ import { generateText } from "ai";
 import { createModel } from "../llm/provider";
 import { loadLlmOverrides } from "../settings-loader";
 import type { Env } from "../env";
-import { adminAuth } from "./auth";
+import { adminAuth, ADMIN_USERNAME } from "./auth";
 import { layout, renderUpgrade } from "./views/layout";
 import { isPro } from "../config";
 import { renderOverview } from "./views/overview";
@@ -49,6 +49,9 @@ import { sendCampaign, createHandoffTemplate, contentApprovalStatus } from "../c
 import { Db } from "../db/client";
 import { LeadsRepo, type Lead } from "../db/leads";
 import { TicketsRepo } from "../db/tickets";
+import { AppointmentsRepo, type Appointment } from "../db/appointments";
+import { AppointmentChangeRequestsRepo, type AppointmentChangeRequest } from "../db/appointmentChangeRequests";
+import { rescheduleBooking, cancelBooking } from "../integrations/calcom";
 import { ConversationsRepo } from "../db/conversations";
 import { MessagesRepo } from "../db/messages";
 import { SettingsRepo, SETTING_KEYS, type SettingKey } from "../db/settings";
@@ -585,6 +588,95 @@ adminApp.post("/tickets/:id/resolve", async (c) => {
   await tickets.resolve(c.req.param("id"), resolvedBy);
   return c.redirect("/admin/tickets");
 });
+
+/**
+ * Aprueba una solicitud de cambio de cita: ejecuta el cambio real en Cal.com,
+ * actualiza la cita, cierra el ticket y le avisa al cliente por su canal.
+ *
+ * Si Cal.com falla no se resuelve nada: la solicitud queda `pending` para que
+ * el dueño reintente el clic sin perderla, y al cliente no se le promete un
+ * cambio que no ocurrió.
+ */
+adminApp.post("/tickets/:id/approve-change", async (c) => {
+  const ticketId = c.req.param("id");
+  const db = new Db(c.env.DB);
+  const ctx = await loadChangeContext(db, ticketId);
+  if (!ctx) return c.redirect("/admin/tickets");
+  const { cr, appt } = ctx;
+
+  const appts = new AppointmentsRepo(db);
+  let mensaje: string;
+
+  if (cr.kind === "reschedule") {
+    const res = await rescheduleBooking(c.env, appt.calcom_uid, cr.proposed_start ?? "", cr.reason ?? undefined);
+    if (!res.ok) {
+      console.error(`[approve-change] reschedule falló para el ticket ${ticketId}: ${res.reason}`);
+      return c.redirect("/admin/tickets");
+    }
+    await appts.confirmAfterReschedule(appt.id, res.uid, res.start ?? cr.proposed_start ?? appt.start);
+    mensaje = `Listo, tu cita quedó reprogramada para ${res.start ?? cr.proposed_start}.`;
+  } else {
+    const res = await cancelBooking(c.env, appt.calcom_uid, cr.reason ?? undefined);
+    if (!res.ok) {
+      console.error(`[approve-change] cancel falló para el ticket ${ticketId}: ${res.reason}`);
+      return c.redirect("/admin/tickets");
+    }
+    await appts.markCancelled(appt.id);
+    mensaje = "Listo, tu cita quedó cancelada.";
+  }
+
+  await new AppointmentChangeRequestsRepo(db).approve(cr.id);
+  await new TicketsRepo(db).resolve(ticketId, ADMIN_USERNAME);
+  const sent = await sendChannelMessage(c.env, cr.conversation_id, mensaje);
+  if (!sent.ok) {
+    // El cambio ya se ejecutó: no lo revertimos por un fallo de aviso, pero
+    // dejamos rastro para que el dueño le escriba a mano desde la bandeja.
+    console.error(`[approve-change] no se pudo avisar al cliente (${cr.conversation_id}): ${sent.error}`);
+  }
+  return c.redirect("/admin/tickets");
+});
+
+/**
+ * Rechaza la solicitud: la cita vuelve a 'confirmed' sin tocar Cal.com, y el
+ * cliente recibe la nota del dueño o un aviso por default.
+ */
+adminApp.post("/tickets/:id/reject-change", async (c) => {
+  const ticketId = c.req.param("id");
+  const db = new Db(c.env.DB);
+  const ctx = await loadChangeContext(db, ticketId);
+  if (!ctx) return c.redirect("/admin/tickets");
+  const { cr, appt } = ctx;
+
+  const form = await c.req.formData().catch(() => null);
+  const note = String(form?.get("note") ?? "").trim();
+
+  await new AppointmentsRepo(db).revertToConfirmed(appt.id);
+  await new AppointmentChangeRequestsRepo(db).reject(cr.id);
+  await new TicketsRepo(db).resolve(ticketId, ADMIN_USERNAME);
+
+  const porDefecto =
+    cr.kind === "reschedule"
+      ? "Tu solicitud de cambio de horario no pudo confirmarse — nos pondremos en contacto contigo para ver otras opciones."
+      : "Tu solicitud de cancelación no pudo confirmarse — nos pondremos en contacto contigo en breve.";
+  const sent = await sendChannelMessage(c.env, cr.conversation_id, note || porDefecto);
+  if (!sent.ok) {
+    console.error(`[reject-change] no se pudo avisar al cliente (${cr.conversation_id}): ${sent.error}`);
+  }
+  return c.redirect("/admin/tickets");
+});
+
+/** Carga ticket → solicitud → cita. `null` si falta cualquiera de los tres. */
+async function loadChangeContext(
+  db: Db,
+  ticketId: string,
+): Promise<{ cr: AppointmentChangeRequest; appt: Appointment } | null> {
+  const ticket = await new TicketsRepo(db).getById(ticketId);
+  if (!ticket?.appointment_change_request_id) return null;
+  const cr = await new AppointmentChangeRequestsRepo(db).getById(ticket.appointment_change_request_id);
+  if (!cr || cr.status !== "pending") return null;
+  const appt = await new AppointmentsRepo(db).getById(cr.appointment_id);
+  return appt ? { cr, appt } : null;
+}
 
 // --- Inbox actions (F1) -------------------------------------------------------
 
