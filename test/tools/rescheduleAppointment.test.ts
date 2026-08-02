@@ -153,6 +153,30 @@ describe("rescheduleAppointmentTool", () => {
     expect(await new TicketsRepo(db).listOpen()).toHaveLength(0);
   });
 
+  it("usa el día LOCAL del negocio para consultar Cal.com, no el día UTC", async () => {
+    // 2026-07-25T02:00:00Z son las 20:00 del 24 de julio en America/Mexico_City
+    // (UTC-6). Cal.com lista ese slot bajo el día local "2026-07-24". Si el
+    // código corta los primeros 10 caracteres del ISO en UTC, consultaría
+    // "2026-07-25" y no encontraría el slot aunque esté libre.
+    await seedAppointment();
+    env.CALCOM_TIMEZONE = "America/Mexico_City";
+    const proposed = "2026-07-25T02:00:00Z";
+    const fetchMock = vi.fn(async (url: string) =>
+      new Response(
+        JSON.stringify({ data: { "2026-07-24": [{ start: proposed }] } }),
+        { status: 200 },
+      ),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    const tool = rescheduleAppointmentTool(env, () => convId);
+    const res = (await tool.execute!({ newStartTime: proposed }, {} as any)) as any;
+
+    expect(res.ok).toBe(true);
+    const calledUrl = fetchMock.mock.calls[0][0] as string;
+    expect(calledUrl).toContain("start=2026-07-24");
+  });
+
   it("los rechazos NO cuentan contra el tope", async () => {
     const apptId = await seedAppointment();
     for (let i = 0; i < 5; i++) {

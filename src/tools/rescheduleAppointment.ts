@@ -49,8 +49,9 @@ export function rescheduleAppointmentTool(env: Env, getConversationId: () => str
       // llega a aprobación una solicitud sobre un horario ya ocupado. Se usa
       // el event type de la cita existente, no el default: reagendar mantiene
       // el mismo servicio que el cliente ya había apartado.
-      const day = newStartTime.slice(0, 10);
-      const slots = await getAvailableSlots(env, appt.event_type_id, day, calcomTimeZone(env));
+      const timeZone = calcomTimeZone(env);
+      const day = localDay(newStartTime, timeZone);
+      const slots = await getAvailableSlots(env, appt.event_type_id, day, timeZone);
       if (!slots.ok) return { error: slots.reason };
       if (!slots.slots.some((s) => sameInstant(s, newStartTime))) {
         return { error: "slot_unavailable" as const, available: slots.slots };
@@ -92,4 +93,22 @@ function sameInstant(a: string, b: string): boolean {
   const ta = Date.parse(a);
   const tb = Date.parse(b);
   return Number.isFinite(ta) && Number.isFinite(tb) && ta === tb;
+}
+
+/**
+ * Día calendario (YYYY-MM-DD) de un instante ISO **en la zona del negocio**.
+ * Cal.com lista sus slots por día local: cortar los primeros 10 caracteres del
+ * ISO daría el día UTC, y para una zona con offset negativo un horario de la
+ * noche cae en el día siguiente en UTC — se consultaría el día equivocado y un
+ * slot libre se reportaría como ocupado.
+ */
+function localDay(iso: string, timeZone: string): string {
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).formatToParts(new Date(iso));
+  const get = (t: string) => parts.find((p) => p.type === t)?.value ?? "";
+  return `${get("year")}-${get("month")}-${get("day")}`;
 }
