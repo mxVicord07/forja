@@ -10,6 +10,30 @@ const CALCOM_API = "https://api.cal.com/v2";
 const SLOTS_VERSION = "2024-09-04";
 const BOOKINGS_VERSION = "2026-02-25";
 
+/** Espera entre el intento fallido y el reintento. Fija, sin backoff exponencial. */
+const RETRY_DELAY_MS = 400;
+
+/**
+ * `fetch` con UN solo reintento, compartido por las 4 llamadas a Cal.com.
+ *
+ * Reintenta solo lo que de verdad es transitorio: una excepción de red o un
+ * 5xx del servidor. Un 4xx NO se reintenta — es un rechazo real (slot ocupado,
+ * booking ya cancelado) y repetirlo daría el mismo resultado, más lento.
+ *
+ * Devuelve la Response o lanza; cada caller traduce eso a su `{ ok: false }`.
+ */
+async function fetchCalcom(url: string, init?: RequestInit): Promise<Response> {
+  try {
+    const res = await fetch(url, init);
+    if (res.status < 500) return res;
+    await new Promise((r) => setTimeout(r, RETRY_DELAY_MS));
+    return await fetch(url, init);
+  } catch (e) {
+    await new Promise((r) => setTimeout(r, RETRY_DELAY_MS));
+    return await fetch(url, init);
+  }
+}
+
 export const DEFAULT_TZ = "America/Mexico_City";
 
 /** ¿El dueño ya conectó Cal.com? (API key + al menos un event type). */
@@ -75,7 +99,7 @@ export async function getAvailableSlots(
   const end = nextDay(date);
   const url = `${CALCOM_API}/slots?eventTypeId=${eventTypeId}&start=${date}&end=${end}&timeZone=${encodeURIComponent(timeZone)}`;
   try {
-    const res = await fetch(url, {
+    const res = await fetchCalcom(url, {
       headers: { Authorization: `Bearer ${env.CALCOM_API_KEY}`, "cal-api-version": SLOTS_VERSION },
     });
     if (!res.ok) return { ok: false, reason: `http_${res.status}` };
@@ -108,7 +132,7 @@ export async function createBooking(
 > {
   if (!env.CALCOM_API_KEY) return { ok: false, reason: "not_configured" };
   try {
-    const res = await fetch(`${CALCOM_API}/bookings`, {
+    const res = await fetchCalcom(`${CALCOM_API}/bookings`, {
       method: "POST",
       headers: {
         Authorization: `Bearer ${env.CALCOM_API_KEY}`,
@@ -132,6 +156,69 @@ export async function createBooking(
     const d = body.data;
     if (!d?.id) return { ok: false, reason: "no_booking_id" };
     return { ok: true, bookingId: d.id, uid: d.uid, status: d.status, start: d.start };
+  } catch (e: any) {
+    return { ok: false, reason: `transient:${String(e?.message ?? e)}` };
+  }
+}
+
+/**
+ * Mueve una cita existente a otro horario. Cal.com devuelve un booking NUEVO
+ * con uid distinto — ese uid es el que hay que guardar, el viejo deja de servir.
+ */
+export async function rescheduleBooking(
+  env: Env,
+  uid: string,
+  newStart: string,
+  reason?: string,
+): Promise<
+  | { ok: true; bookingId: number | string; uid: string; status?: string; start?: string }
+  | { ok: false; reason: string }
+> {
+  if (!env.CALCOM_API_KEY) return { ok: false, reason: "not_configured" };
+  try {
+    const res = await fetchCalcom(`${CALCOM_API}/bookings/${encodeURIComponent(uid)}/reschedule`, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${env.CALCOM_API_KEY}`,
+        "cal-api-version": BOOKINGS_VERSION,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ start: newStart, ...(reason ? { reschedulingReason: reason } : {}) }),
+    });
+    if (!res.ok) return { ok: false, reason: `http_${res.status}` };
+    const body = (await res.json()) as {
+      data?: { id: number | string; uid?: string; status?: string; start?: string };
+    };
+    const d = body.data;
+    if (!d?.id || !d.uid) return { ok: false, reason: "no_booking_id" };
+    return { ok: true, bookingId: d.id, uid: d.uid, status: d.status, start: d.start };
+  } catch (e: any) {
+    return { ok: false, reason: `transient:${String(e?.message ?? e)}` };
+  }
+}
+
+/**
+ * Cancela una cita. Solo la llama la ruta de aprobación del panel — el bot
+ * nunca cancela por su cuenta (ver la decisión de negocio en el spec).
+ */
+export async function cancelBooking(
+  env: Env,
+  uid: string,
+  reason?: string,
+): Promise<{ ok: true } | { ok: false; reason: string }> {
+  if (!env.CALCOM_API_KEY) return { ok: false, reason: "not_configured" };
+  try {
+    const res = await fetchCalcom(`${CALCOM_API}/bookings/${encodeURIComponent(uid)}/cancel`, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${env.CALCOM_API_KEY}`,
+        "cal-api-version": BOOKINGS_VERSION,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(reason ? { cancellationReason: reason } : {}),
+    });
+    if (!res.ok) return { ok: false, reason: `http_${res.status}` };
+    return { ok: true };
   } catch (e: any) {
     return { ok: false, reason: `transient:${String(e?.message ?? e)}` };
   }

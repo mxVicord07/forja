@@ -5,6 +5,8 @@ import {
   resolveEventTypeId,
   getAvailableSlots,
   createBooking,
+  rescheduleBooking,
+  cancelBooking,
   DEFAULT_TZ,
 } from "../../src/integrations/calcom";
 import type { Env } from "../../src/env";
@@ -136,5 +138,96 @@ describe("createBooking", () => {
       timeZone: "UTC",
     });
     expect(res.ok).toBe(false);
+  });
+});
+
+describe("rescheduleBooking", () => {
+  it("hace POST al endpoint de reschedule con la versión correcta", async () => {
+    const fetchMock = vi.fn(async (_url: any, _init: any) =>
+      new Response(
+        JSON.stringify({ status: "success", data: { id: 777, uid: "nuevo-uid", status: "accepted", start: "2026-07-25T16:00:00Z" } }),
+        { status: 200 },
+      ),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    const res = await rescheduleBooking(env({ CALCOM_API_KEY: "cal_x" }), "viejo-uid", "2026-07-25T16:00:00Z", "cliente pidió otro día");
+    expect(res.ok).toBe(true);
+    if (res.ok) {
+      expect(res.uid).toBe("nuevo-uid");
+      expect(res.bookingId).toBe(777);
+    }
+
+    const [url, init] = fetchMock.mock.calls[0];
+    expect(String(url)).toContain("/v2/bookings/viejo-uid/reschedule");
+    expect((init as any).method).toBe("POST");
+    expect((init as any).headers["cal-api-version"]).toBe("2026-02-25");
+    const body = JSON.parse((init as any).body);
+    expect(body.start).toBe("2026-07-25T16:00:00Z");
+    expect(body.reschedulingReason).toBe("cliente pidió otro día");
+  });
+
+  it("no llama a la API sin key", async () => {
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+    const res = await rescheduleBooking(env(), "uid", "2026-07-25T16:00:00Z");
+    expect(res.ok).toBe(false);
+    if (!res.ok) expect(res.reason).toBe("not_configured");
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+});
+
+describe("cancelBooking", () => {
+  it("hace POST al endpoint de cancel con el motivo", async () => {
+    const fetchMock = vi.fn(async () => new Response(JSON.stringify({ status: "success" }), { status: 200 }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    const res = await cancelBooking(env({ CALCOM_API_KEY: "cal_x" }), "uid-1", "el cliente ya no puede");
+    expect(res.ok).toBe(true);
+
+    const [url, init] = (fetchMock.mock.calls[0] as any);
+    expect(String(url)).toContain("/v2/bookings/uid-1/cancel");
+    expect((init as any).headers["cal-api-version"]).toBe("2026-02-25");
+    expect(JSON.parse((init as any).body).cancellationReason).toBe("el cliente ya no puede");
+  });
+
+  it("error http → ok:false", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => new Response("bad", { status: 400 })));
+    const res = await cancelBooking(env({ CALCOM_API_KEY: "cal_x" }), "uid-1");
+    expect(res.ok).toBe(false);
+  });
+});
+
+describe("reintento único", () => {
+  it("reintenta una vez si el fetch lanza, y tiene éxito en el segundo intento", async () => {
+    let calls = 0;
+    const fetchMock = vi.fn(async () => {
+      calls++;
+      if (calls === 1) throw new Error("network down");
+      return new Response(JSON.stringify({ status: "success" }), { status: 200 });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const res = await cancelBooking(env({ CALCOM_API_KEY: "cal_x" }), "uid-1");
+    expect(res.ok).toBe(true);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
+  it("reintenta una vez ante 5xx y luego se rinde (2 llamadas, no más)", async () => {
+    const fetchMock = vi.fn(async () => new Response("boom", { status: 503 }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    const res = await cancelBooking(env({ CALCOM_API_KEY: "cal_x" }), "uid-1");
+    expect(res.ok).toBe(false);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
+  it("NO reintenta ante 4xx — es un rechazo real, no una falla transitoria", async () => {
+    const fetchMock = vi.fn(async () => new Response("nope", { status: 400 }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    const res = await cancelBooking(env({ CALCOM_API_KEY: "cal_x" }), "uid-1");
+    expect(res.ok).toBe(false);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 });
