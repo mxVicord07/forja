@@ -7,6 +7,9 @@ import { snoozeUserTool } from "./snoozeUser";
 import { captureLeadTool } from "./captureLead";
 import { scheduleAppointmentTool } from "./scheduleAppointment";
 import { catalogQueryTool } from "./catalogQuery";
+import { checkAvailabilityTool } from "./checkAvailability";
+import { rescheduleAppointmentTool } from "./rescheduleAppointment";
+import { cancelAppointmentTool } from "./cancelAppointment";
 
 export interface ToolContext {
   env: Env;
@@ -27,7 +30,10 @@ export function buildTools(ctx: ToolContext) {
 
   // Pro tier additions
   if (isPro(ctx.env)) {
+    tools.checkAvailability = checkAvailabilityTool(ctx.env);
     tools.scheduleAppointment = scheduleAppointmentTool(ctx.env, ctx.getConversationId);
+    tools.rescheduleAppointment = rescheduleAppointmentTool(ctx.env, ctx.getConversationId);
+    tools.cancelAppointment = cancelAppointmentTool(ctx.env, ctx.getConversationId);
     tools.catalogQuery = catalogQueryTool(ctx.env);
   }
 

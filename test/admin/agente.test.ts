@@ -53,7 +53,7 @@ describe("Mi Agente — page and canvas", () => {
     expect(html).toContain("Respuesta");
     expect(html).toContain("Modelo");
     expect(html).toContain("Memoria");
-    // Pro tier: all six tools appear as nodes
+    // Pro tier: core tools and Pro additions appear as nodes
     for (const tool of ["searchKb", "handoffHuman", "pauseBot", "captureLead", "scheduleAppointment", "catalogQuery"]) {
       expect(html).toContain(tool);
     }

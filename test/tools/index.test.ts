@@ -33,19 +33,28 @@ describe("buildTools", () => {
     expect(tools.catalogQuery).toBeUndefined();
   });
 
-  it("pro tier has the 5 base tools plus the 2 Pro tools", () => {
+  it("pro tier suma las tools de agenda y catálogo", () => {
     const tools = buildTools(makeCtx("pro"));
     expect(Object.keys(tools).sort()).toEqual([
+      "cancelAppointment",
       "captureLead",
       "catalogQuery",
+      "checkAvailability",
       "handoffHuman",
       "pauseBot",
+      "rescheduleAppointment",
       "scheduleAppointment",
       "searchKb",
       "snoozeUser",
     ]);
-    expect(tools.scheduleAppointment).toBeDefined();
-    expect(tools.catalogQuery).toBeDefined();
+  });
+
+  it("free tier no expone ninguna tool de agenda", () => {
+    const tools = buildTools(makeCtx("free"));
+    expect(tools.checkAvailability).toBeUndefined();
+    expect(tools.scheduleAppointment).toBeUndefined();
+    expect(tools.rescheduleAppointment).toBeUndefined();
+    expect(tools.cancelAppointment).toBeUndefined();
   });
 
   it("el Starter genérico no agrega tools de nicho (aunque BOT_NICHE traiga un giro)", () => {
