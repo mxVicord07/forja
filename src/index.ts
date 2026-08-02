@@ -10,6 +10,7 @@ import { parseYCloudEvent, serveYCloudMedia, verifyYCloudSignature } from "./cha
 import { resolveWaProvider } from "./replies/sender";
 import { adminApp } from "./admin/routes";
 import { purgeOldMessages } from "./crons/purgeOldMessages";
+import { purgeOldSettingsHistory } from "./crons/purgeOldSettingsHistory";
 import { reindexKb } from "./kb/reindex";
 import { analyzeConversations } from "./insights/analyzer";
 import { Db } from "./db/client";
@@ -290,6 +291,8 @@ export default {
 
     // Daily cron (wrangler.toml: "0 3 * * *") — purge messages older than 90 days.
     await purgeOldMessages(env);
+    // Daily cron: purge settings_history rows older than 365 days.
+    await purgeOldSettingsHistory(env);
     // Corrida nocturna del Analista de insights (F2). No debe tumbar la purga.
     await analyzeConversations(env, { limit: 50 }).catch((e) => console.error("insights:", e));
     // Flywheel (F5): detecta huecos de KB y lecciones de takeovers → propone
