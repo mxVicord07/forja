@@ -29,9 +29,9 @@ import {
   renderThreadLive,
   renderSuggestionBox,
 } from "./views/conversations";
-import { pickAdapter } from "../replies/sender";
+import { sendChannelMessage } from "./conversationSend";
 import { channelLabel } from "../channels/labels";
-import { isChannelId, type ChannelId } from "../channels/shared";
+import { isChannelId } from "../channels/shared";
 import { renderInsights } from "./views/insights";
 import { analyzeConversations } from "../insights/analyzer";
 import { renderAgentePage, renderAgenteCanvas, renderNodeModal, toggleTool, toastOob } from "./views/agente";
@@ -602,36 +602,19 @@ adminApp.post("/conversations/:id/reply", async (c) => {
   const text = String(form?.get("text") ?? "").trim();
   if (!text) return c.html(`<span class="text-stone-400">Escribe un mensaje primero.</span>`);
 
-  const db = new Db(c.env.DB);
-  const convs = new ConversationsRepo(db);
-  const conv = await convs.getById(id);
-  if (!conv) return c.html(`<span class="text-red-600">✗ Conversación no encontrada.</span>`);
-
-  try {
-    const adapter = pickAdapter(conv.channel as ChannelId, c.env);
-    await adapter.sendReply(
-      {
-        channel: conv.channel as ChannelId,
-        channelUserId: conv.channel_user_id,
-        chunks: [text],
-        interChunkDelayMs: 0,
-      },
-      c.env,
-    );
-  } catch (e) {
-    // Nothing persisted on failure: the customer never got the message.
-    const msg = e instanceof Error ? e.message : String(e);
-    return c.html(`<span class="text-red-600">✗ No se pudo enviar: ${escapeHtml(msg)}</span>`);
+  const sent = await sendChannelMessage(c.env, id, text);
+  if (!sent.ok) {
+    // Nada persistido en falla: el cliente nunca recibió el mensaje.
+    return c.html(`<span class="text-red-600">✗ No se pudo enviar: ${escapeHtml(sent.error)}</span>`);
   }
 
-  const msgs = new MessagesRepo(db);
-  await msgs.append(id, "owner", text);
-  await convs.touchLastMessage(id);
-  await convs.setPausedUntil(id, Date.now() + TAKEOVER_MS);
+  // El takeover (pausa del bot) es específico de la bandeja, no del helper: la
+  // confirmación automática de una cita no debe callar al bot.
+  await new ConversationsRepo(new Db(c.env.DB)).setPausedUntil(id, Date.now() + TAKEOVER_MS);
 
   c.header("X-Sent", "1");
   return c.html(
-    `<span class="text-emerald-600">✓ Enviado por ${escapeHtml(channelLabel(conv.channel))}</span>` +
+    `<span class="text-emerald-600">✓ Enviado por ${escapeHtml(channelLabel(sent.channel))}</span>` +
       `<div id="thread-live" hx-swap-oob="innerHTML">${await renderThreadLive(c.env, id)}</div>`,
   );
 });
