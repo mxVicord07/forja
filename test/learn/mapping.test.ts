@@ -15,11 +15,13 @@ import {
 } from "../../src/learn/mapping";
 
 let repo: SettingsRepo;
+let db: Db;
 
 beforeEach(async () => {
   const mf = await createTestMiniflare();
   const d1 = await mf.getD1Database("DB");
-  repo = new SettingsRepo(new Db(d1 as any));
+  db = new Db(d1 as any);
+  repo = new SettingsRepo(db);
 });
 
 describe("learned mapping persistence", () => {
@@ -143,6 +145,29 @@ describe("learn mode (auto-expiration by injected timestamp)", () => {
     await startLearnMode(repo, "instagram", 15, start);
     expect(await isLearnMode(repo, "instagram", start + 1)).toBe(true);
     expect(await isLearnMode(repo, "messenger", start + 1)).toBe(false);
+  });
+
+  it("startLearnMode/stopLearnMode attribute to the passed actor in settings_history", async () => {
+    const start = 1_000_000;
+    await startLearnMode(repo, "instagram", 15, start, "owner");
+    await stopLearnMode(repo, "instagram", "owner");
+
+    const rows = await db.all<{ actor: string }>(
+      "SELECT actor FROM settings_history WHERE key = 'learn:instagram:until' ORDER BY changed_at ASC",
+    );
+    expect(rows.length).toBeGreaterThanOrEqual(2);
+    expect(rows.every((r) => r.actor === "owner")).toBe(true);
+  });
+
+  it("startLearnMode/stopLearnMode default to 'system' when no actor is passed", async () => {
+    const start = 2_000_000;
+    await startLearnMode(repo, "whatsapp", 15, start);
+
+    const rows = await db.all<{ actor: string }>(
+      "SELECT actor FROM settings_history WHERE key = 'learn:whatsapp:until'",
+    );
+    expect(rows.length).toBeGreaterThanOrEqual(1);
+    expect(rows.every((r) => r.actor === "system")).toBe(true);
   });
 });
 

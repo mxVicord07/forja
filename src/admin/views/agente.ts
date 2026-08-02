@@ -631,7 +631,11 @@ export async function renderNodeModal(env: Env, nodeId: string, saved = false): 
  * Flip a tool in/out of the disabled_tools setting. Unknown names are rejected
  * (returns false) so the route can't write garbage into settings.
  */
-export async function toggleTool(env: Env, name: string): Promise<boolean> {
+export async function toggleTool(
+  env: Env,
+  name: string,
+  actor: "owner" | "flywheel" | "system" = "system",
+): Promise<boolean> {
   const known = Object.keys(buildTools({ env, getConversationId: () => null }));
   if (!known.includes(name)) return false;
 
@@ -642,6 +646,6 @@ export async function toggleTool(env: Env, name: string): Promise<boolean> {
   );
   if (disabled.has(name)) disabled.delete(name);
   else disabled.add(name);
-  await repo.set(SETTING_KEYS.disabledTools, [...disabled].join(","));
+  await repo.set(SETTING_KEYS.disabledTools, [...disabled].join(","), actor);
   return true;
 }

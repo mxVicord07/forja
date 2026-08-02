@@ -238,7 +238,7 @@ adminApp.post("/mejoras/lessons/remove", async (c) => {
   const form = await c.req.formData();
   const lesson = String(form.get("lesson") ?? "");
   const lessons = (await getLessons(c.env)).filter((l) => l !== lesson);
-  await saveLessons(c.env, lessons);
+  await saveLessons(c.env, lessons, "owner");
   return c.redirect("/admin/mejoras");
 });
 
@@ -375,7 +375,7 @@ adminApp.post("/agente/node/:id/save", async (c) => {
 // the canvas badge updates via the canvas-refresh event.
 adminApp.post("/agente/tools/:name/toggle", async (c) => {
   const name = c.req.param("name");
-  const ok = await toggleTool(c.env, name);
+  const ok = await toggleTool(c.env, name, "owner");
   if (!ok) return c.text("Tool no encontrada", 404);
   c.header("HX-Trigger", "canvas-refresh");
   return c.html((await renderNodeModal(c.env, `tool:${name}`, true)) + toastOob("✓ Guardado"));
@@ -739,7 +739,7 @@ adminApp.post("/learn/:channel/start", async (c) => {
       ? Math.min(rawMinutes, LEARN_MAX_MINUTES)
       : LEARN_DEFAULT_MINUTES;
   const repo = new SettingsRepo(new Db(c.env.DB));
-  await startLearnMode(repo, channel, minutes);
+  await startLearnMode(repo, channel, minutes, Date.now(), "owner");
   return c.json({ ok: true, channel, minutes }, 200);
 });
 
@@ -748,7 +748,7 @@ adminApp.post("/learn/:channel/stop", async (c) => {
   const channel = c.req.param("channel");
   if (!isChannelId(channel)) return c.json({ ok: false, error: `canal desconocido: ${channel}` }, 400);
   const repo = new SettingsRepo(new Db(c.env.DB));
-  await stopLearnMode(repo, channel);
+  await stopLearnMode(repo, channel, "owner");
   return c.json({ ok: true, channel }, 200);
 });
 

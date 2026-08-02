@@ -118,6 +118,20 @@ describe("Mi Agente — tool toggle", () => {
     expect(await res.text()).toContain("Apagar tool");
   });
 
+  it("attributes the toggle to 'owner' in settings_history", async () => {
+    const res = await adminApp.request(
+      "/agente/tools/catalogQuery/toggle",
+      { method: "POST", headers: AUTH },
+      env,
+    );
+    expect(res.status).toBe(200);
+    const rows = await (env.DB as any)
+      .prepare("SELECT actor FROM settings_history WHERE key = 'disabled_tools'")
+      .all();
+    expect(rows.results.length).toBeGreaterThanOrEqual(1);
+    expect(rows.results.every((r: { actor: string }) => r.actor === "owner")).toBe(true);
+  });
+
   it("rejects unknown tool names", async () => {
     const res = await adminApp.request(
       "/agente/tools/noExiste/toggle",

@@ -177,10 +177,14 @@ export async function getLessons(env: Env): Promise<string[]> {
   }
 }
 
-export async function saveLessons(env: Env, lessons: string[]): Promise<void> {
+export async function saveLessons(
+  env: Env,
+  lessons: string[],
+  actor: "owner" | "flywheel" | "system" = "flywheel",
+): Promise<void> {
   await new SettingsRepo(new Db(env.DB)).set(
     SETTING_KEYS.learnedLessons,
     JSON.stringify(lessons.slice(-MAX_LESSONS)),
-    "flywheel",
+    actor,
   );
 }

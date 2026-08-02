@@ -131,6 +131,30 @@ describe("autoApplyPending (copiloto)", () => {
   });
 });
 
+describe("POST /mejoras/lessons/remove (owner action)", () => {
+  it("attributes the owner's manual removal to 'owner', not 'flywheel'", async () => {
+    // Seed a lesson the way the nightly flywheel would (actor defaults to "flywheel").
+    await settings.set(
+      SETTING_KEYS.learnedLessons,
+      JSON.stringify(["Confirmar dirección antes de agendar visita"]),
+    );
+
+    const form = new URLSearchParams({ lesson: "Confirmar dirección antes de agendar visita" });
+    const res = await adminApp.request(
+      "/mejoras/lessons/remove",
+      { method: "POST", headers: FORM, body: form.toString() },
+      env,
+    );
+    expect(res.status).toBeLessThan(400);
+
+    const rows = await db.all<{ actor: string }>(
+      "SELECT actor FROM settings_history WHERE key = 'learned_lessons' ORDER BY changed_at ASC",
+    );
+    // Last write (the removal, triggered from the panel) must be "owner".
+    expect(rows[rows.length - 1]?.actor).toBe("owner");
+  });
+});
+
 describe("watchdog (checkBotHealth)", () => {
   async function seedFailures(n: number, at: number) {
     const convs = new ConversationsRepo(db);

@@ -90,16 +90,18 @@ export async function startLearnMode(
   channel: string,
   minutes: number = 15,
   now: number = Date.now(),
+  actor: "owner" | "flywheel" | "system" = "system",
 ): Promise<void> {
   const until = now + minutes * 60000;
-  await repo.set(learnUntilKey(channel), String(until));
+  await repo.set(learnUntilKey(channel), String(until), actor);
 }
 
 export async function stopLearnMode(
   repo: SettingsRepo,
   channel: string,
+  actor: "owner" | "flywheel" | "system" = "system",
 ): Promise<void> {
-  await repo.set(learnUntilKey(channel), "0");
+  await repo.set(learnUntilKey(channel), "0", actor);
 }
 
 // ---- Gate global (LEARN_MODE_ENABLED) --------------------------------------
