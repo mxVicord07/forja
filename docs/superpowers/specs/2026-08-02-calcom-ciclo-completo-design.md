@@ -42,24 +42,19 @@ Dentro:
   conversación y no se acepten dos cambios en paralelo sobre la misma cita.
 - **Botón Aprobar/Rechazar en el panel `/admin`**, extendiendo la vista de
   Tickets que ya existe — sin construir una sección nueva del panel.
-- Confirmación automática al cliente cuando el dueño aprueba un cambio,
-  reusando el envío-como-humano que ya existe en la bandeja
+- Confirmación automática al cliente cuando el dueño aprueba **o rechaza**
+  un cambio, reusando el envío-como-humano que ya existe en la bandeja
   (`/admin/conversations/:id/reply`).
 - Un reintento único y acotado (red o `5xx` de Cal.com) en las 4 llamadas de
   `integrations/calcom.ts`.
+- **Tope duro de 3 reagendamientos aprobados por cita.** Al cuarto intento,
+  el bot no genera una solicitud nueva — escala directo a un humano con la
+  tool `handoffHuman` que ya existe.
 
 Fuera de este diseño (explícitamente pospuesto):
 - Bookings con "seats" (eventos con cupo, ej. clases grupales) — el Starter
   de Forja no maneja ese caso hoy; se deja para cuando exista un niche pack
   que lo necesite.
-- Un tope numérico de cuántas veces se puede reagendar la misma cita — se
-  deja al criterio del dueño, con visibilidad completa del historial (ver
-  Componente 2). Si en producción resulta necesario, se agrega después con
-  datos reales de cuántos reagendados ocurren, no antes.
-- Notificar al cliente automáticamente cuando se **rechaza** un cambio — solo
-  se automatiza la confirmación al **aprobar**; el rechazo lo comunica el
-  dueño manualmente desde la bandeja si lo considera necesario (decisión
-  explícita, ver Decisión de negocio).
 
 ## Decisión de negocio: reagendar y cancelar requieren aprobación humana
 
@@ -77,14 +72,15 @@ no sienta fricción:
   validada, o motivo de cancelación) y lo dispara a aprobación.
 - La aprobación ocurre con **un clic** en el mismo panel donde el dueño ya
   revisa tickets — no una pantalla nueva que aprender.
-- Al aprobar, el cliente recibe la confirmación **automáticamente**, por el
-  mismo canal por el que escribió — el dueño no tiene que ir a avisarle.
+- Al aprobar **o rechazar**, el cliente recibe un aviso **automático**, por
+  el mismo canal por el que escribió — el dueño no tiene que ir a avisarle
+  en ninguno de los dos casos.
 
 Esto mantiene control humano sobre el calendario real sin que el cliente
 perciba una demora de "ida y vuelta": desde su punto de vista, pidió un
-cambio y en poco tiempo le llega la confirmación.
+cambio y en poco tiempo le llega una respuesta, sea cual sea.
 
-### Control de múltiples reagendamientos
+### Control de múltiples reagendamientos: tope duro de 3
 
 Mientras una cita tiene una solicitud de cambio `pending`, el bot no acepta
 una segunda sobre la misma cita — le dice al cliente que ya hay un cambio en
@@ -92,11 +88,23 @@ revisión. Esto se resuelve con un estado en la propia cita
 (`appointments.status = 'change_pending'`), no con lógica adicional en las
 tools.
 
-Cada solicitud es una fila nueva en `appointment_change_requests` — nunca se
-sobreescribe una anterior. El dueño puede ver, para cualquier cita, cuántas
-veces se ha pedido moverla, cuándo, y qué se resolvió cada vez. Es
-monitoreo completo sin imponer un límite arbitrario que no sabemos si hace
-falta todavía.
+Además, una cita solo puede **reagendarse 3 veces** (contando únicamente
+reagendamientos ya *aprobados* — un rechazo no cuenta contra el tope, porque
+nada se movió de verdad). Al intentar una cuarta vez:
+
+- `rescheduleAppointment` no crea una solicitud nueva ni un ticket
+  estructurado — regresa `{ error: "reschedule_limit_reached" }`.
+- La descripción de la tool le indica al modelo que, ante ese error, escale
+  con `handoffHuman` (tool ya existente, disponible en todos los tiers) en
+  vez de reintentar. El cliente llega con un humano directo, sin pasar por
+  el flujo de aprobar/rechazar — a la cuarta vez, el patrón (mismo cliente,
+  misma cita, moviéndose otra vez) amerita una conversación real, no otro
+  clic de aprobación.
+
+El conteo vive en `appointment_change_requests` (cada fila es un intento,
+nunca se sobreescribe), así que el dueño sigue viendo el historial completo
+de cuántas veces se pidió mover cada cita, incluyendo la que disparó el
+tope.
 
 ## Enfoques considerados
 
@@ -131,6 +139,8 @@ Cliente propone nuevo horario
   → rescheduleAppointment      → AppointmentsRepo.findActive(conversationId)
                                    · sin cita              → error no_appointment_found
                                    · status=change_pending → error change_already_pending
+                                → AppointmentChangeRequestsRepo.countApproved(appointmentId, 'reschedule')
+                                   · ya son 3              → error reschedule_limit_reached (bot escala con handoffHuman)
                                 → integrations/calcom.ts:getAvailableSlots (valida el horario propuesto)
                                    · no disponible         → error slot_unavailable (bot ofrece alternativas)
                                 → AppointmentChangeRequestsRepo.create(kind='reschedule', proposed_start)
@@ -153,12 +163,12 @@ Dueño aprueba desde /admin/tickets (un clic)
                            → TicketsRepo.resolve()
                            → sendChannelMessage() al cliente, mismo canal   (confirmación automática)
 
-Dueño rechaza desde /admin/tickets
+Dueño rechaza desde /admin/tickets (con nota opcional)
   → POST /admin/tickets/:id/reject-change
                            → AppointmentsRepo.revertToConfirmed()
                            → AppointmentChangeRequestsRepo.reject()
                            → TicketsRepo.resolve()
-                           (sin auto-aviso al cliente — el dueño decide si le escribe)
+                           → sendChannelMessage() al cliente, mismo canal   (aviso automático de rechazo)
 ```
 
 Decisiones de diseño no obvias:
@@ -341,6 +351,9 @@ export class AppointmentChangeRequestsRepo {
   async getById(id: number): Promise<AppointmentChangeRequest | null>;
   async approve(id: number): Promise<void>;
   async reject(id: number): Promise<void>;
+
+  /** Cuenta solicitudes 'approved' de un tipo para una cita — usado por el tope de 3 reagendamientos. */
+  async countApproved(appointmentId: number, kind: "reschedule" | "cancel"): Promise<number>;
 }
 ```
 
@@ -366,13 +379,17 @@ input: { newStartTime: string, reason?: string }
 1. `AppointmentsRepo.findActive(conversationId)`.
    - `null` → `{ error: "no_appointment_found" }`.
    - `status === "change_pending"` → `{ error: "change_already_pending" }`.
-2. `getAvailableSlots` del día de `newStartTime`; si `newStartTime` no está
+2. `AppointmentChangeRequestsRepo.countApproved(appointment.id, "reschedule")`.
+   - `>= 3` → `{ error: "reschedule_limit_reached" }`, sin crear nada. La
+     descripción de la tool instruye al modelo a llamar `handoffHuman` en
+     este caso en vez de reintentar.
+3. `getAvailableSlots` del día de `newStartTime`; si `newStartTime` no está
    en la lista → `{ error: "slot_unavailable", available: slots }` (el bot
    usa `available` para ofrecer alternativas reales en el mismo turno).
-3. `AppointmentChangeRequestsRepo.create({ kind: "reschedule", proposedStart:
+4. `AppointmentChangeRequestsRepo.create({ kind: "reschedule", proposedStart:
    newStartTime, reason })`, `AppointmentsRepo.setChangePending()`.
-4. `TicketsRepo.create()` con `appointmentChangeRequestId` + `notifyOwner()`.
-5. Regresa `{ ok: true, pending: true, proposedStart: newStartTime }`.
+5. `TicketsRepo.create()` con `appointmentChangeRequestId` + `notifyOwner()`.
+6. Regresa `{ ok: true, pending: true, proposedStart: newStartTime }`.
 
 ### 8. `tools/cancelAppointment.ts` (nueva)
 
@@ -416,9 +433,10 @@ de aprobación lo reutiliza para la confirmación automática.
 
 Cuando un ticket trae `appointment_change_request_id`, la tarjeta muestra el
 detalle de la solicitud (cita actual, nuevo horario propuesto o motivo de
-cancelación) y dos botones — `Aprobar` / `Rechazar` — en vez del form
-genérico de "Resolver". Los tickets sin solicitud ligada (billing, product,
-complaint, other) se ven exactamente igual que hoy.
+cancelación) y dos forms — `Aprobar` (un botón, sin campos) y `Rechazar`
+(un textarea opcional de "nota para el cliente" + botón). Los tickets sin
+solicitud ligada (billing, product, complaint, other) se ven exactamente
+igual que hoy.
 
 ### 13. `src/admin/routes.ts` — rutas de aprobación
 
@@ -436,9 +454,14 @@ proposed_start)` → `AppointmentsRepo.confirmAfterReschedule(...)`. Si
 `sendChannelMessage()` con un mensaje de confirmación (texto distinto según
 `kind`).
 
-`reject-change`: `AppointmentsRepo.revertToConfirmed()`,
-`AppointmentChangeRequestsRepo.reject()`, `TicketsRepo.resolve()`. Sin envío
-al cliente (ver Decisión de negocio).
+`reject-change`: acepta un campo de form opcional `note`. `AppointmentsRepo.
+revertToConfirmed()`, `AppointmentChangeRequestsRepo.reject()`,
+`TicketsRepo.resolve()`, y `sendChannelMessage()` con: el texto de `note` si
+el dueño escribió algo, o un mensaje por default según `kind` si lo dejó
+vacío (p. ej. "Tu solicitud de cambio de horario no pudo confirmarse — nos
+pondremos en contacto contigo para ver otras opciones" / "Tu solicitud de
+cancelación no pudo confirmarse — nos pondremos en contacto contigo en
+breve").
 
 Si `rescheduleBooking`/`cancelBooking` fallan (Cal.com caído o rechaza), la
 ruta no resuelve el ticket — se queda `pending` y la tarjeta muestra el
@@ -456,6 +479,7 @@ ok: false, reason }`, nunca una excepción hacia la tool.
 | Falla de red (tras el reintento) | `transient:{mensaje}` |
 | No hay cita activa para la conversación | `no_appointment_found` |
 | Ya hay una solicitud de cambio pendiente sobre esa cita | `change_already_pending` |
+| Ya se aprobaron 3 reagendamientos de esa cita | `reschedule_limit_reached` (el bot escala con `handoffHuman`) |
 | El horario que propone el cliente ya no está libre | `slot_unavailable` (con la lista real de `available`) |
 | El dueño aprueba pero Cal.com rechaza en ese momento | el ticket sigue `pending`, error visible en la tarjeta |
 
@@ -469,18 +493,21 @@ ok: false, reason }`, nunca una excepción hacia la tool.
   (nuevos) — mismo patrón que los repos existentes contra D1 de test.
 - `test/tools/checkAvailability.test.ts`, `scheduleAppointment.test.ts`
   (actualizado), `rescheduleAppointment.test.ts`, `cancelAppointment.test.ts`
-  — incluyendo el caso `change_already_pending` y `slot_unavailable`.
+  — incluyendo `change_already_pending`, `slot_unavailable`, y
+  `reschedule_limit_reached` con exactamente 3 solicitudes `approved`
+  previas (y que con 2 sí se deje crear la tercera).
 - `test/admin/routes.test.ts` (extendido) — `approve-change` y
-  `reject-change`, mismo estilo que las rutas existentes ahí (mock de
-  `integrations/calcom.ts` y de `sendChannelMessage`).
+  `reject-change` (con y sin `note`), mismo estilo que las rutas existentes
+  ahí (mock de `integrations/calcom.ts` y de `sendChannelMessage`).
 - `pnpm test` + `pnpm typecheck` limpios antes de cada commit, como en las
   sesiones anteriores (YCloud, Instrucción Maestra).
 
 ## Fuera de alcance (explícito)
 
 - Bookings con "seats" (cupo grupal).
-- Tope numérico duro de reagendamientos por cita.
-- Aviso automático al cliente cuando se **rechaza** un cambio.
+- Tope de intentos para **cancelar** — solo `reschedule` tiene el límite de
+  3; cancelar no se repite sobre la misma cita (una vez aprobada, la cita
+  queda `cancelled` y no admite más solicitudes).
 - Sincronizar `appointments`/`appointment_change_requests` con ningún CRM
   externo — eso es el punto pendiente de la integración de CRM (ver
   `FORJA/_context/decisions.md`, 2026-08-01), fuera de este diseño.
