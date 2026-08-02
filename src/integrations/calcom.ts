@@ -20,18 +20,24 @@ const RETRY_DELAY_MS = 400;
  * 5xx del servidor. Un 4xx NO se reintenta — es un rechazo real (slot ocupado,
  * booking ya cancelado) y repetirlo daría el mismo resultado, más lento.
  *
+ * Garantiza como máximo 2 llamadas a fetch, sin importar cómo falle cada intento.
+ * El reintento está fuera del try para que si lanza, no genere un tercer intento.
+ *
  * Devuelve la Response o lanza; cada caller traduce eso a su `{ ok: false }`.
  */
 async function fetchCalcom(url: string, init?: RequestInit): Promise<Response> {
   try {
     const res = await fetch(url, init);
     if (res.status < 500) return res;
-    await new Promise((r) => setTimeout(r, RETRY_DELAY_MS));
-    return await fetch(url, init);
+    // 5xx en el primer intento — reintentar
   } catch (e) {
-    await new Promise((r) => setTimeout(r, RETRY_DELAY_MS));
-    return await fetch(url, init);
+    // Excepción en el primer intento — reintentar
   }
+
+  // Dormir y reintentar, fuera del try/catch. Si esto falla (tira o 5xx),
+  // lo devolvemos/lanzamos sin más reintentos.
+  await new Promise((r) => setTimeout(r, RETRY_DELAY_MS));
+  return await fetch(url, init);
 }
 
 export const DEFAULT_TZ = "America/Mexico_City";

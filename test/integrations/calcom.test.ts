@@ -230,4 +230,32 @@ describe("reintento único", () => {
     expect(res.ok).toBe(false);
     expect(fetchMock).toHaveBeenCalledTimes(1);
   });
+
+  it("mixto: 5xx seguido de throw — máximo 2 llamadas, luego se rinde", async () => {
+    let calls = 0;
+    const fetchMock = vi.fn(async () => {
+      calls++;
+      if (calls === 1) return new Response("server error", { status: 503 });
+      throw new Error("network down on retry");
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const res = await cancelBooking(env({ CALCOM_API_KEY: "cal_x" }), "uid-1");
+    expect(res.ok).toBe(false);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
+  it("mixto: throw seguido de 5xx — máximo 2 llamadas, luego se rinde", async () => {
+    let calls = 0;
+    const fetchMock = vi.fn(async () => {
+      calls++;
+      if (calls === 1) throw new Error("network timeout");
+      return new Response("server error", { status: 502 });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const res = await cancelBooking(env({ CALCOM_API_KEY: "cal_x" }), "uid-1");
+    expect(res.ok).toBe(false);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
 });
