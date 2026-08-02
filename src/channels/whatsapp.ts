@@ -12,7 +12,7 @@
 // tocarlas, lo servimos por un proxy FIRMADO (/webhooks/whatsapp/media/:id): la
 // URL es pública pero con HMAC + expiración, y el token queda del lado del server.
 import type { ChannelAdapter, IncomingMessage, OutgoingReply } from "./shared";
-import { hmacHex, timingSafeEqual, normalizePhone } from "./shared";
+import { hmacHex, timingSafeEqual, normalizePhone, toWhatsAppMarkdown } from "./shared";
 import type { Env } from "../env";
 
 const GRAPH_VERSION = "v21.0";
@@ -187,7 +187,7 @@ export const whatsappAdapter: ChannelAdapter = {
           recipient_type: "individual",
           to: reply.channelUserId,
           type: "text",
-          text: { preview_url: false, body: reply.chunks[i] },
+          text: { preview_url: false, body: toWhatsAppMarkdown(reply.chunks[i]) },
         }),
       });
       // Fuera de la ventana de 24h Meta rechaza texto libre (pide plantilla HSM):

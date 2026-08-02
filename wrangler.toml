@@ -1,7 +1,7 @@
 # Member replaces {{BOT_SLUG}} via the skill /configurar-mi-chatbot.
 # DO NOT commit member-specific values to git.
 
-name = "horizontes-bot-{{BOT_SLUG}}"
+name = "birevx-support-bot"
 main = "src/index.ts"
 compatibility_date = "2026-05-01"
 compatibility_flags = ["nodejs_compat"]
@@ -20,7 +20,7 @@ new_sqlite_classes = ["SupportAgent"]
 [[d1_databases]]
 binding = "DB"
 database_name = "horizontes_bot_db"
-database_id = "{{D1_DATABASE_ID}}"  # filled in by skill at deploy time
+database_id = "e67b7241-4bbf-45f1-9a20-156163a01e7b"
 
 [[vectorize]]
 binding = "KB"
@@ -28,15 +28,17 @@ index_name = "horizontes_bot_kb"
 
 [[r2_buckets]]
 binding = "CATALOG"
-bucket_name = "horizontes-bot-catalog-{{BOT_SLUG}}"
+bucket_name = "horizontes-bot-catalog-birevx-support-bot"
 
 [vars]
-BOT_NAME = "{{BOT_NAME}}"
-BUSINESS_NAME = "{{BUSINESS_NAME}}"
-BOT_LANGUAGE = "{{BOT_LANGUAGE}}"
-BOT_TIER = "{{BOT_TIER}}"  # 'free' | 'pro'
+BOT_NAME = "BIRevX Support Bot"
+BUSINESS_NAME = "BIRevX — Agencia de Automatizacion IA"
+BOT_LANGUAGE = "es"
+BOT_TIER = "free"
 BUFFER_SECONDS = "15"
-DASHBOARD_BASE_URL = "https://horizontes-bot-{{BOT_SLUG}}.workers.dev"
+DASHBOARD_BASE_URL = "https://birevx-support-bot.victor-m-426.workers.dev"
+WA_PROVIDER = "ycloud"
+YCLOUD_WA_FROM = "+524444237875"
 
 # Secrets (set with `wrangler secret put <NAME>` — never commit values):
 #   ANTHROPIC_API_KEY          required — Claude API

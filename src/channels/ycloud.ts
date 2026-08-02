@@ -17,7 +17,7 @@
 //    antes de ese fix whatsapp.ts NO normalizaba, así que este comentario
 //    habría sido falso).
 import type { ChannelAdapter, IncomingMessage, OutgoingReply } from "./shared";
-import { hmacHex, timingSafeEqual, normalizePhone } from "./shared";
+import { hmacHex, timingSafeEqual, normalizePhone, toWhatsAppMarkdown } from "./shared";
 import type { Env } from "../env";
 
 // Re-exportado por compatibilidad: este módulo definía `normalizePhone`
@@ -256,7 +256,7 @@ export const ycloudAdapter: ChannelAdapter = {
           from,
           to,
           type: "text",
-          text: { body: reply.chunks[i], preview_url: false },
+          text: { body: toWhatsAppMarkdown(reply.chunks[i]), preview_url: false },
         }),
       });
       // Fuera de la ventana de 24h Meta rechaza texto libre (pide plantilla

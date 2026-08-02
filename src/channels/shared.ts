@@ -86,3 +86,23 @@ export function timingSafeEqual(a: string, b: string): boolean {
 export function normalizePhone(raw: string): string {
   return raw.replace(/\D/g, "");
 }
+
+/**
+ * El modelo escribe CommonMark (`**bold**`, lo que "Markdown OK" en el
+ * system prompt significa para un LLM). WhatsApp usa su propio dialecto:
+ * un solo `*bold*` es negrita, `_italic_` es cursiva — `**` no es nada
+ * especial, sale como asteriscos literales. Sin esta conversión el cliente
+ * ve `**BIRevX**` tal cual en vez de negrita. Comparte la misma estrategia
+ * que `toTelegramMarkdown` (Telegram legacy Markdown usa el mismo dialecto
+ * de bold-con-un-asterisco), pero vive acá porque la usan ambos adapters de
+ * WhatsApp (YCloud y Meta Cloud API).
+ */
+export function toWhatsAppMarkdown(text: string): string {
+  const SENTINEL = "\x01";
+  return text
+    .replace(/\*\*(.+?)\*\*/gs, SENTINEL + "$1" + SENTINEL)
+    .replace(/\*(.+?)\*/gs, "_$1_")
+    .split(SENTINEL)
+    .map((part, i) => (i % 2 === 1 ? "*" + part + "*" : part))
+    .join("");
+}
