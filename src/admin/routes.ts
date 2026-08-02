@@ -121,7 +121,7 @@ adminApp.post("/costs/budget", async (c) => {
   const raw = String(form.get("monthly_budget") ?? "").trim();
   const n = Number.parseFloat(raw);
   const value = raw !== "" && Number.isFinite(n) && n > 0 ? String(n) : "";
-  await new SettingsRepo(new Db(c.env.DB)).set(SETTING_KEYS.monthlyBudget, value);
+  await new SettingsRepo(new Db(c.env.DB)).set(SETTING_KEYS.monthlyBudget, value, "owner");
   return c.redirect("/admin/costs?saved=1");
 });
 
@@ -182,7 +182,7 @@ adminApp.post("/kb/reindex", async (c) => {
 adminApp.post("/handoff/template/setup", async (c) => {
   const r = await createHandoffTemplate(c.env);
   if ("error" in r) return c.json(r, 502);
-  await new SettingsRepo(new Db(c.env.DB)).set(SETTING_KEYS.twilioHandoffContentSid, r.sid);
+  await new SettingsRepo(new Db(c.env.DB)).set(SETTING_KEYS.twilioHandoffContentSid, r.sid, "owner");
   return c.json(r);
 });
 
@@ -229,7 +229,7 @@ adminApp.post("/mejoras/:id/dismiss", async (c) => {
 adminApp.post("/mejoras/autonomy", async (c) => {
   const form = await c.req.formData();
   const level = String(form.get("level") ?? "manual") === "copilot" ? "copilot" : "manual";
-  await new SettingsRepo(new Db(c.env.DB)).set(SETTING_KEYS.autonomyLevel, level);
+  await new SettingsRepo(new Db(c.env.DB)).set(SETTING_KEYS.autonomyLevel, level, "owner");
   return c.redirect("/admin/mejoras");
 });
 
@@ -326,27 +326,42 @@ adminApp.post("/agente/node/:id/save", async (c) => {
 
   if (id === "buffer") {
     const s = num("buffer_seconds");
-    if (s !== null) await repo.set(SETTING_KEYS.bufferSeconds, String(Math.round(clamp(s, 1, 60))));
+    if (s !== null)
+      await repo.set(SETTING_KEYS.bufferSeconds, String(Math.round(clamp(s, 1, 60))), "owner");
   } else if (id === "reply") {
     const chunks = num("max_chunks");
-    if (chunks !== null) await repo.set(SETTING_KEYS.maxChunks, String(Math.round(clamp(chunks, 1, 5))));
+    if (chunks !== null)
+      await repo.set(SETTING_KEYS.maxChunks, String(Math.round(clamp(chunks, 1, 5))), "owner");
     const delayS = num("inter_chunk_delay_s");
     if (delayS !== null)
-      await repo.set(SETTING_KEYS.interChunkDelayMs, String(Math.round(clamp(delayS, 0, 5) * 1000)));
+      await repo.set(
+        SETTING_KEYS.interChunkDelayMs,
+        String(Math.round(clamp(delayS, 0, 5) * 1000)),
+        "owner",
+      );
   } else if (id === "model") {
     const m = String(form.get("model_override") ?? "");
-    if (m === "auto" || m === "haiku" || m === "sonnet") await repo.set(SETTING_KEYS.modelOverride, m);
+    if (m === "auto" || m === "haiku" || m === "sonnet")
+      await repo.set(SETTING_KEYS.modelOverride, m, "owner");
     const t = num("temperature");
-    if (t !== null) await repo.set(SETTING_KEYS.temperature, String(clamp(t, 0, 1)));
+    if (t !== null) await repo.set(SETTING_KEYS.temperature, String(clamp(t, 0, 1)), "owner");
   } else if (id === "brain") {
     // Three sub-actions share the brain modal: reset-to-auto, pause toggle,
     // and saving the manual prompt. Checked in that priority order.
     if (String(form.get("action") ?? "") === "reset") {
-      await repo.set(SETTING_KEYS.systemPromptOverride, "");
+      await repo.set(SETTING_KEYS.systemPromptOverride, "", "owner");
     } else if (form.get("bot_paused") !== null) {
-      await repo.set(SETTING_KEYS.botPaused, String(form.get("bot_paused")) === "1" ? "1" : "0");
+      await repo.set(
+        SETTING_KEYS.botPaused,
+        String(form.get("bot_paused")) === "1" ? "1" : "0",
+        "owner",
+      );
     } else if (form.get("system_prompt_override") !== null) {
-      await repo.set(SETTING_KEYS.systemPromptOverride, String(form.get("system_prompt_override")).trim());
+      await repo.set(
+        SETTING_KEYS.systemPromptOverride,
+        String(form.get("system_prompt_override")).trim(),
+        "owner",
+      );
     }
   } else {
     return c.text("Nodo desconocido", 404);
@@ -468,7 +483,7 @@ adminApp.post("/config", async (c) => {
     const picked = form.get(key);
     if (picked === null) continue; // control not submitted — leave as-is
     const value = levelToValue(key, String(picked));
-    if (value !== null) await repo.set(key, value);
+    if (value !== null) await repo.set(key, value, "owner");
   }
 
   // Free-text controls (stored verbatim, trimmed).
@@ -481,7 +496,7 @@ adminApp.post("/config", async (c) => {
   for (const key of textKeys) {
     const raw = form.get(key);
     if (raw === null) continue;
-    await repo.set(key, String(raw).trim());
+    await repo.set(key, String(raw).trim(), "owner");
   }
 
   // BYO-LLM: proveedor y modelo se guardan tal cual (allow-list de valores).
@@ -491,20 +506,21 @@ adminApp.post("/config", async (c) => {
     await repo.set(
       SETTING_KEYS.llmProvider,
       v === "anthropic" || v === "openai" || v === "xai" ? v : "",
+      "owner",
     );
   }
   const modelRaw = form.get(SETTING_KEYS.llmModel);
   if (modelRaw !== null) {
-    await repo.set(SETTING_KEYS.llmModel, String(modelRaw).trim().slice(0, 100));
+    await repo.set(SETTING_KEYS.llmModel, String(modelRaw).trim().slice(0, 100), "owner");
   }
   // La API key SOLO se sobreescribe si escribieron algo (el input siempre
   // llega vacío cuando no la tocaron); el checkbox la borra explícitamente.
   if (form.get("llm_api_key_clear") === "1") {
-    await repo.set(SETTING_KEYS.llmApiKey, "");
+    await repo.set(SETTING_KEYS.llmApiKey, "", "owner");
   } else {
     const keyRaw = form.get(SETTING_KEYS.llmApiKey);
     if (keyRaw !== null && String(keyRaw).trim() !== "") {
-      await repo.set(SETTING_KEYS.llmApiKey, String(keyRaw).trim());
+      await repo.set(SETTING_KEYS.llmApiKey, String(keyRaw).trim(), "owner");
     }
   }
 

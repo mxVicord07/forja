@@ -181,5 +181,6 @@ export async function saveLessons(env: Env, lessons: string[]): Promise<void> {
   await new SettingsRepo(new Db(env.DB)).set(
     SETTING_KEYS.learnedLessons,
     JSON.stringify(lessons.slice(-MAX_LESSONS)),
+    "flywheel",
   );
 }

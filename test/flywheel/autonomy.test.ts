@@ -108,6 +108,23 @@ describe("autoApplyPending (copiloto)", () => {
     expect(holey.evidence ?? "").not.toContain("automático");
   });
 
+  it("attributes auto-applied lessons to 'flywheel' in settings_history", async () => {
+    await suggestions.createIfNew({
+      kind: "leccion",
+      fingerprint: "conv:xyz",
+      title: "Confirmar dirección antes de agendar visita",
+      payload: { lesson: "Confirmar dirección antes de agendar visita" },
+      evidence: "aprendida de tu takeover",
+    });
+
+    await autoApplyPending(env);
+
+    const rows = await db.all<{ actor: string }>(
+      "SELECT actor FROM settings_history WHERE key = 'learned_lessons'",
+    );
+    expect(rows.some((r) => r.actor === "flywheel")).toBe(true);
+  });
+
   it("no hace nada cuando no hay pendientes", async () => {
     const r = await autoApplyPending(env);
     expect(r).toEqual({ applied: 0, left: 0 });
