@@ -15,7 +15,8 @@
     "db:apply": "wrangler d1 execute horizontes_bot_db --file=src/db/schema.sql",
     "db:apply:remote": "wrangler d1 execute horizontes_bot_db --file=src/db/schema.sql --remote",
     "kb:reindex": "tsx scripts/generate-fixtures.ts",
-    "eval": "tsx scripts/eval-bot-live.ts"
+    "eval": "tsx scripts/eval-bot-live.ts",
+    "prompt:sync": "tsx scripts/prompt-sync.ts"
   },
   "dependencies": {
     "@ai-sdk/anthropic": "^3.0.0",
