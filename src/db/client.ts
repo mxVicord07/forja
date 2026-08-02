@@ -13,4 +13,10 @@ export class Db {
     const res = await this.d1.prepare(sql).bind(...params).all();
     return res.results as T[];
   }
+
+  async batch(statements: { sql: string; params?: unknown[] }[]): Promise<void> {
+    await this.d1.batch(
+      statements.map((s) => this.d1.prepare(s.sql).bind(...(s.params ?? []))),
+    );
+  }
 }

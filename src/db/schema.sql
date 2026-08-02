@@ -203,3 +203,20 @@ CREATE TABLE IF NOT EXISTS template_sends (
   UNIQUE (campaign_key, conversation_id)
 );
 CREATE INDEX IF NOT EXISTS idx_template_sends_time ON template_sends(sent_at);
+
+-- Historial de cambios de `settings`, para auditoría/gobernanza de la
+-- instrucción maestra (ver docs/superpowers/specs/2026-08-01-instruccion-maestra-viva-design.md).
+-- Se escribe SOLO cuando SettingsRepo.set() detecta que el valor cambió de
+-- verdad — el panel admin guarda todas las keys de un formulario de golpe,
+-- así que sin esa comparación cada guardado generaría filas basura.
+-- old_value: NULL si la key no existía antes de este cambio
+-- actor: 'owner' | 'flywheel' | 'system'
+CREATE TABLE IF NOT EXISTS settings_history (
+  id         INTEGER PRIMARY KEY AUTOINCREMENT,
+  key        TEXT    NOT NULL,
+  old_value  TEXT,
+  new_value  TEXT    NOT NULL,
+  actor      TEXT    NOT NULL,
+  changed_at INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_settings_history_changed ON settings_history(changed_at DESC);
