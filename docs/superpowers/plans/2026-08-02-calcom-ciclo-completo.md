@@ -377,7 +377,7 @@ git commit -m "feat(calcom): rescheduleBooking, cancelBooking y reintento único
 
 **Interfaces:**
 - Consumes: `Db` de `src/db/client.ts`; tabla `appointments` (Task 1)
-- Produces: `interface Appointment`, `class AppointmentsRepo` con `create`, `findActive`, `setChangePending`, `revertToConfirmed`, `confirmAfterReschedule`, `markCancelled`
+- Produces: `interface Appointment`, `class AppointmentsRepo` con `create`, `findActive`, `getById`, `setChangePending`, `revertToConfirmed`, `confirmAfterReschedule`, `markCancelled`
 
 - [ ] **Step 1: Escribir el test que falla**
 
@@ -417,6 +417,13 @@ describe("AppointmentsRepo", () => {
 
   it("findActive devuelve null si la conversación no tiene citas", async () => {
     expect(await repo.findActive("telegram:999")).toBeNull();
+  });
+
+  it("getById encuentra la cita aunque esté cancelada", async () => {
+    const id = await repo.create(base);
+    await repo.markCancelled(id);
+    expect((await repo.getById(id))?.status).toBe("cancelled");
+    expect(await repo.getById(9999)).toBeNull();
   });
 
   it("setChangePending marca la cita y findActive la sigue devolviendo", async () => {
@@ -536,6 +543,11 @@ export class AppointmentsRepo {
     );
   }
 
+  /** Cita por id, sin filtrar por estado — la usa la ruta de aprobación del panel. */
+  async getById(id: number): Promise<Appointment | null> {
+    return this.db.first<Appointment>("SELECT * FROM appointments WHERE id = ?", [id]);
+  }
+
   async setChangePending(id: number): Promise<void> {
     await this.db.run(
       "UPDATE appointments SET status = 'change_pending', updated_at = ? WHERE id = ?",
@@ -572,7 +584,7 @@ export class AppointmentsRepo {
 - [ ] **Step 4: Correr los tests**
 
 Run: `pnpm test test/db/appointments.test.ts`
-Expected: PASS (7 tests).
+Expected: PASS (8 tests).
 
 - [ ] **Step 5: Typecheck**
 
@@ -1475,10 +1487,11 @@ export function rescheduleAppointmentTool(env: Env, getConversationId: () => str
       }
 
       // Validar contra el calendario ANTES de molestar al dueño: así nunca
-      // llega a aprobación una solicitud sobre un horario ya ocupado.
-      const eventTypeId = resolveEventTypeId(env, undefined) ?? appt.event_type_id;
+      // llega a aprobación una solicitud sobre un horario ya ocupado. Se usa
+      // el event type de la cita existente, no el default: reagendar mantiene
+      // el mismo servicio que el cliente ya había apartado.
       const day = newStartTime.slice(0, 10);
-      const slots = await getAvailableSlots(env, eventTypeId, day, calcomTimeZone(env));
+      const slots = await getAvailableSlots(env, appt.event_type_id, day, calcomTimeZone(env));
       if (!slots.ok) return { error: slots.reason };
       if (!slots.slots.some((s) => sameInstant(s, newStartTime))) {
         return { error: "slot_unavailable" as const, available: slots.slots };
@@ -2464,7 +2477,7 @@ async function loadChangeContext(
   if (!ticket?.appointment_change_request_id) return null;
   const cr = await new AppointmentChangeRequestsRepo(db).getById(ticket.appointment_change_request_id);
   if (!cr || cr.status !== "pending") return null;
-  const appt = await db.first<Appointment>("SELECT * FROM appointments WHERE id = ?", [cr.appointment_id]);
+  const appt = await new AppointmentsRepo(db).getById(cr.appointment_id);
   return appt ? { cr, appt } : null;
 }
 ```
