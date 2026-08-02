@@ -1165,10 +1165,29 @@ git commit -m "feat(scripts): pnpm prompt:sync — baja la instrucción maestra 
 
 This task follows the exact order-of-operations discipline documented in `docs/canales/ycloud.md` for the YCloud cutover: **schema change before code that depends on it**, applied to the *live* database, not just the local test one (Miniflare already has it via `createTestMiniflare()`'s automatic `schema.sql` load, but that's a fresh in-memory DB per test — it says nothing about the real D1 database backing the deployed bot).
 
+- [ ] **Step 0: Merge this branch into `~/Dev/forja` main first**
+
+`~/Dev/forja` (the main checkout, NOT the worktree this plan was executed
+from) is still on `main` without the `settings_history` table in its local
+`schema.sql` — until `feat/instruccion-maestra-viva` is merged there. If
+Step 1's `pnpm db:apply:remote` is run literally from `~/Dev/forja` before
+merging, it reads the OLD `schema.sql`, "succeeds" without creating anything,
+and the subsequent deploy would ship code that depends on a table that was
+never created. Merge `feat/instruccion-maestra-viva` into `main` in
+`~/Dev/forja` first — or, if that's not yet possible, run Step 1 from this
+worktree (`/Users/mvico/Dev/forja-instruccion-maestra`) instead of from
+`~/Dev/forja`.
+
 - [ ] **Step 1: Apply the migration to the live D1 database**
 
 Run: `cd ~/Dev/forja && pnpm db:apply:remote`
 Expected: no errors — `settings_history` table and its index are created (idempotent `CREATE TABLE IF NOT EXISTS`, safe to re-run).
+
+Verify the table was actually created (don't trust a silent "success" — see Step 0):
+```bash
+wrangler d1 execute horizontes_bot_db --remote --command "SELECT name FROM sqlite_master WHERE name='settings_history'"
+```
+Expected: one row with `name = settings_history`. If the result is empty, Step 0 was skipped or the merge didn't happen — stop here, do not proceed to Step 2 (deploy).
 
 - [ ] **Step 2: Deploy**
 

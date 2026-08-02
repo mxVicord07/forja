@@ -65,4 +65,30 @@ describe("GET /admin/instruccion-maestra.md", () => {
     const res = await adminApp.request("/instruccion-maestra.md", { headers: AUTH }, brokenEnv);
     expect(res.status).toBe(503);
   });
+
+  // Hallazgo 1 (revisión final de rama): learn:<channel>:<kind> guarda el
+  // payload CRUDO de un webhook entrante (teléfono, texto del cliente,
+  // nombre de perfil). No debe filtrarse en texto plano al changelog.
+  it("no filtra el payload crudo de una captura learn:* en el changelog", async () => {
+    await repo.set(
+      "learn:whatsapp:capture:text",
+      JSON.stringify({ phone: "+52123456789", text: "mi tarjeta es 4111111111111111" }),
+      "system",
+    );
+    const res = await adminApp.request("/instruccion-maestra.md", { headers: AUTH }, env);
+    const body = await res.text();
+    expect(body).not.toContain("+52123456789");
+    expect(body).not.toContain("4111111111111111");
+    expect(body).toContain("(valor oculto)");
+  });
+
+  // Hallazgo 6 (revisión final de rama): DASHBOARD_PUBLIC="1" es un bypass de
+  // solo-lectura del panel, pero este endpoint es el export más concentrado
+  // de todo el panel (prompt completo + historial de 365 días) — nunca debe
+  // quedar exento del Basic Auth, igual que /admin/learn/*.
+  it("DASHBOARD_PUBLIC=1 NO exime a instruccion-maestra.md del Basic Auth", async () => {
+    const publicEnv = { ...env, DASHBOARD_PUBLIC: "1" } as unknown as Env;
+    const res = await adminApp.request("/instruccion-maestra.md", {}, publicEnv);
+    expect(res.status).toBe(401);
+  });
 });

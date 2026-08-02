@@ -12,22 +12,32 @@ export interface HistoryRow {
   changed_at: number;
 }
 
-/** Setting keys whose values must never appear in plaintext in the generated doc. */
-export const REDACTED_KEYS: readonly string[] = [SETTING_KEYS.llmApiKey];
+/**
+ * Allowlist de keys seguras para renderizar en texto plano en el documento.
+ *
+ * `settings` NO es un enum fijo: hay keys namespaced dinámicas escritas fuera
+ * de SETTING_KEYS (`learn:<channel>:<kind>` guarda el payload CRUDO de un
+ * webhook entrante — teléfonos, texto de mensajes, nombres de perfil; también
+ * `map:<channel>`, `send:<channel>:type`, `watchdog:last_alert`, etc.). Una
+ * denylist tipo REDACTED_KEYS no puede cubrir un keyspace que crece solo, así
+ * que invertimos la lógica: por default toda key se oculta, y solo se
+ * muestra el valor de las keys explícitamente listadas acá (todo
+ * SETTING_KEYS menos el secreto llm_api_key).
+ */
+export const ALLOWED_KEYS: readonly string[] = Object.values(SETTING_KEYS).filter(
+  (k) => k !== SETTING_KEYS.llmApiKey,
+);
 
 const MAX_DIFF_LINES = 8;
+const MAX_HISTORY_ROWS = 500;
 
 function fmtTime(ms: number): string {
   const d = new Date(ms);
-  return d.toISOString().slice(11, 16); // HH:MM UTC
+  return `${d.toISOString().slice(11, 16)} UTC`;
 }
 
 function fmtDate(ms: number): string {
   return new Date(ms).toISOString().slice(0, 10); // YYYY-MM-DD
-}
-
-function redact(key: string, value: string): string {
-  return REDACTED_KEYS.includes(key) ? "••••" : value;
 }
 
 function renderLessonsDiff(oldValue: string | null, newValue: string): string {
@@ -72,8 +82,8 @@ function renderLineDiff(oldValue: string | null, newValue: string): string {
 export function renderChangelogEntry(row: HistoryRow): string {
   const header = `- ${fmtTime(row.changed_at)} · **${row.actor}** · ${row.key}`;
 
-  if (REDACTED_KEYS.includes(row.key)) {
-    return `${header}\n  •••• → ••••`;
+  if (!ALLOWED_KEYS.includes(row.key)) {
+    return `${header} (valor oculto)`;
   }
 
   if (row.key === SETTING_KEYS.learnedLessons) {
@@ -85,9 +95,7 @@ export function renderChangelogEntry(row: HistoryRow): string {
     return `${header}\n${renderLineDiff(row.old_value, row.new_value)}`;
   }
 
-  const before = redact(row.key, row.old_value ?? "");
-  const after = redact(row.key, row.new_value);
-  return `${header}\n  "${before}" → "${after}"`;
+  return `${header}\n  "${row.old_value ?? ""}" → "${row.new_value}"`;
 }
 
 export function renderChangelog(rows: HistoryRow[]): string {
@@ -134,11 +142,17 @@ export async function renderInstruccionMaestraDoc(env: Env): Promise<string> {
   const autonomyLevel = (await repo.get(SETTING_KEYS.autonomyLevel)) ?? "manual";
   const language = (await repo.get(SETTING_KEYS.botLanguage)) ?? env.BOT_LANGUAGE;
 
-  const historyRows = await db.all<HistoryRow>(
-    "SELECT key, old_value, new_value, actor, changed_at FROM settings_history ORDER BY changed_at ASC",
+  // DESC + LIMIT para acotar el peor caso (defensa en profundidad — la
+  // allowlist de ALLOWED_KEYS ya excluye las keys de alto volumen como
+  // send:*), luego revertimos en JS para volver al orden ascendente que
+  // renderChangelog espera dentro de cada día.
+  const recentFirst = await db.all<HistoryRow>(
+    `SELECT key, old_value, new_value, actor, changed_at FROM settings_history
+     ORDER BY changed_at DESC LIMIT ${MAX_HISTORY_ROWS}`,
   );
+  const historyRows = [...recentFirst].reverse();
 
-  const generatedAt = new Date().toISOString().replace("T", " ").slice(0, 16);
+  const generatedAt = `${new Date().toISOString().replace("T", " ").slice(0, 16)} UTC`;
 
   const avisos = overrideActive
     ? `## ⚠️ Avisos\n- \`system_prompt_override\` ACTIVO: el prompt generado y las ${lessons.length} lecciones del flywheel se están ignorando.\n\n`

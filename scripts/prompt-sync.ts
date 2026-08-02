@@ -49,6 +49,7 @@ async function main() {
     renameSync(tmpPath, TARGET);
   } catch (e) {
     // Cross-device o permiso denegado — fallback a copy+delete (raro con la estrategia de mismo directorio).
+    console.error("rename atómico falló, usando fallback copy+delete:", e);
     try {
       writeFileSync(TARGET, body, "utf-8");
     } finally {

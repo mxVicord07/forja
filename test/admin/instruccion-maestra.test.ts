@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { renderChangelog, renderChangelogEntry, REDACTED_KEYS, type HistoryRow } from "../../src/admin/instruccion-maestra";
+import { renderChangelog, renderChangelogEntry, ALLOWED_KEYS, type HistoryRow } from "../../src/admin/instruccion-maestra";
 import { SETTING_KEYS } from "../../src/db/settings";
 
 function row(overrides: Partial<HistoryRow>): HistoryRow {
@@ -49,13 +49,13 @@ describe("renderChangelogEntry", () => {
     expect(line).toContain('- "b"');
   });
 
-  it("redacts llm_api_key values", () => {
+  it("hides llm_api_key values (outside the allowlist)", () => {
     const line = renderChangelogEntry(
       row({ key: SETTING_KEYS.llmApiKey, old_value: "sk-old-secret", new_value: "sk-new-secret" }),
     );
     expect(line).not.toContain("sk-old-secret");
     expect(line).not.toContain("sk-new-secret");
-    expect(line).toContain("••••");
+    expect(line).toContain("(valor oculto)");
   });
 
   it("diffs long text by line, truncating with a count of hidden lines", () => {
@@ -82,8 +82,36 @@ describe("renderChangelog", () => {
   });
 });
 
-describe("REDACTED_KEYS", () => {
-  it("includes llm_api_key", () => {
-    expect(REDACTED_KEYS).toContain(SETTING_KEYS.llmApiKey);
+describe("ALLOWED_KEYS", () => {
+  it("does not include llm_api_key", () => {
+    expect(ALLOWED_KEYS).not.toContain(SETTING_KEYS.llmApiKey);
+  });
+
+  it("includes ordinary settings like tone", () => {
+    expect(ALLOWED_KEYS).toContain(SETTING_KEYS.tone);
+  });
+});
+
+describe("renderChangelogEntry — allowlist", () => {
+  it("hides the value for a key outside ALLOWED_KEYS (e.g. a learn:* capture)", () => {
+    const line = renderChangelogEntry(
+      row({
+        key: "learn:whatsapp:capture:text",
+        old_value: null,
+        new_value: JSON.stringify({ phone: "+52123456789", text: "hola, quiero comprar" }),
+        actor: "system",
+      }),
+    );
+    expect(line).toContain("(valor oculto)");
+    expect(line).not.toContain("+52123456789");
+    expect(line).not.toContain("hola, quiero comprar");
+  });
+
+  it("still shows key/actor/timestamp metadata for a hidden-value entry", () => {
+    const line = renderChangelogEntry(
+      row({ key: "map:whatsapp", old_value: null, new_value: "{}", actor: "system" }),
+    );
+    expect(line).toContain("map:whatsapp");
+    expect(line).toContain("system");
   });
 });

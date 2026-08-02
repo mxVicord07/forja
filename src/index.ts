@@ -292,7 +292,7 @@ export default {
     // Daily cron (wrangler.toml: "0 3 * * *") — purge messages older than 90 days.
     await purgeOldMessages(env);
     // Daily cron: purge settings_history rows older than 365 days.
-    await purgeOldSettingsHistory(env);
+    await purgeOldSettingsHistory(env).catch((e) => console.error("purgeSettingsHistory:", e));
     // Corrida nocturna del Analista de insights (F2). No debe tumbar la purga.
     await analyzeConversations(env, { limit: 50 }).catch((e) => console.error("insights:", e));
     // Flywheel (F5): detecta huecos de KB y lecciones de takeovers → propone

@@ -69,13 +69,24 @@ export const adminApp = new Hono<{ Bindings: Env }>();
 // habilita /webhooks/learn/:channel, un endpoint sin verificación de firma
 // que escribe payloads crudos a D1 — un panel "público de solo lectura"
 // jamás debe incluir ese interruptor.
+// /admin/instruccion-maestra.md también queda SIEMPRE fuera del bypass: es
+// el export de solo-lectura más concentrado del panel entero (prompt
+// completo + contexto de negocio + 365 días de historial de cambios) — un
+// panel "público de solo lectura" tampoco debe exponer esto sin auth.
 // El match usa una regex (no startsWith) porque c.req.path trae el prefijo
 // "/admin" cuando esta sub-app está montada en index.ts, pero NO lo trae en
 // los tests que llaman a adminApp.request(...) directamente — el patrón
 // /learn/:channel/(start|stop) al final del path cubre ambos casos.
 const LEARN_PATH_RE = /\/learn\/[^/]+\/(start|stop)$/;
+const INSTRUCCION_MAESTRA_PATH_RE = /\/instruccion-maestra\.md$/;
 adminApp.use("*", (c, next) => {
-  if (c.env.DASHBOARD_PUBLIC === "1" && !LEARN_PATH_RE.test(c.req.path)) return next();
+  if (
+    c.env.DASHBOARD_PUBLIC === "1" &&
+    !LEARN_PATH_RE.test(c.req.path) &&
+    !INSTRUCCION_MAESTRA_PATH_RE.test(c.req.path)
+  ) {
+    return next();
+  }
   return adminAuth(c.env)(c, next);
 });
 
