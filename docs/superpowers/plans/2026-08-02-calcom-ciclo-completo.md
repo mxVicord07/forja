@@ -1086,6 +1086,8 @@ git commit -m "feat(tools): checkAvailability sobre Cal.com v2"
 
 **Regla de negocio:** un contacto solo puede tener **una cita activa a la vez**. Si ya tiene una (`confirmed` o `change_pending`), la tool rechaza con `appointment_already_exists` sin llamar a Cal.com; el bot le ofrece reagendar la que ya tiene. Una cita `cancelled` no bloquea.
 
+**Precondición sobre `createBooking` (Task 2):** su rama `ok: true` debe **exigir** `uid`, igual que ya hace `rescheduleBooking` (`if (!d?.id || !d.uid) return { ok: false, reason: "no_booking_id" }`), y tiparlo como no-opcional. Una reserva sin uid utilizable no es una reserva utilizable: guardar un sustituto (`String(bookingId)`) rompería el reagendado semanas después, sin ninguna señal al momento de agendar.
+
 - [ ] **Step 1: Reemplazar el test por completo**
 
 Sobrescribir `test/tools/scheduleAppointment.test.ts`. Los tests viejos prueban la API v1 que este task elimina — no se conservan.
@@ -1276,7 +1278,7 @@ export function scheduleAppointmentTool(env: Env, getConversationId: () => strin
 
       await appts.create({
         conversationId,
-        calcomUid: booking.uid ?? String(booking.bookingId),
+        calcomUid: booking.uid,
         eventTypeId,
         start: booking.start ?? startTime,
         attendeeName,
