@@ -3,6 +3,26 @@ import type { Env } from "../env";
 
 const TG_API = "https://api.telegram.org/bot";
 
+/**
+ * The model writes CommonMark (`**bold**`, `*italic*` — what "Markdown OK" in
+ * the system prompt means to an LLM). Telegram's legacy `parse_mode:
+ * "Markdown"` uses a DIFFERENT, non-standard mapping: a single `*text*` is
+ * BOLD (not italic), and italic is `_text_`. Sending CommonMark as-is means
+ * `**text**` is just literal asterisks to Telegram (never an error — it just
+ * doesn't match legacy Markdown's single-asterisk-bold rule), and any
+ * `*text*` the model meant as italic would silently render bold instead.
+ * This normalizes CommonMark to Telegram's legacy dialect before sending.
+ */
+export function toTelegramMarkdown(text: string): string {
+  const SENTINEL = "\x01";
+  return text
+    .replace(/\*\*(.+?)\*\*/gs, SENTINEL + "$1" + SENTINEL)
+    .replace(/\*(.+?)\*/gs, "_$1_")
+    .split(SENTINEL)
+    .map((part, i) => (i % 2 === 1 ? "*" + part + "*" : part))
+    .join("");
+}
+
 interface TgUpdate {
   update_id: number;
   message?: {
@@ -79,11 +99,34 @@ export const telegramAdapter: ChannelAdapter = {
       }).catch(() => {});
       const delay = i === 0 ? 0 : reply.interChunkDelayMs ?? 1000;
       if (delay > 0) await new Promise((r) => setTimeout(r, delay));
-      await fetch(`${TG_API}${token}/sendMessage`, {
+      // parse_mode "Markdown" so the model's **bold**/`code` renders instead of
+      // showing literal asterisks/backticks. Legacy mode (not MarkdownV2) is
+      // intentional: MarkdownV2 requires escaping ~12 special chars in plain
+      // prose, which the model doesn't do. The model writes CommonMark
+      // (**bold**), but Telegram's legacy Markdown uses a single *asterisk*
+      // for bold and _underscore_ for italic — toTelegramMarkdown() converts
+      // between the two dialects first. If a chunk still has an unmatched
+      // entity, Telegram rejects the whole call — fall back to plain text so
+      // a formatting glitch never drops a message outright.
+      const res = await fetch(`${TG_API}${token}/sendMessage`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ chat_id: reply.channelUserId, text: reply.chunks[i] }),
+        body: JSON.stringify({
+          chat_id: reply.channelUserId,
+          text: toTelegramMarkdown(reply.chunks[i]),
+          parse_mode: "Markdown",
+        }),
       });
+      if (!res.ok) {
+        console.warn(
+          `[telegram] parse_mode=Markdown rejected (${res.status}), falling back to plain text: ${await res.text()}`,
+        );
+        await fetch(`${TG_API}${token}/sendMessage`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ chat_id: reply.channelUserId, text: reply.chunks[i] }),
+        });
+      }
     }
   },
 

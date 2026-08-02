@@ -24,6 +24,14 @@ export const SETTING_KEYS = {
   llmProvider: "llm_provider", // "" (auto) | anthropic | openai
   llmApiKey: "llm_api_key", // owner's API key; empty = use the env key
   llmModel: "llm_model", // concrete model id; empty = auto tiers (fast⇄smart)
+  // Formatting rules (bold/emoji usage) injected INSIDE <style_guide> — same
+  // section the model already treats as authoritative for chat formatting,
+  // instead of competing from a different section like `tone` does.
+  formattingRules: "formatting_rules",
+  // Overrides env.BOT_LANGUAGE without a redeploy. Special value "espejo" =
+  // detect and mirror the customer's language turn by turn instead of a
+  // single fixed language.
+  botLanguage: "bot_language",
 } as const;
 
 export type SettingKey = (typeof SETTING_KEYS)[keyof typeof SETTING_KEYS];

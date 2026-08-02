@@ -10,21 +10,13 @@ export interface SystemPromptInput {
   tone?: string;                    // owner-chosen tone (e.g. "cálido y cercano")
   extraEscalationKeywords?: string[]; // extra words that trigger a human handoff
   lessons?: string[];               // flywheel: rules distilled from owner takeovers
+  formattingRules?: string;         // owner-defined bold/emoji rules, injected INSIDE <style_guide>
 }
 
 const TEMPLATE = `<output_language>
 CRITICAL OVERRIDE — APPLIES TO 100% OF YOUR OUTPUT.
 
-THE COACH'S CUSTOMER PREFERS LANGUAGE: {{LANGUAGE}}
-
-EVERY token you emit MUST be in {{LANGUAGE}}, including pre-tool-call
-narration and confirmations. If the customer writes in another language,
-reply in {{LANGUAGE}} anyway. Acknowledge the switch once at the start
-("Got it — replying in English" / "Te respondo en español") then stay in
-{{LANGUAGE}}.
-
-Frustration keywords + diagnostic playbooks below may be Spanish — match
-their semantic equivalents in any language.
+{{LANGUAGE_INSTRUCTIONS}}
 </output_language>
 
 <role>
@@ -85,7 +77,7 @@ NO escales cuando:
 - NO uses headers (#) — esto es chat, no documento.
 - NO uses tablas — bubbles son angostas.
 - Emojis: cero, excepto ✓ al confirmar acción exitosa.
-- Cierre: ninguno. NO "espero que te sirva". Termina con la respuesta.
+- Cierre: ninguno. NO "espero que te sirva". Termina con la respuesta.{{EXTRA_STYLE}}
 </style_guide>
 
 <anti_patterns>
@@ -99,11 +91,52 @@ NUNCA:
 - Ignorar la directiva <output_language>. Es la #1 prioridad.
 </anti_patterns>`;
 
+/**
+ * "espejo" is a special language value (not a real language code): instead of
+ * pinning every reply to one fixed language, the bot detects and mirrors the
+ * customer's language turn by turn. Any other value keeps the original
+ * fixed-language behavior (single language, one-time acknowledgment if the
+ * customer switches — never actually switching).
+ */
+function buildLanguageInstructions(language: string): string {
+  if (language.trim().toLowerCase() === "espejo") {
+    return `THE BOT MIRRORS THE CUSTOMER'S LANGUAGE, MESSAGE BY MESSAGE.
+
+Detect the language of the customer's most recent message and reply in that
+SAME language, including pre-tool-call narration and confirmations. If the
+customer switches language mid-conversation, switch with them on your very
+next reply — no need to ask, announce the switch, or escalate to a human just
+because of a language change. If the language is ambiguous or mixed, default
+to Spanish.
+
+Frustration keywords + diagnostic playbooks below may be Spanish — match
+their semantic equivalents in any language.`;
+  }
+  return `THE COACH'S CUSTOMER PREFERS LANGUAGE: ${language}
+
+EVERY token you emit MUST be in ${language}, including pre-tool-call
+narration and confirmations. If the customer writes in another language,
+reply in ${language} anyway. Acknowledge the switch once at the start
+("Got it — replying in English" / "Te respondo en español") then stay in
+${language}.
+
+Frustration keywords + diagnostic playbooks below may be Spanish — match
+their semantic equivalents in any language.`;
+}
+
 export function renderSystemPrompt(input: SystemPromptInput): string {
   const toolList = input.toolList.map((t) => `- ${t}`).join("\n");
 
   const tone = input.tone?.trim();
   const toneLine = tone ? `\n- Adopta un estilo ${tone} en todas tus respuestas.` : "";
+
+  // Injected INSIDE <style_guide> (not identity_and_voice like tone) so it
+  // reads as part of the SAME authoritative formatting section the model
+  // already follows, instead of competing with it from elsewhere.
+  const formattingRules = input.formattingRules?.trim();
+  const extraStyle = formattingRules
+    ? `\n- IMPORTANTE — estas reglas de formato tienen prioridad sobre las anteriores de este bloque: ${formattingRules}`
+    : "";
 
   const extraKeywords = (input.extraEscalationKeywords ?? [])
     .map((k) => k.trim())
@@ -123,7 +156,7 @@ ${lessons.map((l) => `- ${l}`).join("\n")}
       : "";
 
   return TEMPLATE
-    .replaceAll("{{LANGUAGE}}", input.language)
+    .replaceAll("{{LANGUAGE_INSTRUCTIONS}}", buildLanguageInstructions(input.language))
     .replaceAll("{{BOT_NAME}}", input.botName)
     .replaceAll("{{BUSINESS_NAME}}", input.businessName)
     .replaceAll("{{BUSINESS_CONTEXT}}", input.businessContext)
@@ -131,7 +164,8 @@ ${lessons.map((l) => `- ${l}`).join("\n")}
     .replaceAll("{{NICHO_PLAYBOOK}}", input.nichoPlaybook ?? "")
     .replaceAll("{{LECCIONES}}", lessonsBlock)
     .replaceAll("{{TONE_LINE}}", toneLine)
-    .replaceAll("{{EXTRA_ESCALATION}}", extraEscalation);
+    .replaceAll("{{EXTRA_ESCALATION}}", extraEscalation)
+    .replaceAll("{{EXTRA_STYLE}}", extraStyle);
 }
 
 export interface SystemPromptOverrides {
@@ -139,6 +173,8 @@ export interface SystemPromptOverrides {
   extraEscalationKeywords?: string[];
   botName?: string;
   lessons?: string[];
+  formattingRules?: string;
+  language?: string; // overrides env.BOT_LANGUAGE (e.g. "espejo")
 }
 
 export function systemPromptFromEnv(
@@ -151,12 +187,13 @@ export function systemPromptFromEnv(
   return renderSystemPrompt({
     botName: overrides?.botName ?? env.BOT_NAME,
     businessName: env.BUSINESS_NAME,
-    language: env.BOT_LANGUAGE,
+    language: overrides?.language?.trim() || env.BOT_LANGUAGE,
     businessContext,
     toolList: toolNames,
     nichoPlaybook,
     tone: overrides?.tone,
     extraEscalationKeywords: overrides?.extraEscalationKeywords,
     lessons: overrides?.lessons,
+    formattingRules: overrides?.formattingRules,
   });
 }

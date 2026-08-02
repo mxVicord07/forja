@@ -96,6 +96,8 @@ export async function resolveAgentConfig(env: Env, toolNames: string[]): Promise
   // Tono elegido en el panel gana; si no hay, el tono por defecto del nicho.
   const tone = get(SETTING_KEYS.tone) ?? (niche.defaultTone || undefined);
   const escalationKeywords = parseCsvList(get(SETTING_KEYS.escalationKeywords));
+  const formattingRules = get(SETTING_KEYS.formattingRules);
+  const language = get(SETTING_KEYS.botLanguage);
 
   // Flywheel lessons (JSON array). Only injected into the GENERATED prompt —
   // a manual override replaces the whole prompt, lessons included.
@@ -117,6 +119,8 @@ export async function resolveAgentConfig(env: Env, toolNames: string[]): Promise
       extraEscalationKeywords: escalationKeywords,
       botName,
       lessons,
+      formattingRules,
+      language,
     });
 
   const bufferSecondsRaw = get(SETTING_KEYS.bufferSeconds);

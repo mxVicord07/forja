@@ -1,1 +1,68 @@
-[]
+[
+  {
+    "id": "faq-desaparecen-despues",
+    "source": "faq-desaparecen-despues.md",
+    "title": "\"¿BIRevX desaparece después de implementar?\"",
+    "content": "# \"¿BIRevX desaparece después de implementar?\"\n\nRespuesta oficial (publicada en birevx.com): \"No. Ofrecemos acompañamiento\ncontinuo. Somos un aliado operativo, no un proveedor que entrega y se va. El\néxito de tu operación es nuestro éxito.\""
+  },
+  {
+    "id": "faq-resistencia-al-cambio",
+    "source": "faq-resistencia-al-cambio.md",
+    "title": "\"Mi equipo se va a resistir al cambio\"",
+    "content": "# \"Mi equipo se va a resistir al cambio\"\n\nRespuesta oficial (publicada en birevx.com): \"Normal. Por eso implementamos\ngradualmente. No lanzamos un sistema nuevo de golpe — el equipo adopta\nmientras sigue operando. La resistencia cae cuando la gente ve que el nuevo\nproceso les facilita el trabajo, no se los complica.\""
+  },
+  {
+    "id": "faq-seguridad-informacion",
+    "source": "faq-seguridad-informacion.md",
+    "title": "\"¿Qué pasa con la seguridad de mi información?\"",
+    "content": "# \"¿Qué pasa con la seguridad de mi información?\"\n\nRespuesta oficial (publicada en birevx.com): \"Trabajamos con plataformas\nenterprise con control de roles, trazabilidad de acciones y respaldo\nautomático. Tu información no 'vive' en archivos sin dueño ni en correos sin\ncontrol.\""
+  },
+  {
+    "id": "faq-tiempo-implementacion",
+    "source": "faq-tiempo-implementacion.md",
+    "title": "\"¿Cuánto tiempo toma implementar algo?\"",
+    "content": "# \"¿Cuánto tiempo toma implementar algo?\"\n\nRespuesta oficial (publicada en birevx.com): \"Depende del alcance, pero el\ndiagnóstico inicial toma pocas semanas y ya en esa fase tienes un mapa claro\nde qué esperar. Las primeras mejoras visibles suelen llegar antes de terminar\nla Fase 2. Por eso empezamos siempre con diagnóstico: sabes exactamente qué\nesperar.\"\n\nReferencia adicional: el paquete de implementación estándar toma entre 15 y\n20 días hábiles una vez aprobado el alcance."
+  },
+  {
+    "id": "faq-ya-tengo-sistema",
+    "source": "faq-ya-tengo-sistema.md",
+    "title": "\"Ya tengo algún sistema o herramienta. ¿Empezamos de cero?\"",
+    "content": "# \"Ya tengo algún sistema o herramienta. ¿Empezamos de cero?\"\n\nRespuesta oficial (publicada en birevx.com): \"No. El diagnóstico evalúa lo que\nya tienes y aprovecha lo que sirve. No rompemos lo que funciona: lo\nintegramos, ordenamos o mejoramos. Sin rehacer todo cuando quieras crecer.\""
+  },
+  {
+    "id": "funciona-para-mi-negocio",
+    "source": "funciona-para-mi-negocio.md",
+    "title": "\"¿Esto funciona para mi tipo de negocio?\"",
+    "content": "# \"¿Esto funciona para mi tipo de negocio?\"\n\nBIRevX ha trabajado con: escuelas e instituciones educativas, clínicas y\nconsultorios de salud, clínicas veterinarias, servicios profesionales\n(agencias, despachos, venta de autos) y restaurantes — pero el argumento\naplica a cualquier giro.\n\nRegla de cierre universal: \"Si tu negocio recibe mensajes, tiene clientes que\ndar seguimiento y procesos repetitivos internos, hay automatización que puede\nayudarte. No importa el giro.\"\n\nCuando un prospecto pregunte esto, hay que indagar primero en qué consiste su\noperación antes de responder, para conectar la respuesta con su caso\nespecífico en vez de dar una respuesta genérica."
+  },
+  {
+    "id": "objecion-esta-caro",
+    "source": "objecion-esta-caro.md",
+    "title": "Objeción: \"Está caro\" / \"¿Es muy caro para una PyME?\"",
+    "content": "# Objeción: \"Está caro\" / \"¿Es muy caro para una PyME?\"\n\nNo se discute el precio de forma directa ni se ofrece un descuento. Primero se\nayuda al prospecto a cuantificar lo que le cuesta NO automatizar: mensajes sin\nresponder, valor de un cliente nuevo, oportunidades perdidas por semana.\n\nRespuesta oficial (tal cual la usa BIRevX): \"El costo se define después del\ndiagnóstico, no antes. Cada fase está diseñada para que el valor generado\njustifique la inversión. Sin compromiso hasta que tú apruebes el alcance y el\npresupuesto.\"\n\nFrase ancla si insiste: \"No es un gasto, es una inversión con ROI medible\ndesde los primeros meses.\"\n\nNunca se debe inventar o prometer un precio cerrado sin diagnóstico previo."
+  },
+  {
+    "id": "objecion-no-tengo-tiempo",
+    "source": "objecion-no-tengo-tiempo.md",
+    "title": "Objeción: \"No tengo tiempo para implementar esto\"",
+    "content": "# Objeción: \"No tengo tiempo para implementar esto\"\n\nRespuesta oficial: \"Tú no tienes que implementar nada. Nosotros lo hacemos\ntodo.\" El cliente solo necesita dar 2-3 horas para la sesión de diagnóstico\ninicial; el proceso completo de implementación toma entre 15 y 20 días\nhábiles, y ocurre sin interrumpir la operación del negocio."
+  },
+  {
+    "id": "objecion-ya-probe-chatbots",
+    "source": "objecion-ya-probe-chatbots.md",
+    "title": "Objeción: \"Ya probé chatbots y no funcionaron\"",
+    "content": "# Objeción: \"Ya probé chatbots y no funcionaron\"\n\nRespuesta oficial: \"La mayoría de los chatbots no funcionan porque solo\ncontestan mensajes... pero no entienden tu operación.\"\n\nReencuadre: lo que el prospecto probó antes fue probablemente un chatbot\ngenérico de menú simple. BIRevX no vende eso — implementa un asistente\noperativo con flujos, reglas y lógica específica para el negocio de cada\ncliente, entrenado sobre su información real (no respuestas prediseñadas\ngenéricas)."
+  },
+  {
+    "id": "proceso-de-trabajo",
+    "source": "proceso-de-trabajo.md",
+    "title": "Proceso de trabajo — las 4 fases",
+    "content": "# Proceso de trabajo — las 4 fases\n\nBIRevX trabaja siempre en el mismo orden estructurado, sin excepciones:\n\n1. **Diagnóstico** — analizamos los procesos actuales del negocio e\n   identificamos las oportunidades de automatización con mayor impacto. Esta\n   sesión inicial de valoración es gratuita y sin compromiso.\n2. **Diseño** — arquitecturamos la solución ideal con las herramientas de IA\n   más adecuadas para la industria del cliente.\n3. **Implementación** — construimos e integramos el sistema en el stack\n   tecnológico actual del cliente, sin interrumpir su operación.\n4. **Optimización** — monitoreamos resultados y ajustamos continuamente para\n   maximizar el retorno de la inversión.\n\nEl diagnóstico inicial suele tomar pocas semanas, y ya en esa fase el cliente\ntiene un mapa claro de qué esperar. Las primeras mejoras visibles suelen\nllegar antes de terminar la fase de Diseño."
+  },
+  {
+    "id": "que-vendemos-y-que-no",
+    "source": "que-vendemos-y-que-no.md",
+    "title": "Qué vende y qué no vende BIRevX",
+    "content": "# Qué vende y qué no vende BIRevX\n\nBIRevX SÍ vende: asistentes virtuales personalizados (WhatsApp, web y otros\ncanales), automatización de tareas repetitivas, sistemas de atención y\nseguimiento de clientes, infraestructura operativa digital propia (VPS\nautoalojado), CRM, ERP, dashboards y reportes, y acompañamiento en la\nimplementación y el mantenimiento de todos esos flujos.\n\nBIRevX NO vende: chatbots genéricos de menú simple, software estándar de\nmercado sin personalizar, \"IA por sí sola\" sin aplicación operativa, ni\ntecnología sin estrategia detrás. La filosofía del fundador es clara: \"No\ndigitalizamos el caos. Primero lo eliminamos, después lo automatizamos.\"\n\nSi un prospecto pregunta si esto es \"solo un chatbot\", la respuesta correcta\nes: no — es un asistente operativo entrenado con la lógica y las reglas\nespecíficas de su negocio, no una herramienta de respuestas genéricas."
+  }
+]

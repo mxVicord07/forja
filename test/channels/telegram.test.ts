@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { telegramAdapter, resolveTelegramFileUrl } from "../../src/channels/telegram";
+import { telegramAdapter, resolveTelegramFileUrl, toTelegramMarkdown } from "../../src/channels/telegram";
 import type { Env } from "../../src/env";
 
 function makeReq(body: unknown): Request {
@@ -118,5 +118,29 @@ describe("resolveTelegramFileUrl", () => {
     vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response("nope", { status: 400 }));
     const url = await resolveTelegramFileUrl("x", "tok");
     expect(url).toBeNull();
+  });
+});
+
+describe("toTelegramMarkdown", () => {
+  it("converts CommonMark bold (**x**) to Telegram legacy bold (*x*)", () => {
+    expect(toTelegramMarkdown("El **precio** es fijo")).toBe("El *precio* es fijo");
+  });
+
+  it("converts CommonMark italic (*x*) to Telegram italic (_x_)", () => {
+    expect(toTelegramMarkdown("tu *propio* ritmo")).toBe("tu _propio_ ritmo");
+  });
+
+  it("handles bold and italic together without cross-matching", () => {
+    expect(toTelegramMarkdown("**Next step:** ve a tu *propio* ritmo")).toBe(
+      "*Next step:* ve a tu _propio_ ritmo",
+    );
+  });
+
+  it("handles multiple bold spans in the same message", () => {
+    expect(toTelegramMarkdown("**Uno** y **dos** y **tres**")).toBe("*Uno* y *dos* y *tres*");
+  });
+
+  it("leaves plain text without asterisks unchanged", () => {
+    expect(toTelegramMarkdown("Hola, ¿en qué te ayudo?")).toBe("Hola, ¿en qué te ayudo?");
   });
 });

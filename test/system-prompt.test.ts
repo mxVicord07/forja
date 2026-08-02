@@ -62,6 +62,31 @@ describe("renderSystemPrompt", () => {
     const withoutPlaybook = renderSystemPrompt(input);
     expect(withoutPlaybook).not.toContain("{{NICHO_PLAYBOOK}}");
   });
+
+  it("keeps the fixed single-language instructions by default", () => {
+    const prompt = renderSystemPrompt(input);
+    expect(prompt).toContain("THE COACH'S CUSTOMER PREFERS LANGUAGE: es");
+    expect(prompt).not.toContain("MIRRORS THE CUSTOMER'S LANGUAGE");
+  });
+
+  it('switches to mirror-language instructions when language is "espejo"', () => {
+    const prompt = renderSystemPrompt({ ...input, language: "espejo" });
+    expect(prompt).toContain("THE BOT MIRRORS THE CUSTOMER'S LANGUAGE");
+    expect(prompt).not.toContain("THE COACH'S CUSTOMER PREFERS LANGUAGE");
+  });
+
+  it("injects formattingRules inside <style_guide>, not identity_and_voice", () => {
+    const prompt = renderSystemPrompt({ ...input, formattingRules: "usa 2-4 emojis clave" });
+    const styleGuide = prompt.slice(prompt.indexOf("<style_guide>"), prompt.indexOf("</style_guide>"));
+    expect(styleGuide).toContain("usa 2-4 emojis clave");
+    const identity = prompt.slice(prompt.indexOf("<identity_and_voice>"), prompt.indexOf("</identity_and_voice>"));
+    expect(identity).not.toContain("usa 2-4 emojis clave");
+  });
+
+  it("omits {{EXTRA_STYLE}} placeholder when formattingRules is absent", () => {
+    const prompt = renderSystemPrompt(input);
+    expect(prompt).not.toContain("{{EXTRA_STYLE}}");
+  });
 });
 
 describe("systemPromptFromEnv", () => {
