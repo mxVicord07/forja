@@ -57,4 +57,12 @@ describe("GET /admin/instruccion-maestra.md", () => {
     const body = await res.text();
     expect(body).not.toContain("sk-super-secret-value");
   });
+
+  it("returns 503 instead of a partial document when composition fails", async () => {
+    // Force a failure inside renderInstruccionMaestraDoc by breaking the DB
+    // binding after setup — simplest reliable way without a full mock:
+    const brokenEnv = { ...env, DB: undefined } as unknown as Env;
+    const res = await adminApp.request("/instruccion-maestra.md", { headers: AUTH }, brokenEnv);
+    expect(res.status).toBe(503);
+  });
 });

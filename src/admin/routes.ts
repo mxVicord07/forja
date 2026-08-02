@@ -541,8 +541,13 @@ adminApp.get("/leads/export.csv", async (c) => {
 });
 
 adminApp.get("/instruccion-maestra.md", async (c) => {
-  const doc = await renderInstruccionMaestraDoc(c.env);
-  return new Response(doc, { headers: { "Content-Type": "text/markdown; charset=utf-8" } });
+  try {
+    const doc = await renderInstruccionMaestraDoc(c.env);
+    return new Response(doc, { headers: { "Content-Type": "text/markdown; charset=utf-8" } });
+  } catch (e) {
+    console.error("instruccion-maestra.md:", e);
+    return c.text("No se pudo generar la instrucción maestra — intentá de nuevo.", 503);
+  }
 });
 
 // --- Mutating actions (HTMX / plain form posts) -----------------------------
