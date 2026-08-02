@@ -54,9 +54,14 @@ export class AppointmentsRepo {
   }
 
   /**
-   * Cita vigente de una conversación: la más próxima en el futuro primero, y
-   * nunca una ya cancelada. Incluye 'change_pending' a propósito — las tools
-   * necesitan distinguir "no tiene cita" de "ya tiene un cambio en revisión".
+   * Cita vigente de una conversación. Por diseño hay como máximo una:
+   * `scheduleAppointment` se niega a agendar si el contacto ya tiene una, así
+   * que el ORDER BY solo desempata de forma determinista si alguna vez
+   * quedaran dos (datos viejos, una carrera) — no expresa una preferencia de
+   * negocio.
+   *
+   * Incluye 'change_pending' a propósito: las tools necesitan distinguir
+   * "no tiene cita" de "ya tiene un cambio en revisión".
    */
   async findActive(conversationId: string): Promise<Appointment | null> {
     return this.db.first<Appointment>(
