@@ -233,6 +233,22 @@ export async function cancelBooking(
   }
 }
 
+/**
+ * Fecha y hora legibles en la zona del negocio, para mensajes al cliente.
+ * Ej.: "25 de julio, 10:00 a. m." en vez del ISO crudo en UTC — sin esto, un
+ * cliente en una zona con offset negativo lee una hora que no es la suya.
+ */
+export function formatForCustomer(iso: string, timeZone: string): string {
+  return new Intl.DateTimeFormat("es-MX", {
+    timeZone,
+    day: "numeric",
+    month: "long",
+    hour: "numeric",
+    minute: "2-digit",
+    hour12: true,
+  }).format(new Date(iso));
+}
+
 /** YYYY-MM-DD del día siguiente (para la ventana de slots). */
 function nextDay(date: string): string {
   const d = new Date(`${date}T00:00:00Z`);

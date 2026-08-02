@@ -7,6 +7,7 @@ import {
   createBooking,
   rescheduleBooking,
   cancelBooking,
+  formatForCustomer,
   DEFAULT_TZ,
 } from "../../src/integrations/calcom";
 import type { Env } from "../../src/env";
@@ -273,5 +274,17 @@ describe("reintento único", () => {
     const res = await cancelBooking(env({ CALCOM_API_KEY: "cal_x" }), "uid-1");
     expect(res.ok).toBe(false);
     expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+});
+
+describe("formatForCustomer", () => {
+  it("formatea un ISO en UTC como fecha/hora legible en la zona del negocio", () => {
+    expect(formatForCustomer("2026-07-25T16:00:00Z", "America/Mexico_City")).toBe(
+      "25 de julio a las 10:00 a.m.",
+    );
+  });
+
+  it("respeta otra zona horaria distinta", () => {
+    expect(formatForCustomer("2026-01-05T09:05:00Z", "UTC")).toBe("5 de enero a las 9:05 a.m.");
   });
 });

@@ -84,6 +84,21 @@ const TOOL_META: Record<string, ToolMeta> = {
     desc: "Consulta el catálogo de productos/servicios del negocio para responder con precios y opciones reales.",
     icon: "package",
   },
+  checkAvailability: {
+    label: "Ver disponibilidad",
+    desc: "Consulta los horarios libres antes de agendar o de aceptar un cambio, para no ofrecer un espacio ya ocupado.",
+    icon: "calendar-search",
+  },
+  rescheduleAppointment: {
+    label: "Reagendar cita",
+    desc: "Registra la solicitud del cliente de mover su cita a otro horario — queda pendiente de tu aprobación, no se mueve sola.",
+    icon: "calendar-clock",
+  },
+  cancelAppointment: {
+    label: "Cancelar cita",
+    desc: "Registra la solicitud del cliente de cancelar su cita y la escala a ti — no la cancela directamente en el calendario.",
+    icon: "calendar-x",
+  },
 };
 
 function toolMeta(name: string): ToolMeta {

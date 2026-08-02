@@ -112,12 +112,27 @@ describe("POST /tickets/:id/approve-change", () => {
   it("si Cal.com falla, la solicitud sigue pendiente y no se avisa al cliente", async () => {
     rescheduleBooking.mockResolvedValueOnce({ ok: false, reason: "http_500" } as any);
     const { crId, ticketId } = await seed("reschedule");
-    await post(`/tickets/${ticketId}/approve-change`);
+    const res = await post(`/tickets/${ticketId}/approve-change`);
 
     expect((await changes.getById(crId))?.status).toBe("pending");
     expect((await tickets.getById(ticketId))?.status).toBe("open");
     expect((await appts.findActive(convId))?.status).toBe("change_pending");
     expect(sendChannelMessage).not.toHaveBeenCalled();
+    // El redirect lleva el id fallido para que la tarjeta muestre el error.
+    expect(res.headers.get("Location")).toBe(`/admin/tickets?failed=${ticketId}`);
+  });
+
+  it("si cancelBooking falla, la solicitud de cancelación sigue pendiente y no se avisa al cliente", async () => {
+    cancelBooking.mockResolvedValueOnce({ ok: false, reason: "http_500" } as any);
+    const { crId, ticketId } = await seed("cancel");
+    const res = await post(`/tickets/${ticketId}/approve-change`);
+
+    expect(res.status).toBe(302);
+    expect((await changes.getById(crId))?.status).toBe("pending");
+    expect((await tickets.getById(ticketId))?.status).toBe("open");
+    expect((await appts.findActive(convId))?.status).toBe("change_pending");
+    expect(sendChannelMessage).not.toHaveBeenCalled();
+    expect(res.headers.get("Location")).toBe(`/admin/tickets?failed=${ticketId}`);
   });
 });
 

@@ -9,7 +9,7 @@ const STATUS_PILL: Record<string, string> = {
   in_progress: "var(--info)",
 };
 
-export async function renderTickets(env: Env): Promise<string> {
+export async function renderTickets(env: Env, failedTicketId?: string): Promise<string> {
   const db = new Db(env.DB);
   const repo = new TicketsRepo(db);
   const changes = new AppointmentChangeRequestsRepo(db);
@@ -41,7 +41,7 @@ export async function renderTickets(env: Env): Promise<string> {
           <span class="text-dim text-[11px]" style="flex:none">${date}</span>
         </div>
         <p class="text-muted text-[12.5px] leading-relaxed" style="margin:0 0 12px">${escapeHtml(t.summary)}</p>
-        ${cr ? changeActions(t.id, cr) : resolveForm(t.id)}
+        ${cr ? changeActions(t.id, cr, t.id === failedTicketId) : resolveForm(t.id)}
       </div>`;
     })
     .join("");
@@ -74,13 +74,15 @@ function resolveForm(ticketId: string): string {
  * Ticket de agenda: aprobar ejecuta el cambio en Cal.com y le avisa al cliente;
  * rechazar lo deja como estaba y también le avisa (con la nota, si la hay).
  */
-function changeActions(ticketId: string, cr: AppointmentChangeRequest): string {
+function changeActions(ticketId: string, cr: AppointmentChangeRequest, failed = false): string {
   const detalle =
     cr.kind === "reschedule"
       ? `Nuevo horario propuesto: <b class="text-cream">${escapeHtml(cr.proposed_start ?? "")}</b>`
-      : `Solicitud de <b class="text-cream">cancelación</b>`;
+      : `Solicitud de <b class="text-cream">cancelación</b>` +
+        (cr.reason ? ` — motivo: ${escapeHtml(cr.reason)}` : "");
   return `<div style="border-top:1px solid var(--line);padding-top:12px">
     <p class="text-muted text-[12px]" style="margin:0 0 10px">${detalle}</p>
+    ${failed ? `<p class="text-[11.5px]" style="color:var(--bad)">✗ No se pudo ejecutar el cambio en Cal.com — vuelve a intentar el clic.</p>` : ""}
     <div style="display:flex;gap:8px;align-items:flex-start;flex-wrap:wrap">
       <form method="POST" action="/admin/tickets/${ticketId}/approve-change">
         <button class="bigbtn font-display font-bold text-[11.5px] cursor-pointer"

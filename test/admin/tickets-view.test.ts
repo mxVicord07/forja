@@ -69,4 +69,57 @@ describe("renderTickets", () => {
     expect(html).toContain(`/admin/tickets/${id}/resolve`);
     expect(html).not.toContain("approve-change");
   });
+
+  it("muestra el motivo de cancelación cuando viene presente", async () => {
+    const apptId = await new AppointmentsRepo(db).create({
+      conversationId: "telegram:1",
+      calcomUid: "uid-1",
+      eventTypeId: 10,
+      start: "2026-07-20T15:00:00Z",
+      attendeeName: "Ana",
+      attendeeEmail: "ana@example.com",
+    });
+    const crId = await new AppointmentChangeRequestsRepo(db).create({
+      appointmentId: apptId,
+      conversationId: "telegram:1",
+      kind: "cancel",
+      reason: "ya no puedo ese día",
+    });
+    await new TicketsRepo(db).create({
+      conversationId: null,
+      category: "agenda",
+      summary: "Ana pide cancelar su cita",
+      transcript: "",
+      appointmentChangeRequestId: crId,
+    });
+    const html = await renderTickets(env);
+    expect(html).toContain("ya no puedo ese día");
+  });
+
+  it("marca con el indicador de error solo la tarjeta del ticket que falló al aprobar", async () => {
+    await seedChangeTicket("reschedule"); // ticket "sano", no debe llevar el aviso
+    const { ticketId: failedId } = await seedChangeTicket("cancel");
+
+    const html = await renderTickets(env, failedId);
+    expect(html).toContain("No se pudo ejecutar el cambio en Cal.com");
+    // Aparece exactamente una vez: la otra tarjeta (misma vista) no lo lleva,
+    // aunque ambas usen exactamente el mismo markup de changeActions().
+    expect(html.split("No se pudo ejecutar el cambio en Cal.com").length - 1).toBe(1);
+
+    // El aviso vive dentro de la tarjeta del ticket fallido específicamente
+    // (cada tarjeta es un <div class="tkcard...> independiente).
+    const cards = html.split('<div class="tkcard');
+    const failedCard = cards.find((c) => c.includes(failedId));
+    expect(failedCard).toContain("No se pudo ejecutar el cambio en Cal.com");
+    const otherCards = cards.filter((c) => !c.includes(failedId));
+    for (const c of otherCards) {
+      expect(c).not.toContain("No se pudo ejecutar el cambio en Cal.com");
+    }
+  });
+
+  it("sin failedTicketId ninguna tarjeta muestra el indicador de error", async () => {
+    await seedChangeTicket("reschedule");
+    const html = await renderTickets(env);
+    expect(html).not.toContain("No se pudo ejecutar el cambio en Cal.com");
+  });
 });

@@ -51,7 +51,7 @@ import { LeadsRepo, type Lead } from "../db/leads";
 import { TicketsRepo } from "../db/tickets";
 import { AppointmentsRepo, type Appointment } from "../db/appointments";
 import { AppointmentChangeRequestsRepo, type AppointmentChangeRequest } from "../db/appointmentChangeRequests";
-import { rescheduleBooking, cancelBooking } from "../integrations/calcom";
+import { rescheduleBooking, cancelBooking, formatForCustomer, calcomTimeZone } from "../integrations/calcom";
 import { ConversationsRepo } from "../db/conversations";
 import { MessagesRepo } from "../db/messages";
 import { SettingsRepo, SETTING_KEYS, type SettingKey } from "../db/settings";
@@ -398,7 +398,7 @@ adminApp.post("/agente/tools/:name/toggle", async (c) => {
 
 adminApp.get("/leads", async (c) => c.html(await renderLeads(c.env)));
 
-adminApp.get("/tickets", async (c) => c.html(await renderTickets(c.env)));
+adminApp.get("/tickets", async (c) => c.html(await renderTickets(c.env, c.req.query("failed"))));
 
 // Conexiones: mapa de canales con estado verde/gris (paso 4 del onboarding).
 adminApp.get("/conexiones", (c) => c.html(renderConexiones(c.env)));
@@ -611,15 +611,15 @@ adminApp.post("/tickets/:id/approve-change", async (c) => {
     const res = await rescheduleBooking(c.env, appt.calcom_uid, cr.proposed_start ?? "", cr.reason ?? undefined);
     if (!res.ok) {
       console.error(`[approve-change] reschedule falló para el ticket ${ticketId}: ${res.reason}`);
-      return c.redirect("/admin/tickets");
+      return c.redirect(`/admin/tickets?failed=${ticketId}`);
     }
     await appts.confirmAfterReschedule(appt.id, res.uid, res.start ?? cr.proposed_start ?? appt.start);
-    mensaje = `Listo, tu cita quedó reprogramada para ${res.start ?? cr.proposed_start}.`;
+    mensaje = `Listo, tu cita quedó reprogramada para ${formatForCustomer(res.start ?? cr.proposed_start ?? "", calcomTimeZone(c.env))}.`;
   } else {
     const res = await cancelBooking(c.env, appt.calcom_uid, cr.reason ?? undefined);
     if (!res.ok) {
       console.error(`[approve-change] cancel falló para el ticket ${ticketId}: ${res.reason}`);
-      return c.redirect("/admin/tickets");
+      return c.redirect(`/admin/tickets?failed=${ticketId}`);
     }
     await appts.markCancelled(appt.id);
     mensaje = "Listo, tu cita quedó cancelada.";

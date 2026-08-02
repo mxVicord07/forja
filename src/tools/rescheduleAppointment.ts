@@ -22,7 +22,9 @@ export function rescheduleAppointmentTool(env: Env, getConversationId: () => str
     description:
       "Solicita mover la cita del cliente a otro horario. El cambio NO es inmediato: queda en revisión y el equipo lo confirma. " +
       "Si devuelve reschedule_limit_reached, no lo intentes de nuevo — usa handoffHuman para pasar la conversación a una persona. " +
-      "Si devuelve slot_unavailable, ofrécele al cliente los horarios que vienen en `available`.",
+      "Si devuelve slot_unavailable, ofrécele al cliente los horarios que vienen en `available`. " +
+      "Si devuelve no_appointment_found, dile al cliente que no tienes registro de una cita suya y ofrécele agendar una nueva con scheduleAppointment. " +
+      "Si devuelve change_already_pending, dile al cliente que su solicitud anterior sigue pendiente de confirmación — no generes una segunda.",
     inputSchema: z.object({
       newStartTime: z.string().describe("Nuevo horario propuesto, ISO, ej. 2026-07-25T16:00:00Z"),
       reason: z.string().optional().describe("Motivo del cambio, si el cliente lo dio"),

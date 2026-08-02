@@ -54,7 +54,17 @@ describe("Mi Agente — page and canvas", () => {
     expect(html).toContain("Modelo");
     expect(html).toContain("Memoria");
     // Pro tier: core tools and Pro additions appear as nodes
-    for (const tool of ["searchKb", "handoffHuman", "pauseBot", "captureLead", "scheduleAppointment", "catalogQuery"]) {
+    for (const tool of [
+      "searchKb",
+      "handoffHuman",
+      "pauseBot",
+      "captureLead",
+      "scheduleAppointment",
+      "catalogQuery",
+      "checkAvailability",
+      "rescheduleAppointment",
+      "cancelAppointment",
+    ]) {
       expect(html).toContain(tool);
     }
     // Buffer shows the effective seconds from env
@@ -93,6 +103,21 @@ describe("Mi Agente — node panels", () => {
     const html = await res.text();
     expect(html).toContain("Capturar lead");
     expect(html).toContain("Apagar tool");
+  });
+
+  // Las 3 tools de Cal.com nuevas de este branch deben tener su propia
+  // entrada en TOOL_META — sin ella el owner ve un nombre en inglés, ícono de
+  // llave inglesa y la descripción genérica de "Tool personalizada".
+  it.each([
+    ["checkAvailability", "Ver disponibilidad"],
+    ["rescheduleAppointment", "Reagendar cita"],
+    ["cancelAppointment", "Cancelar cita"],
+  ])("tool panel de %s muestra su label real '%s', no el fallback genérico", async (name, label) => {
+    const res = await adminApp.request(`/agente/node/tool%3A${name}`, { headers: AUTH }, env);
+    expect(res.status).toBe(200);
+    const html = await res.text();
+    expect(html).toContain(label);
+    expect(html).not.toContain("Tool personalizada de esta instancia.");
   });
 });
 

@@ -11,7 +11,9 @@ import { notifyOwner } from "./handoffHuman";
 export function cancelAppointmentTool(env: Env, getConversationId: () => string | null) {
   return tool({
     description:
-      "Registra la solicitud de cancelación de la cita del cliente. La cancelación NO es inmediata: queda en revisión y el equipo la confirma. Dile eso al cliente, no le asegures que ya quedó cancelada.",
+      "Registra la solicitud de cancelación de la cita del cliente. La cancelación NO es inmediata: queda en revisión y el equipo la confirma. Dile eso al cliente, no le asegures que ya quedó cancelada. " +
+      "Si devuelve no_appointment_found, dile al cliente que no tienes registro de una cita suya y ofrécele agendar una nueva con scheduleAppointment. " +
+      "Si devuelve change_already_pending, dile al cliente que su solicitud anterior sigue pendiente de confirmación — no generes una segunda.",
     inputSchema: z.object({
       reason: z.string().optional().describe("Motivo de la cancelación, si el cliente lo dio"),
     }),
