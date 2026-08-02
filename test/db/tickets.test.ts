@@ -46,4 +46,25 @@ describe("TicketsRepo", () => {
     expect(list).toHaveLength(1);
     expect(list[0].summary).toBe("a");
   });
+
+  it("guarda el id de la solicitud de cambio cuando se pasa", async () => {
+    const id = await repo.create({
+      conversationId: null,
+      category: "agenda",
+      summary: "Reagendar cita",
+      transcript: "",
+      appointmentChangeRequestId: 42,
+    });
+    expect((await repo.getById(id))?.appointment_change_request_id).toBe(42);
+  });
+
+  it("deja el id en null para un ticket normal", async () => {
+    const id = await repo.create({
+      conversationId: null,
+      category: "product",
+      summary: "x",
+      transcript: "",
+    });
+    expect((await repo.getById(id))?.appointment_change_request_id).toBeNull();
+  });
 });

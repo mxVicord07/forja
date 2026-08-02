@@ -9,6 +9,8 @@ export interface Ticket {
   status: "open" | "in_progress" | "resolved";
   resolved_at: number | null;
   resolved_by: string | null;
+  /** Solicitud de cambio de cita ligada, o null para un ticket normal. */
+  appointment_change_request_id: number | null;
   created_at: number;
 }
 
@@ -17,6 +19,7 @@ export interface CreateTicketInput {
   category: string;
   summary: string;
   transcript: string;
+  appointmentChangeRequestId?: number;
 }
 
 export class TicketsRepo {
@@ -25,9 +28,18 @@ export class TicketsRepo {
   async create(input: CreateTicketInput): Promise<string> {
     const id = crypto.randomUUID();
     await this.db.run(
-      `INSERT INTO tickets (id, conversation_id, category, summary, transcript, created_at)
-       VALUES (?, ?, ?, ?, ?, ?)`,
-      [id, input.conversationId, input.category, input.summary, input.transcript, Date.now()],
+      `INSERT INTO tickets
+         (id, conversation_id, category, summary, transcript, appointment_change_request_id, created_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?)`,
+      [
+        id,
+        input.conversationId,
+        input.category,
+        input.summary,
+        input.transcript,
+        input.appointmentChangeRequestId ?? null,
+        Date.now(),
+      ],
     );
     return id;
   }
