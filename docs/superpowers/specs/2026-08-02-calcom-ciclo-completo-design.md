@@ -1,6 +1,6 @@
 # Cal.com — ciclo completo de citas (disponibilidad, agendar, reagendar, cancelar)
 
-> Estado: aprobado, pendiente de implementación · 2026-08-02
+> Estado: aprobado, pendiente de implementación · 2026-08-02 (revisado)
 
 ## Problema
 
@@ -22,102 +22,173 @@ después para reagendarla o cancelarla.
 
 Objetivo del pedido original ("agrega disponibilidad, agendar, reagendar y
 cancelar") implica primero **resolver la inconsistencia v1/v2 de `agendar`**,
-y luego construir las tres capacidades que de verdad faltan.
+y luego construir las tres capacidades que de verdad faltan — con una
+salvedad de negocio: reagendar y cancelar no deben ejecutarse solos contra el
+calendario real; requieren una aprobación humana con un clic, sin fricción
+para el cliente.
 
 ## Alcance
 
 Dentro:
 - Reescribir `scheduleAppointment` sobre la base v2 ya existente y probada.
 - Tool nueva de disponibilidad (`checkAvailability`).
-- Tool nueva de reagendado (`rescheduleAppointment`), llamando a Cal.com.
-- Tool nueva de cancelación (`cancelAppointment`) — **sin tocar Cal.com**,
-  solo escalando a un humano (ver Decisión de negocio abajo).
-- Memoria de citas en D1 (`appointments`) para que reagendar/cancelar sepan
-  a qué cita se refiere el cliente sin pedirle un código.
+- Tool nueva de reagendado (`rescheduleAppointment`) — conversa con el
+  cliente, valida el horario propuesto contra Cal.com, y genera una
+  **solicitud de cambio pendiente de aprobación**, no un reagendado directo.
+- Tool nueva de cancelación (`cancelAppointment`) — mismo mecanismo de
+  solicitud pendiente, sin tocar Cal.com hasta que se apruebe.
+- Memoria de citas en D1 (`appointments`) y de sus solicitudes de cambio
+  (`appointment_change_requests`), para que el bot sepa qué cita tiene cada
+  conversación y no se acepten dos cambios en paralelo sobre la misma cita.
+- **Botón Aprobar/Rechazar en el panel `/admin`**, extendiendo la vista de
+  Tickets que ya existe — sin construir una sección nueva del panel.
+- Confirmación automática al cliente cuando el dueño aprueba un cambio,
+  reusando el envío-como-humano que ya existe en la bandeja
+  (`/admin/conversations/:id/reply`).
+- Un reintento único y acotado (red o `5xx` de Cal.com) en las 4 llamadas de
+  `integrations/calcom.ts`.
 
 Fuera de este diseño (explícitamente pospuesto):
-- Botón de cancelar desde el panel `/admin` — no se pidió, y cancelar sigue
-  siendo una acción humana en Cal.com directamente o vía el ticket generado.
 - Bookings con "seats" (eventos con cupo, ej. clases grupales) — el Starter
   de Forja no maneja ese caso hoy; se deja para cuando exista un niche pack
   que lo necesite.
-- Reintentos automáticos si Cal.com está caído — mismo criterio que el resto
-  del repo: se reporta el error, no se reintenta solo.
+- Un tope numérico de cuántas veces se puede reagendar la misma cita — se
+  deja al criterio del dueño, con visibilidad completa del historial (ver
+  Componente 2). Si en producción resulta necesario, se agrega después con
+  datos reales de cuántos reagendados ocurren, no antes.
+- Notificar al cliente automáticamente cuando se **rechaza** un cambio — solo
+  se automatiza la confirmación al **aprobar**; el rechazo lo comunica el
+  dueño manualmente desde la bandeja si lo considera necesario (decisión
+  explícita, ver Decisión de negocio).
 
-## Decisión de negocio: cancelar no es automático
+## Decisión de negocio: reagendar y cancelar requieren aprobación humana
 
 En LIA (n8n), cancelar una cita estaba restringido a Victor o directivos —
-nunca al agente conversacional directo con el cliente. Se mantiene el mismo
-criterio aquí: `cancelAppointment` **no llama al endpoint de cancelación de
-Cal.com**. Busca la cita en D1, crea un ticket (mismo mecanismo que
-`handoffHuman`) con el detalle de la cita, notifica al dueño, y le dice al
-bot que ya escaló — el cliente se entera de que su cancelación quedó
-registrada y será confirmada por una persona, no que ya se canceló.
+nunca al agente conversacional directo con el cliente. Este diseño extiende
+el mismo criterio a **reagendar**, con foco en que la experiencia del cliente
+no sienta fricción:
 
-Reagendar sí es automático (sin esa restricción histórica en LIA): el cliente
-puede mover su propia cita sin intervención humana.
+- El bot **sí** conduce toda la conversación: deja que el cliente proponga
+  libremente el nuevo horario (o pida cancelar), y valida contra Cal.com que
+  ese horario esté realmente disponible — así el dueño nunca revisa una
+  solicitud inválida.
+- Lo único que el bot no hace por su cuenta es **ejecutar** el cambio en el
+  calendario real. Arma el "registro completo" de la solicitud (nueva hora
+  validada, o motivo de cancelación) y lo dispara a aprobación.
+- La aprobación ocurre con **un clic** en el mismo panel donde el dueño ya
+  revisa tickets — no una pantalla nueva que aprender.
+- Al aprobar, el cliente recibe la confirmación **automáticamente**, por el
+  mismo canal por el que escribió — el dueño no tiene que ir a avisarle.
+
+Esto mantiene control humano sobre el calendario real sin que el cliente
+perciba una demora de "ida y vuelta": desde su punto de vista, pidió un
+cambio y en poco tiempo le llega la confirmación.
+
+### Control de múltiples reagendamientos
+
+Mientras una cita tiene una solicitud de cambio `pending`, el bot no acepta
+una segunda sobre la misma cita — le dice al cliente que ya hay un cambio en
+revisión. Esto se resuelve con un estado en la propia cita
+(`appointments.status = 'change_pending'`), no con lógica adicional en las
+tools.
+
+Cada solicitud es una fila nueva en `appointment_change_requests` — nunca se
+sobreescribe una anterior. El dueño puede ver, para cualquier cita, cuántas
+veces se ha pedido moverla, cuándo, y qué se resolvió cada vez. Es
+monitoreo completo sin imponer un límite arbitrario que no sabemos si hace
+falta todavía.
 
 ## Enfoques considerados
 
-- **A — Guardar el estado de la cita en D1 al crearla.** *(elegido)* Nueva
-  tabla `appointments` ligada a `conversation_id`. El bot ya sabe qué cita
-  tiene ese contacto sin preguntar nada. Costo: una tabla nueva + un repo.
-- **B — Buscar en vivo contra Cal.com por email/teléfono del asistente.**
-  Sin tabla nueva, pero depende de que el endpoint de listado de bookings de
-  Cal.com filtre bien por attendee, y le añade una ronda de "dame tu correo
-  otra vez" a cada reagendado/cancelación. Descartado por fricción y por
-  acoplar el flujo a un endpoint que no se ha verificado a fondo.
-- **C — Pedirle al cliente el `uid` de su cita** (viene en la confirmación
-  de Cal.com por email). Cero estado nuevo, pero es fricción real en
-  WhatsApp — nadie va a copiar un uid de un correo a un chat. Descartado.
+- **A — Guardar el estado de la cita en D1 al crearla, con aprobación
+  humana para cambios.** *(elegido)* Ver arquitectura abajo.
+- **B — Buscar en vivo contra Cal.com por email/teléfono del asistente,
+  reagendar/cancelar directo.** Sin tabla nueva, pero sin control humano
+  sobre el calendario y dependiente de que el endpoint de listado de
+  bookings de Cal.com filtre bien por attendee. Descartado: no cumple el
+  requisito de aprobación.
+- **C — Aprobación humana pero vía Cal.com mismo** (el dueño entra a su
+  propio calendario de Cal.com a mover/cancelar la cita). Cero código nuevo
+  de aprobación, pero obliga al dueño a salir de Forja y operar en dos
+  sistemas — contradice el valor central del panel de Forja (todo en un
+  lugar). Descartado.
+- **D — Aprobación vía ticket genérico sin acción estructurada** (el ticket
+  solo avisa "cliente quiere reagendar a X", el dueño reagenda a mano en
+  Cal.com). Más simple de construir, pero no resuelve el pedido de "botón
+  de aprobar" ni cierra el ciclo dentro de Forja. Descartado.
 
 ## Arquitectura
 
 ```
 Cliente pregunta horario
-  → checkAvailability        → integrations/calcom.ts:getAvailableSlots   (v2, ya existe)
+  → checkAvailability          → integrations/calcom.ts:getAvailableSlots     (v2, ya existe)
 
 Cliente confirma
-  → scheduleAppointment      → integrations/calcom.ts:createBooking       (v2, ya existe)
-                              → AppointmentsRepo.create()  (D1, ligada a conversation_id)
+  → scheduleAppointment        → integrations/calcom.ts:createBooking        (v2, ya existe)
+                                → AppointmentsRepo.create()  (status='confirmed')
 
-Cliente pide otro horario
-  → rescheduleAppointment    → AppointmentsRepo.findActive(conversationId)
-                              → integrations/calcom.ts:rescheduleBooking  (v2, NUEVA)
-                              → AppointmentsRepo.update()  (nuevo uid + nuevo start)
+Cliente propone nuevo horario
+  → rescheduleAppointment      → AppointmentsRepo.findActive(conversationId)
+                                   · sin cita              → error no_appointment_found
+                                   · status=change_pending → error change_already_pending
+                                → integrations/calcom.ts:getAvailableSlots (valida el horario propuesto)
+                                   · no disponible         → error slot_unavailable (bot ofrece alternativas)
+                                → AppointmentChangeRequestsRepo.create(kind='reschedule', proposed_start)
+                                → AppointmentsRepo.setChangePending()
+                                → TicketsRepo.create() (ligado a la change request) + notifyOwner()
 
 Cliente pide cancelar
-  → cancelAppointment        → AppointmentsRepo.findActive(conversationId)
-                              → TicketsRepo.create() + notifyOwner()      (reusa handoffHuman)
-                              → AppointmentsRepo.markCancelRequested()
-                              (Cal.com NO se toca — lo cancela un humano)
+  → cancelAppointment          → AppointmentsRepo.findActive(conversationId)  (mismos 2 checks de arriba)
+                                → AppointmentChangeRequestsRepo.create(kind='cancel', reason)
+                                → AppointmentsRepo.setChangePending()
+                                → TicketsRepo.create() (ligado a la change request) + notifyOwner()
+
+Dueño aprueba desde /admin/tickets (un clic)
+  → POST /admin/tickets/:id/approve-change
+       kind='reschedule'  → integrations/calcom.ts:rescheduleBooking (v2, NUEVA)
+                           → AppointmentsRepo.confirmAfterReschedule(nuevo uid + start)
+       kind='cancel'      → integrations/calcom.ts:cancelBooking     (v2, NUEVA)
+                           → AppointmentsRepo.markCancelled()
+                           → AppointmentChangeRequestsRepo.approve()
+                           → TicketsRepo.resolve()
+                           → sendChannelMessage() al cliente, mismo canal   (confirmación automática)
+
+Dueño rechaza desde /admin/tickets
+  → POST /admin/tickets/:id/reject-change
+                           → AppointmentsRepo.revertToConfirmed()
+                           → AppointmentChangeRequestsRepo.reject()
+                           → TicketsRepo.resolve()
+                           (sin auto-aviso al cliente — el dueño decide si le escribe)
 ```
 
 Decisiones de diseño no obvias:
 
 - **Todas las tools delegan la llamada HTTP a `integrations/calcom.ts`,
   nunca a `fetch` directo.** Es exactamente el problema que tiene hoy
-  `scheduleAppointment.ts` — duplicar la llamada a la API en la capa de tool
-  es lo que la dejó en v1 mientras la v2 se construía al lado sin que nadie
-  la conectara.
-- **`rescheduleBooking` y `createBooking` comparten `cal-api-version:
-  2026-02-25`.** Confirmado contra la documentación oficial de Cal.com v2
-  (`POST /v2/bookings/{uid}/reschedule`, mismo header de versión que
-  bookings) — no es una suposición.
-- **`cancelAppointment` no necesita ninguna llamada a Cal.com.** Por la
-  decisión de negocio de arriba, esta tool es puro D1 + ticket. Se
-  contempló agregar `cancelBooking` a `integrations/calcom.ts` "por si
-  luego se necesita" — se descarta: no hay caller hoy, y agregarlo sin uso
-  es la misma clase de deuda que ya existe (código sin conectar).
-- **`AppointmentsRepo.findActive` regresa la cita `confirmed` más reciente
-  de la conversación**, no una lista. Un cliente con dos citas activas al
-  mismo tiempo es un caso que no existe hoy en el negocio piloto de BIRevX;
-  soportarlo sería construir para un caso hipotético (regla del proyecto:
-  no diseñar para requisitos hipotéticos).
+  `scheduleAppointment.ts`.
+- **`rescheduleBooking` y `cancelBooking` comparten `cal-api-version:
+  2026-02-25`** con `createBooking` (mismo header de versión). Confirmado
+  contra la documentación oficial de Cal.com v2 — no es una suposición.
+- **La aprobación vive en la vista de Tickets, no en una sección nueva.**
+  El panel ya tiene el patrón exacto que hace falta: una tarjeta por
+  pendiente, con un form que hace POST y refresca. Construir una pantalla
+  aparte duplicaría ese patrón sin necesidad.
+- **La confirmación automática al cliente reusa la ruta de "responder como
+  humano".** Hoy `/admin/conversations/:id/reply` ya resuelve el adapter del
+  canal (`pickAdapter`), envía, persiste el mensaje y actualiza la
+  conversación — se extrae esa secuencia a un helper (`sendChannelMessage`)
+  para no duplicarla entre esa ruta y la nueva de aprobación.
+- **`AppointmentsRepo.findActive` regresa la cita más reciente en estado
+  `confirmed` o `change_pending`** (nunca `cancelled`), para poder distinguir
+  "no tiene cita" de "ya tiene un cambio pendiente" con mensajes distintos.
+- **El reintento vive una sola vez, en `integrations/calcom.ts`**, no en cada
+  tool ni en cada ruta — así las 4 llamadas (slots, crear, reagendar,
+  cancelar) lo heredan sin repetir código.
 
 ## Componentes
 
-### 1. Migración — tabla `appointments`
+### 1. Migración — tablas `appointments` y `appointment_change_requests`,
+columna nueva en `tickets`
 
 En `src/db/schema.sql` (mismo patrón que `settings_history`: idempotente,
 sin migración separada, se aplica con `pnpm db:apply:remote`):
@@ -129,7 +200,7 @@ CREATE TABLE IF NOT EXISTS appointments (
   calcom_uid       TEXT    NOT NULL,
   event_type_id    INTEGER NOT NULL,
   start            TEXT    NOT NULL,   -- ISO datetime
-  status           TEXT    NOT NULL,   -- 'confirmed' | 'cancel_requested'
+  status           TEXT    NOT NULL,   -- 'confirmed' | 'change_pending' | 'cancelled'
   attendee_name    TEXT    NOT NULL,
   attendee_email   TEXT    NOT NULL,
   attendee_phone   TEXT,
@@ -138,11 +209,35 @@ CREATE TABLE IF NOT EXISTS appointments (
 );
 CREATE INDEX IF NOT EXISTS idx_appointments_conv
   ON appointments(conversation_id, status, start DESC);
+
+CREATE TABLE IF NOT EXISTS appointment_change_requests (
+  id               INTEGER PRIMARY KEY AUTOINCREMENT,
+  appointment_id   INTEGER NOT NULL,
+  conversation_id  TEXT    NOT NULL,
+  kind             TEXT    NOT NULL,   -- 'reschedule' | 'cancel'
+  proposed_start   TEXT,               -- solo 'reschedule'
+  reason           TEXT,
+  status           TEXT    NOT NULL,   -- 'pending' | 'approved' | 'rejected'
+  requested_at     INTEGER NOT NULL,
+  resolved_at      INTEGER,
+  FOREIGN KEY (appointment_id) REFERENCES appointments(id) ON DELETE CASCADE
+);
+CREATE INDEX IF NOT EXISTS idx_change_requests_appt
+  ON appointment_change_requests(appointment_id, status);
+
+-- Liga un ticket a su solicitud de cambio, cuando aplica. NULL para todo
+-- ticket "normal" (billing/product/complaint/other) que no viene de Cal.com.
+ALTER TABLE tickets ADD COLUMN appointment_change_request_id INTEGER
+  REFERENCES appointment_change_requests(id) ON DELETE SET NULL;
 ```
 
-### 2. `integrations/calcom.ts` — `rescheduleBooking`
+(La sentencia `ALTER TABLE` se ejecuta una sola vez por base — D1/SQLite no
+soporta `ADD COLUMN IF NOT EXISTS`; se sigue el mismo criterio operativo que
+ya usa el manual de Forja para cambios de esquema: correrla contra la base
+ya existente de `birevx-support-bot` como parte del despliegue de esta
+feature, documentada en el runbook igual que se hizo con `settings_history`.)
 
-Nueva función, mismo estilo que `createBooking`:
+### 2. `integrations/calcom.ts` — `rescheduleBooking`, `cancelBooking`, reintento
 
 ```ts
 export async function rescheduleBooking(
@@ -155,15 +250,32 @@ export async function rescheduleBooking(
   | { ok: false; reason: string }
 >
 ```
+`POST {CALCOM_API}/bookings/${uid}/reschedule`, header `cal-api-version:
+2026-02-25` (constante `BOOKINGS_VERSION` reutilizada), body `{ start:
+newStart, reschedulingReason: reason }`. Cal.com regresa un booking con uid
+nuevo — ese es el que se guarda en D1.
 
-`POST {CALCOM_API}/bookings/${uid}/reschedule`, header
-`cal-api-version: 2026-02-25` (constante `BOOKINGS_VERSION` ya existente,
-reutilizada), body `{ start: newStart, reschedulingReason: reason }`. Cal.com
-regresa un booking nuevo (uid distinto) — ese uid es el que se guarda en D1.
+```ts
+export async function cancelBooking(
+  env: Env,
+  uid: string,
+  reason?: string,
+): Promise<{ ok: true } | { ok: false; reason: string }>
+```
+`POST {CALCOM_API}/bookings/${uid}/cancel`, mismo header de versión, body
+`{ cancellationReason: reason }`.
+
+**Reintento único:** se agrega un helper interno `fetchCalcom(url, init)` que
+envuelve el `fetch` de las 4 funciones (`getAvailableSlots`, `createBooking`,
+`rescheduleBooking`, `cancelBooking`). Reintenta **una sola vez**, con una
+espera corta fija (~400ms, sin backoff exponencial), y solo cuando:
+- el `fetch` lanzó una excepción (red/timeout), o
+- la respuesta fue `5xx`.
+
+Nunca reintenta un `4xx` — eso es un rechazo real de Cal.com (slot ocupado,
+booking no reagendable, etc.), no una falla transitoria.
 
 ### 3. `db/appointments.ts` — `AppointmentsRepo`
-
-Mismo patrón que `LeadsRepo`/`TicketsRepo`:
 
 ```ts
 export interface Appointment {
@@ -172,7 +284,7 @@ export interface Appointment {
   calcom_uid: string;
   event_type_id: number;
   start: string;
-  status: "confirmed" | "cancel_requested";
+  status: "confirmed" | "change_pending" | "cancelled";
   attendee_name: string;
   attendee_email: string;
   attendee_phone: string | null;
@@ -191,97 +303,184 @@ export class AppointmentsRepo {
     attendeeEmail: string;
     attendeePhone?: string;
   }): Promise<number>;
-  async findActive(conversationId: string): Promise<Appointment | null>; // status='confirmed', más reciente
-  async updateAfterReschedule(id: number, newUid: string, newStart: string): Promise<void>;
-  async markCancelRequested(id: number): Promise<void>;
+
+  /** Cita más reciente en 'confirmed' o 'change_pending' (nunca 'cancelled'). */
+  async findActive(conversationId: string): Promise<Appointment | null>;
+
+  async setChangePending(id: number): Promise<void>;
+  async revertToConfirmed(id: number): Promise<void>;
+  async confirmAfterReschedule(id: number, newUid: string, newStart: string): Promise<void>;
+  async markCancelled(id: number): Promise<void>;
 }
 ```
 
-### 4. `tools/checkAvailability.ts` (nueva)
+### 4. `db/appointmentChangeRequests.ts` — `AppointmentChangeRequestsRepo` (nuevo)
 
+```ts
+export interface AppointmentChangeRequest {
+  id: number;
+  appointment_id: number;
+  conversation_id: string;
+  kind: "reschedule" | "cancel";
+  proposed_start: string | null;
+  reason: string | null;
+  status: "pending" | "approved" | "rejected";
+  requested_at: number;
+  resolved_at: number | null;
+}
+
+export class AppointmentChangeRequestsRepo {
+  constructor(private readonly db: Db) {}
+  async create(input: {
+    appointmentId: number;
+    conversationId: string;
+    kind: "reschedule" | "cancel";
+    proposedStart?: string;
+    reason?: string;
+  }): Promise<number>;
+  async getById(id: number): Promise<AppointmentChangeRequest | null>;
+  async approve(id: number): Promise<void>;
+  async reject(id: number): Promise<void>;
+}
+```
+
+### 5. `tools/checkAvailability.ts` (nueva)
+
+Sin cambios respecto al diseño original:
 ```
 input:  { servicio?: string, fecha: string }   // YYYY-MM-DD
 output: { ok: true, slots: string[] } | { ok: false, reason: string }
 ```
 
-Resuelve `eventTypeId` con `resolveEventTypeId` (ya existe) y timezone con
-`calcomTimeZone` (ya existe). Llama `getAvailableSlots`.
+### 6. `tools/scheduleAppointment.ts` (reescrita in-place)
 
-### 5. `tools/scheduleAppointment.ts` (reescrita in-place)
+Sin cambios respecto al diseño original: resuelve `eventTypeId` + timezone →
+`createBooking` (v2) → si `ok`, `AppointmentsRepo.create()` (`status:
+'confirmed'`).
 
-Mismo nombre de tool (no rompe el system prompt ni las descripciones que ya
-lo mencionan). Cambia la implementación interna:
-
-```
-input:  { servicio?, startTime, attendeeName, attendeeEmail, attendeePhone?, notes? }
-```
-
-Resuelve `eventTypeId` + timezone → `createBooking` (v2) → si `ok`,
-`AppointmentsRepo.create()` con el `conversationId` del contexto de la tool
-→ regresa `{ bookingId, uid, start }`.
-
-### 6. `tools/rescheduleAppointment.ts` (nueva)
+### 7. `tools/rescheduleAppointment.ts` (nueva)
 
 ```
 input: { newStartTime: string, reason?: string }
 ```
+1. `AppointmentsRepo.findActive(conversationId)`.
+   - `null` → `{ error: "no_appointment_found" }`.
+   - `status === "change_pending"` → `{ error: "change_already_pending" }`.
+2. `getAvailableSlots` del día de `newStartTime`; si `newStartTime` no está
+   en la lista → `{ error: "slot_unavailable", available: slots }` (el bot
+   usa `available` para ofrecer alternativas reales en el mismo turno).
+3. `AppointmentChangeRequestsRepo.create({ kind: "reschedule", proposedStart:
+   newStartTime, reason })`, `AppointmentsRepo.setChangePending()`.
+4. `TicketsRepo.create()` con `appointmentChangeRequestId` + `notifyOwner()`.
+5. Regresa `{ ok: true, pending: true, proposedStart: newStartTime }`.
 
-`AppointmentsRepo.findActive(conversationId)` → si no hay, `{ error:
-"no_appointment_found" }` (el bot le dice al cliente que no tiene una cita
-activa registrada y le ofrece agendar una). Si hay, `rescheduleBooking(uid,
-newStartTime, reason)` → si `ok`, `updateAfterReschedule()`.
-
-### 7. `tools/cancelAppointment.ts` (nueva)
+### 8. `tools/cancelAppointment.ts` (nueva)
 
 ```
 input: { reason?: string }
 ```
+Mismos checks 1 que `rescheduleAppointment`. Si hay cita activa:
+`AppointmentChangeRequestsRepo.create({ kind: "cancel", reason })`,
+`AppointmentsRepo.setChangePending()`, ticket + `notifyOwner()`. Regresa
+`{ ok: true, pending: true }`.
 
-`AppointmentsRepo.findActive(conversationId)` → si no hay, mismo error que
-arriba. Si hay: `TicketsRepo.create()` (de `db/tickets.ts`) con categoría de agenda +
-resumen que incluye fecha/hora de la cita, `ConversationsRepo.setOpenTicket()`
-(de `db/conversations.ts`), `notifyOwner()` (importada de
-`tools/handoffHuman.ts`, ya exportada ahí), `AppointmentsRepo.markCancelRequested()`
-→ regresa `{ ticketId, escalated: true }`.
-
-### 8. `tools/index.ts`
+### 9. `tools/index.ts`
 
 Las 4 tools (`checkAvailability`, `scheduleAppointment`, `rescheduleAppointment`,
 `cancelAppointment`) quedan bajo el mismo `if (isPro(ctx.env))` donde ya
 vivía `scheduleAppointment` — sin cambio de tier.
+
+### 10. `db/tickets.ts` — extender `TicketsRepo`
+
+`CreateTicketInput` gana un campo opcional `appointmentChangeRequestId?:
+number`, incluido en el `INSERT` cuando viene presente (columna nueva del
+componente 1). El resto del repo no cambia.
+
+### 11. `src/admin/conversationSend.ts` (nuevo, extraído de `routes.ts`)
+
+```ts
+export async function sendChannelMessage(
+  env: Env,
+  conversationId: string,
+  text: string,
+): Promise<{ ok: true } | { ok: false; error: string }>
+```
+Encapsula exactamente lo que hoy hace inline `POST
+/conversations/:id/reply`: buscar la conversación, `pickAdapter(...).
+sendReply(...)`, `MessagesRepo.append(id, "owner", text)`,
+`convs.touchLastMessage(id)`. La ruta de reply existente se refactoriza para
+usar este helper (mismo comportamiento, sin duplicar código); la nueva ruta
+de aprobación lo reutiliza para la confirmación automática.
+
+### 12. `src/admin/views/tickets.ts` — Aprobar / Rechazar
+
+Cuando un ticket trae `appointment_change_request_id`, la tarjeta muestra el
+detalle de la solicitud (cita actual, nuevo horario propuesto o motivo de
+cancelación) y dos botones — `Aprobar` / `Rechazar` — en vez del form
+genérico de "Resolver". Los tickets sin solicitud ligada (billing, product,
+complaint, other) se ven exactamente igual que hoy.
+
+### 13. `src/admin/routes.ts` — rutas de aprobación
+
+```
+POST /admin/tickets/:id/approve-change
+POST /admin/tickets/:id/reject-change
+```
+
+`approve-change`: carga el ticket → su `appointment_change_request` → su
+`appointment`. Si `kind === "reschedule"`: `rescheduleBooking(uid,
+proposed_start)` → `AppointmentsRepo.confirmAfterReschedule(...)`. Si
+`kind === "cancel"`: `cancelBooking(uid, reason)` →
+`AppointmentsRepo.markCancelled(...)`. En ambos casos:
+`AppointmentChangeRequestsRepo.approve()`, `TicketsRepo.resolve()`, y
+`sendChannelMessage()` con un mensaje de confirmación (texto distinto según
+`kind`).
+
+`reject-change`: `AppointmentsRepo.revertToConfirmed()`,
+`AppointmentChangeRequestsRepo.reject()`, `TicketsRepo.resolve()`. Sin envío
+al cliente (ver Decisión de negocio).
+
+Si `rescheduleBooking`/`cancelBooking` fallan (Cal.com caído o rechaza), la
+ruta no resuelve el ticket — se queda `pending` y la tarjeta muestra el
+error, para que el dueño reintente el clic sin perder la solicitud.
 
 ## Manejo de errores
 
 Mismo contrato que ya usa `integrations/calcom.ts`: `{ ok: true, ... } | {
 ok: false, reason }`, nunca una excepción hacia la tool.
 
-| Caso | `reason` |
+| Caso | `reason` / `error` |
 |---|---|
 | Sin `CALCOM_API_KEY` | `not_configured` |
-| Cal.com responde no-2xx | `http_{status}` |
-| Falla de red | `transient:{mensaje}` |
+| Cal.com responde no-2xx (tras el reintento) | `http_{status}` |
+| Falla de red (tras el reintento) | `transient:{mensaje}` |
 | No hay cita activa para la conversación | `no_appointment_found` |
-| Cal.com rechaza el reagendado (cita ya cancelada/rechazada) | `http_4xx` tal cual — la tool no reintenta, el bot le dice al cliente que agende una nueva |
+| Ya hay una solicitud de cambio pendiente sobre esa cita | `change_already_pending` |
+| El horario que propone el cliente ya no está libre | `slot_unavailable` (con la lista real de `available`) |
+| El dueño aprueba pero Cal.com rechaza en ese momento | el ticket sigue `pending`, error visible en la tarjeta |
 
 ## Testing
 
 - `test/integrations/calcom.test.ts` — casos nuevos para `rescheduleBooking`,
-  mismo estilo que los de `getAvailableSlots`/`createBooking` (mock de
-  `fetch`, verificación de URL/header/body).
-- `test/db/appointments.test.ts` (nuevo) — `AppointmentsRepo` contra D1 real
-  de test (mismo patrón que `test/db/leads.test.ts` si existe, o Miniflare
-  D1 en memoria).
+  `cancelBooking` y el reintento (`fetch` que lanza una vez y luego
+  responde bien → éxito; `fetch` que siempre falla → `ok: false` tras un
+  solo reintento, no más).
+- `test/db/appointments.test.ts` y `test/db/appointmentChangeRequests.test.ts`
+  (nuevos) — mismo patrón que los repos existentes contra D1 de test.
 - `test/tools/checkAvailability.test.ts`, `scheduleAppointment.test.ts`
   (actualizado), `rescheduleAppointment.test.ts`, `cancelAppointment.test.ts`
-  — mockeando `integrations/calcom.ts` y `AppointmentsRepo`.
+  — incluyendo el caso `change_already_pending` y `slot_unavailable`.
+- `test/admin/routes.test.ts` (extendido) — `approve-change` y
+  `reject-change`, mismo estilo que las rutas existentes ahí (mock de
+  `integrations/calcom.ts` y de `sendChannelMessage`).
 - `pnpm test` + `pnpm typecheck` limpios antes de cada commit, como en las
   sesiones anteriores (YCloud, Instrucción Maestra).
 
 ## Fuera de alcance (explícito)
 
-- Botón de cancelar/reagendar desde el panel `/admin`.
 - Bookings con "seats" (cupo grupal).
-- Reintentos automáticos ante caída de Cal.com.
-- Sincronizar `appointments` con ningún CRM externo — eso es el punto
-  pendiente de la integración de CRM (ver `FORJA/_context/decisions.md`,
-  2026-08-01), fuera de este diseño.
+- Tope numérico duro de reagendamientos por cita.
+- Aviso automático al cliente cuando se **rechaza** un cambio.
+- Sincronizar `appointments`/`appointment_change_requests` con ningún CRM
+  externo — eso es el punto pendiente de la integración de CRM (ver
+  `FORJA/_context/decisions.md`, 2026-08-01), fuera de este diseño.
