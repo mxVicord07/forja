@@ -38,9 +38,11 @@ primero, las tools escriben contra tablas que no existen y el bot falla en vivo.
 # 1. Migración — tablas nuevas (idempotente, se puede repetir sin daño)
 pnpm db:apply:remote
 
-# 2. Columna nueva en `tickets`. SQLite no soporta ADD COLUMN IF NOT EXISTS,
-#    así que esto se corre UNA sola vez por base. Si ya se corrió, falla con
-#    "duplicate column name" — ese error es seguro de ignorar.
+# 2. Columna nueva en `tickets`. En este primer deploy la base es nueva, así
+#    que schema.sql ya la creó en el paso 1 — este comando fallará con
+#    "duplicate column name". ESE ERROR ES ESPERADO. El comando existe como
+#    patrón general: si en el futuro schema.sql cambia, esta línea permite
+#    agregar la columna a bases existentes.
 npx wrangler d1 execute horizontes_bot_db --remote \
   --command "ALTER TABLE tickets ADD COLUMN appointment_change_request_id INTEGER"
 
@@ -54,7 +56,7 @@ pnpm run deploy
 
 ## Prueba de humo tras el deploy
 
-1. Escribirle al bot: "¿qué horarios tienes el viernes?" → debe listar horarios reales.
+1. Escribirle al bot: "¿qué horarios tienes el viernes?" → espera: una lista de horarios reales (ej. "10:00, 14:30, 16:00"). Si dice "no hay horarios", revisar que `CALCOM_EVENT_TYPE_ID` sea correcto.
 2. Agendar una cita → verificar que aparece en Cal.com.
 3. Pedir moverla a otro horario libre → el bot dice que quedó **en revisión**, no que ya se movió.
 4. Entrar a `/admin/tickets` → debe verse el ticket con **Aprobar / Rechazar**.
