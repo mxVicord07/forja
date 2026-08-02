@@ -1503,6 +1503,27 @@ describe("rescheduleAppointmentTool", () => {
     const res = (await tool.execute!({ newStartTime: SLOT }, {} as any)) as any;
     expect(res.ok).toBe(true);
   });
+
+  it("consulta el DÍA LOCAL del horario propuesto, no el día UTC", async () => {
+    // 2026-07-25T02:00:00Z son las 20:00 del 24 de julio en America/Mexico_City
+    // (default de calcomTimeZone). Cortar el ISO por texto pediría el 25 y
+    // Cal.com nunca devolvería el slot, aunque esté libre.
+    await seedAppointment();
+    const nearMidnightUtc = "2026-07-25T02:00:00.000Z";
+    const fetchMock = vi.fn(async () =>
+      new Response(
+        JSON.stringify({ data: { "2026-07-24": [{ start: nearMidnightUtc }] } }),
+        { status: 200 },
+      ),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    const tool = rescheduleAppointmentTool(env, () => convId);
+    const res = (await tool.execute!({ newStartTime: nearMidnightUtc }, {} as any)) as any;
+
+    expect(res.ok).toBe(true);
+    expect(String(fetchMock.mock.calls[0][0])).toContain("start=2026-07-24");
+  });
 });
 ```
 
@@ -1572,8 +1593,9 @@ export function rescheduleAppointmentTool(env: Env, getConversationId: () => str
       // llega a aprobación una solicitud sobre un horario ya ocupado. Se usa
       // el event type de la cita existente, no el default: reagendar mantiene
       // el mismo servicio que el cliente ya había apartado.
-      const day = newStartTime.slice(0, 10);
-      const slots = await getAvailableSlots(env, appt.event_type_id, day, calcomTimeZone(env));
+      const timeZone = calcomTimeZone(env);
+      const day = localDay(newStartTime, timeZone);
+      const slots = await getAvailableSlots(env, appt.event_type_id, day, timeZone);
       if (!slots.ok) return { error: slots.reason };
       if (!slots.slots.some((s) => sameInstant(s, newStartTime))) {
         return { error: "slot_unavailable" as const, available: slots.slots };
@@ -1616,12 +1638,31 @@ function sameInstant(a: string, b: string): boolean {
   const tb = Date.parse(b);
   return Number.isFinite(ta) && Number.isFinite(tb) && ta === tb;
 }
+
+/**
+ * Día calendario (YYYY-MM-DD) de un instante ISO **en la zona del negocio**.
+ * Cal.com lista sus slots por día local: cortar los primeros 10 caracteres
+ * del ISO daría el día UTC, y para una zona con offset negativo un horario
+ * de la noche cae en el día siguiente en UTC — se consultaría el día
+ * equivocado y un slot libre se reportaría como ocupado. Ej.:
+ * "2026-07-25T02:00:00Z" son las 20:00 del 24 de julio en America/Mexico_City.
+ */
+function localDay(iso: string, timeZone: string): string {
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).formatToParts(new Date(iso));
+  const get = (t: string) => parts.find((p) => p.type === t)?.value ?? "";
+  return `${get("year")}-${get("month")}-${get("day")}`;
+}
 ```
 
 - [ ] **Step 4: Correr los tests**
 
 Run: `pnpm test test/tools/rescheduleAppointment.test.ts`
-Expected: PASS (7 tests).
+Expected: PASS (8 tests).
 
 - [ ] **Step 5: Typecheck**
 

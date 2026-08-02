@@ -390,9 +390,12 @@ input: { newStartTime: string, reason?: string }
    - `>= 3` → `{ error: "reschedule_limit_reached" }`, sin crear nada. La
      descripción de la tool instruye al modelo a llamar `handoffHuman` en
      este caso en vez de reintentar.
-3. `getAvailableSlots` del día de `newStartTime`; si `newStartTime` no está
-   en la lista → `{ error: "slot_unavailable", available: slots }` (el bot
-   usa `available` para ofrecer alternativas reales en el mismo turno).
+3. `getAvailableSlots` del **día local** (en la zona del negocio) de
+   `newStartTime` — no el día UTC: cortar el ISO por texto asignaría a un
+   horario nocturno con offset negativo el día siguiente, y Cal.com listaría
+   el slot bajo el día anterior. Si `newStartTime` no está en la lista →
+   `{ error: "slot_unavailable", available: slots }` (el bot usa `available`
+   para ofrecer alternativas reales en el mismo turno).
 4. `AppointmentChangeRequestsRepo.create({ kind: "reschedule", proposedStart:
    newStartTime, reason })`, `AppointmentsRepo.setChangePending()`.
 5. `TicketsRepo.create()` con `appointmentChangeRequestId` + `notifyOwner()`.
