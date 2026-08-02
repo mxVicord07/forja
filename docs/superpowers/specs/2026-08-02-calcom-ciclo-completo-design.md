@@ -188,9 +188,16 @@ Decisiones de diseño no obvias:
   canal (`pickAdapter`), envía, persiste el mensaje y actualiza la
   conversación — se extrae esa secuencia a un helper (`sendChannelMessage`)
   para no duplicarla entre esa ruta y la nueva de aprobación.
-- **`AppointmentsRepo.findActive` regresa la cita más reciente en estado
-  `confirmed` o `change_pending`** (nunca `cancelled`), para poder distinguir
-  "no tiene cita" de "ya tiene un cambio pendiente" con mensajes distintos.
+- **Un contacto solo puede tener una cita activa a la vez.**
+  `scheduleAppointment` rechaza con `appointment_already_exists` si ya hay una
+  en `confirmed` o `change_pending`, y el bot le ofrece reagendar la que tiene.
+  Sin este candado, un cliente podría acumular varias citas y ni el bot ni el
+  dueño sabrían a cuál se refiere al pedir "cambiar mi cita". Una cita
+  `cancelled` no bloquea volver a agendar.
+- **`AppointmentsRepo.findActive` regresa la cita en estado `confirmed` o
+  `change_pending`** (nunca `cancelled`), para poder distinguir "no tiene cita"
+  de "ya tiene un cambio pendiente" con mensajes distintos. Por la regla de
+  arriba hay como máximo una.
 - **El reintento vive una sola vez, en `integrations/calcom.ts`**, no en cada
   tool ni en cada ruta — así las 4 llamadas (slots, crear, reagendar,
   cancelar) lo heredan sin repetir código.
@@ -478,6 +485,7 @@ ok: false, reason }`, nunca una excepción hacia la tool.
 | Cal.com responde no-2xx (tras el reintento) | `http_{status}` |
 | Falla de red (tras el reintento) | `transient:{mensaje}` |
 | No hay cita activa para la conversación | `no_appointment_found` |
+| El contacto ya tiene una cita activa y pide agendar otra | `appointment_already_exists` (el bot ofrece reagendar la que tiene) |
 | Ya hay una solicitud de cambio pendiente sobre esa cita | `change_already_pending` |
 | Ya se aprobaron 3 reagendamientos de esa cita | `reschedule_limit_reached` (el bot escala con `handoffHuman`) |
 | El horario que propone el cliente ya no está libre | `slot_unavailable` (con la lista real de `available`) |

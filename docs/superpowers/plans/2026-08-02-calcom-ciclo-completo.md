@@ -550,9 +550,14 @@ export class AppointmentsRepo {
   }
 
   /**
-   * Cita vigente de una conversación: la más próxima en el futuro primero, y
-   * nunca una ya cancelada. Incluye 'change_pending' a propósito — las tools
-   * necesitan distinguir "no tiene cita" de "ya tiene un cambio en revisión".
+   * Cita vigente de una conversación. Por diseño hay como máximo una:
+   * `scheduleAppointment` se niega a agendar si el contacto ya tiene una, así
+   * que el ORDER BY solo desempata de forma determinista si alguna vez
+   * quedaran dos (datos viejos, una carrera) — no expresa una preferencia de
+   * negocio.
+   *
+   * Incluye 'change_pending' a propósito: las tools necesitan distinguir
+   * "no tiene cita" de "ya tiene un cambio en revisión".
    */
   async findActive(conversationId: string): Promise<Appointment | null> {
     return this.db.first<Appointment>(
@@ -1077,7 +1082,9 @@ git commit -m "feat(tools): checkAvailability sobre Cal.com v2"
 
 **Interfaces:**
 - Consumes: `createBooking`, `resolveEventTypeId`, `calcomTimeZone`, `calcomConfigured` (calcom.ts); `AppointmentsRepo` (Task 3)
-- Produces: `scheduleAppointmentTool(env: Env, getConversationId: () => string | null): Tool` — resultado `{ ok: true; bookingId; uid; start } | { error: string }`
+- Produces: `scheduleAppointmentTool(env: Env, getConversationId: () => string | null): Tool` — resultado `{ ok: true; bookingId; uid; start } | { error: string; existingStart?: string }`
+
+**Regla de negocio:** un contacto solo puede tener **una cita activa a la vez**. Si ya tiene una (`confirmed` o `change_pending`), la tool rechaza con `appointment_already_exists` sin llamar a Cal.com; el bot le ofrece reagendar la que ya tiene. Una cita `cancelled` no bloquea.
 
 - [ ] **Step 1: Reemplazar el test por completo**
 
@@ -1148,6 +1155,49 @@ describe("scheduleAppointmentTool", () => {
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
+  it("rechaza agendar si el contacto ya tiene una cita activa", async () => {
+    await appts.create({
+      conversationId: "telegram:1",
+      calcomUid: "uid-previa",
+      eventTypeId: 10,
+      start: "2026-07-10T12:00:00Z",
+      attendeeName: "Ana",
+      attendeeEmail: "ana@example.com",
+    });
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+
+    const tool = scheduleAppointmentTool(env, () => "telegram:1");
+    const res = (await tool.execute!(args, {} as any)) as any;
+
+    expect(res.error).toBe("appointment_already_exists");
+    expect(res.existingStart).toBe("2026-07-10T12:00:00Z");
+    // No debe crear un booking nuevo en Cal.com ni una segunda fila.
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("una cita cancelada NO bloquea agendar de nuevo", async () => {
+    const previa = await appts.create({
+      conversationId: "telegram:1",
+      calcomUid: "uid-previa",
+      eventTypeId: 10,
+      start: "2026-07-10T12:00:00Z",
+      attendeeName: "Ana",
+      attendeeEmail: "ana@example.com",
+    });
+    await appts.markCancelled(previa);
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () =>
+        new Response(JSON.stringify({ data: { id: 555, uid: "uid-1", start: "2026-07-20T15:00:00Z" } }), { status: 201 }),
+      ),
+    );
+
+    const tool = scheduleAppointmentTool(env, () => "telegram:1");
+    const res = (await tool.execute!(args, {} as any)) as any;
+    expect(res.ok).toBe(true);
+  });
+
   it("error si Cal.com no está configurado", async () => {
     const fetchMock = vi.fn();
     vi.stubGlobal("fetch", fetchMock);
@@ -1184,7 +1234,8 @@ import {
 export function scheduleAppointmentTool(env: Env, getConversationId: () => string | null) {
   return tool({
     description:
-      "Agenda una cita en el calendario. Confirma primero el horario con checkAvailability. Necesitas fecha/hora, nombre y correo del cliente.",
+      "Agenda una cita en el calendario. Confirma primero el horario con checkAvailability. Necesitas fecha/hora, nombre y correo del cliente. " +
+      "Si devuelve appointment_already_exists, el cliente YA tiene una cita: no insistas en agendar otra — ofrécele mover la que tiene con rescheduleAppointment.",
     inputSchema: z.object({
       startTime: z.string().describe("Fecha y hora ISO, ej. 2026-07-20T15:00:00Z"),
       attendeeName: z.string().describe("Nombre del cliente"),
@@ -1197,6 +1248,15 @@ export function scheduleAppointmentTool(env: Env, getConversationId: () => strin
       const conversationId = getConversationId();
       if (!conversationId) return { error: "no_conversation" as const };
       if (!calcomConfigured(env)) return { error: "calcom_not_configured" as const };
+
+      // Una cita activa por contacto. Sin este candado, un cliente podría
+      // acumular varias y ni el bot ni el dueño sabrían a cuál se refiere
+      // cuando pida "cambiar mi cita".
+      const appts = new AppointmentsRepo(new Db(env.DB));
+      const existente = await appts.findActive(conversationId);
+      if (existente) {
+        return { error: "appointment_already_exists" as const, existingStart: existente.start };
+      }
 
       const eventTypeId = resolveEventTypeId(env, servicio);
       if (eventTypeId === null) return { error: "calcom_not_configured" as const };
@@ -1214,7 +1274,7 @@ export function scheduleAppointmentTool(env: Env, getConversationId: () => strin
       // al bot creyendo que el cliente tiene cita cuando no la tiene.
       if (!booking.ok) return { error: booking.reason };
 
-      await new AppointmentsRepo(new Db(env.DB)).create({
+      await appts.create({
         conversationId,
         calcomUid: booking.uid ?? String(booking.bookingId),
         eventTypeId,
@@ -1238,7 +1298,7 @@ export function scheduleAppointmentTool(env: Env, getConversationId: () => strin
 - [ ] **Step 4: Correr los tests**
 
 Run: `pnpm test test/tools/scheduleAppointment.test.ts`
-Expected: PASS (4 tests).
+Expected: PASS (6 tests).
 
 - [ ] **Step 5: Typecheck y suite completa**
 
