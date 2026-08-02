@@ -133,7 +133,7 @@ export async function createBooking(
     notes?: string;
   },
 ): Promise<
-  | { ok: true; bookingId: number | string; uid?: string; status?: string; start?: string }
+  | { ok: true; bookingId: number | string; uid: string; status?: string; start?: string }
   | { ok: false; reason: string }
 > {
   if (!env.CALCOM_API_KEY) return { ok: false, reason: "not_configured" };
@@ -160,7 +160,10 @@ export async function createBooking(
     if (!res.ok) return { ok: false, reason: `http_${res.status}` };
     const body = (await res.json()) as { data?: { id: number | string; uid?: string; status?: string; start?: string } };
     const d = body.data;
-    if (!d?.id) return { ok: false, reason: "no_booking_id" };
+    // Un booking sin uid no sirve: rescheduleBooking/cancelBooking necesitan el
+    // uid para volver a encontrar la cita en Cal.com. Mismo criterio que
+    // rescheduleBooking abajo — no deben discrepar sobre si el uid es requerido.
+    if (!d?.id || !d.uid) return { ok: false, reason: "no_booking_id" };
     return { ok: true, bookingId: d.id, uid: d.uid, status: d.status, start: d.start };
   } catch (e: any) {
     return { ok: false, reason: `transient:${String(e?.message ?? e)}` };

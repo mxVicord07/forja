@@ -139,6 +139,22 @@ describe("createBooking", () => {
     });
     expect(res.ok).toBe(false);
   });
+
+  it("201 sin uid en data → ok:false (un booking sin uid no es usable)", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => new Response(JSON.stringify({ status: "success", data: { id: 555, status: "accepted" } }), { status: 201 })),
+    );
+    const res = await createBooking(env({ CALCOM_API_KEY: "cal_x" }), {
+      eventTypeId: 10,
+      start: "2026-07-20T15:00:00Z",
+      name: "Ana",
+      email: "ana@example.com",
+      timeZone: "UTC",
+    });
+    expect(res.ok).toBe(false);
+    if (!res.ok) expect(res.reason).toBe("no_booking_id");
+  });
 });
 
 describe("rescheduleBooking", () => {

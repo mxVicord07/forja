@@ -55,7 +55,7 @@ export function scheduleAppointmentTool(env: Env, getConversationId: () => strin
 
       await appts.create({
         conversationId,
-        calcomUid: booking.uid ?? String(booking.bookingId),
+        calcomUid: booking.uid,
         eventTypeId,
         start: booking.start ?? startTime,
         attendeeName,
