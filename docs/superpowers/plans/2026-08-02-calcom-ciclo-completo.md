@@ -233,6 +233,20 @@ describe("reintento único", () => {
     expect(res.ok).toBe(false);
     expect(fetchMock).toHaveBeenCalledTimes(1);
   });
+
+  it("tope de 2 llamadas aunque los modos de falla se mezclen (5xx y luego throw)", async () => {
+    let calls = 0;
+    const fetchMock = vi.fn(async () => {
+      calls++;
+      if (calls === 1) return new Response("boom", { status: 503 });
+      throw new Error("network down");
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const res = await cancelBooking(env({ CALCOM_API_KEY: "cal_x" }), "uid-1");
+    expect(res.ok).toBe(false);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
 });
 ```
 
@@ -259,15 +273,21 @@ const RETRY_DELAY_MS = 400;
  * Devuelve la Response o lanza; cada caller traduce eso a su `{ ok: false }`.
  */
 async function fetchCalcom(url: string, init?: RequestInit): Promise<Response> {
-  try {
-    const res = await fetch(url, init);
-    if (res.status < 500) return res;
-    await new Promise((r) => setTimeout(r, RETRY_DELAY_MS));
-    return await fetch(url, init);
-  } catch (e) {
-    await new Promise((r) => setTimeout(r, RETRY_DELAY_MS));
-    return await fetch(url, init);
+  // Dos intentos como máximo, pase lo que pase. Un `return fetch(...)` de
+  // reintento dentro del try caería al catch si ESE intento lanza, y el catch
+  // reintentaría otra vez: tres llamadas donde el contrato dice dos.
+  let lastError: unknown;
+  for (let attempt = 0; attempt < 2; attempt++) {
+    if (attempt > 0) await new Promise((r) => setTimeout(r, RETRY_DELAY_MS));
+    try {
+      const res = await fetch(url, init);
+      if (res.status < 500) return res;
+      if (attempt === 1) return res; // segundo intento: se entrega el 5xx tal cual
+    } catch (e) {
+      lastError = e;
+    }
   }
+  throw lastError ?? new Error("calcom: reintento agotado");
 }
 ```
 
