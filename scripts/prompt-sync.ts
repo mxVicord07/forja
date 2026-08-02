@@ -11,7 +11,6 @@
  * Uso: pnpm prompt:sync
  */
 import { writeFileSync, renameSync, unlinkSync } from "node:fs";
-import { tmpdir } from "node:os";
 import path from "node:path";
 
 const BOT_BASE_URL = process.env.BOT_BASE_URL ?? "https://birevx-support-bot.victor-m-426.workers.dev";
@@ -43,14 +42,22 @@ async function main() {
 
   const body = await res.text();
 
-  const tmpPath = path.join(tmpdir(), `instruccion-maestra-${Date.now()}.md`);
+  // Escribir en el mismo directorio que TARGET para garantizar rename atómico (same-device).
+  const tmpPath = path.join(path.dirname(TARGET), `.instruccion-maestra-${Date.now()}.tmp`);
   writeFileSync(tmpPath, body, "utf-8");
   try {
     renameSync(tmpPath, TARGET);
   } catch (e) {
-    // rename cross-device (tmp en otro filesystem que OneDrive) — fallback a copy+delete.
-    writeFileSync(TARGET, body, "utf-8");
-    unlinkSync(tmpPath);
+    // Cross-device o permiso denegado — fallback a copy+delete (raro con la estrategia de mismo directorio).
+    try {
+      writeFileSync(TARGET, body, "utf-8");
+    } finally {
+      try {
+        unlinkSync(tmpPath);
+      } catch {
+        // Ignorar errores al limpiar el temp file — es best-effort.
+      }
+    }
   }
 
   console.log(`✅ Instrucción maestra sincronizada: ${TARGET}`);
