@@ -4,11 +4,13 @@ import { Db } from "../../src/db/client";
 import { SettingsRepo, SETTING_KEYS } from "../../src/db/settings";
 
 let repo: SettingsRepo;
+let db: Db;
 
 beforeEach(async () => {
   const mf = await createTestMiniflare();
   const d1 = await mf.getD1Database("DB");
-  repo = new SettingsRepo(new Db(d1 as any));
+  db = new Db(d1 as any);
+  repo = new SettingsRepo(db);
 });
 
 describe("SettingsRepo", () => {
@@ -44,5 +46,46 @@ describe("SettingsRepo", () => {
 
   it("all returns an empty object when nothing is set", async () => {
     expect(await repo.all()).toEqual({});
+  });
+
+  it("does not write a history row when the value is unchanged", async () => {
+    await repo.set(SETTING_KEYS.tone, "cálido y cercano");
+    await repo.set(SETTING_KEYS.tone, "cálido y cercano");
+    const history = await db.all<{ key: string }>("SELECT key FROM settings_history");
+    expect(history).toHaveLength(1);
+  });
+
+  it("writes a history row with old_value NULL on the first write of a key", async () => {
+    await repo.set(SETTING_KEYS.botName, "Pelusa");
+    const rows = await db.all<{ key: string; old_value: string | null; new_value: string; actor: string }>(
+      "SELECT key, old_value, new_value, actor FROM settings_history",
+    );
+    expect(rows).toEqual([
+      { key: SETTING_KEYS.botName, old_value: null, new_value: "Pelusa", actor: "system" },
+    ]);
+  });
+
+  it("records old_value on a subsequent change", async () => {
+    await repo.set(SETTING_KEYS.tone, "cálido y cercano");
+    await repo.set(SETTING_KEYS.tone, "formal y profesional");
+    const rows = await db.all<{ old_value: string | null; new_value: string }>(
+      "SELECT old_value, new_value FROM settings_history ORDER BY id",
+    );
+    expect(rows).toEqual([
+      { old_value: null, new_value: "cálido y cercano" },
+      { old_value: "cálido y cercano", new_value: "formal y profesional" },
+    ]);
+  });
+
+  it("defaults actor to 'system' when not passed", async () => {
+    await repo.set(SETTING_KEYS.botName, "Pelusa");
+    const row = await db.first<{ actor: string }>("SELECT actor FROM settings_history LIMIT 1");
+    expect(row?.actor).toBe("system");
+  });
+
+  it("records the actor when passed explicitly", async () => {
+    await repo.set(SETTING_KEYS.tone, "cálido", "owner");
+    const row = await db.first<{ actor: string }>("SELECT actor FROM settings_history LIMIT 1");
+    expect(row?.actor).toBe("owner");
   });
 });

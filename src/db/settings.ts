@@ -52,13 +52,30 @@ export class SettingsRepo {
     return row?.value ?? null;
   }
 
-  async set(key: string, value: string): Promise<void> {
-    await this.db.run(
-      `INSERT INTO settings (key, value, updated_at)
-       VALUES (?, ?, ?)
-       ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at`,
-      [key, value, Date.now()],
-    );
+  async set(key: string, value: string, actor: "owner" | "flywheel" | "system" = "system"): Promise<void> {
+    const previous = await this.get(key);
+    if (previous === value) {
+      await this.db.run(
+        `INSERT INTO settings (key, value, updated_at)
+         VALUES (?, ?, ?)
+         ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at`,
+        [key, value, Date.now()],
+      );
+      return;
+    }
+    const now = Date.now();
+    await this.db.batch([
+      {
+        sql: `INSERT INTO settings_history (key, old_value, new_value, actor, changed_at) VALUES (?, ?, ?, ?, ?)`,
+        params: [key, previous, value, actor, now],
+      },
+      {
+        sql: `INSERT INTO settings (key, value, updated_at)
+              VALUES (?, ?, ?)
+              ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at`,
+        params: [key, value, now],
+      },
+    ]);
   }
 
   async all(): Promise<Record<string, string>> {

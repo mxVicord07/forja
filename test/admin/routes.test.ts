@@ -40,6 +40,7 @@ function makeStubDb(
   };
   return {
     prepare: (sql: string) => makeStmt(sql),
+    batch: async (stmts: any[]) => Promise.all(stmts.map((s) => s.run())),
   } as unknown as D1Database;
 }
 
