@@ -2106,7 +2106,11 @@ import { sendChannelMessage } from "./conversationSend";
 - [ ] **Step 5: Correr los tests**
 
 Run: `pnpm test test/admin/conversationSend.test.ts test/admin/routes.test.ts`
-Expected: PASS — la ruta de reply mantiene el mismo comportamiento observable.
+Expected: PASS. Nota: el mensaje de "conversación no encontrada" queda fusionado
+con el de "no se pudo enviar" (`✗ No se pudo enviar: Conversación no
+encontrada.` en vez del texto exacto de antes) — decisión aceptada: mismo
+código HTTP, caso raro (ID de conversación inválido a mitad de sesión), sin
+test que fijara el texto anterior.
 
 - [ ] **Step 6: Typecheck y suite completa**
 
