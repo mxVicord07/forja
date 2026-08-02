@@ -56,6 +56,7 @@ import { CONTROLS, levelToValue } from "./control-levels";
 import { systemPromptFromEnv } from "../system-prompt";
 import { renderBusinessContext } from "../businessContext";
 import { startLearnMode, stopLearnMode, isLearnModeEnabled } from "../learn/mapping";
+import { renderInstruccionMaestraDoc } from "./instruccion-maestra";
 
 export const adminApp = new Hono<{ Bindings: Env }>();
 
@@ -537,6 +538,11 @@ adminApp.get("/leads/export.csv", async (c) => {
       "Content-Disposition": `attachment; filename="leads-${Date.now()}.csv"`,
     },
   });
+});
+
+adminApp.get("/instruccion-maestra.md", async (c) => {
+  const doc = await renderInstruccionMaestraDoc(c.env);
+  return new Response(doc, { headers: { "Content-Type": "text/markdown; charset=utf-8" } });
 });
 
 // --- Mutating actions (HTMX / plain form posts) -----------------------------

@@ -1,4 +1,8 @@
-import { SETTING_KEYS } from "../db/settings";
+import { SettingsRepo, SETTING_KEYS } from "../db/settings";
+import type { Env } from "../env";
+import { Db } from "../db/client";
+import { resolveAgentConfig } from "../settings-loader";
+import { buildTools } from "../tools";
 
 export interface HistoryRow {
   key: string;
@@ -107,4 +111,65 @@ export function renderChangelog(rows: HistoryRow[]): string {
   });
 
   return `## Changelog\n${sections.join("\n\n")}`;
+}
+
+export async function renderInstruccionMaestraDoc(env: Env): Promise<string> {
+  const db = new Db(env.DB);
+  const repo = new SettingsRepo(db);
+
+  const toolNames = Object.keys(buildTools({ env, getConversationId: () => null }));
+  const cfg = await resolveAgentConfig(env, toolNames);
+  const disabledToolNames = toolNames.filter((n) => !cfg.enabledToolNames.includes(n));
+
+  const overrideActive = (await repo.get(SETTING_KEYS.systemPromptOverride))?.trim();
+  const rawLessons = (await repo.get(SETTING_KEYS.learnedLessons)) ?? "[]";
+  const lessons: string[] = (() => {
+    try {
+      const parsed = JSON.parse(rawLessons);
+      return Array.isArray(parsed) ? parsed.filter((l: unknown) => typeof l === "string") : [];
+    } catch {
+      return [];
+    }
+  })();
+  const autonomyLevel = (await repo.get(SETTING_KEYS.autonomyLevel)) ?? "manual";
+  const language = (await repo.get(SETTING_KEYS.botLanguage)) ?? env.BOT_LANGUAGE;
+
+  const historyRows = await db.all<HistoryRow>(
+    "SELECT key, old_value, new_value, actor, changed_at FROM settings_history ORDER BY changed_at ASC",
+  );
+
+  const generatedAt = new Date().toISOString().replace("T", " ").slice(0, 16);
+
+  const avisos = overrideActive
+    ? `## ⚠️ Avisos\n- \`system_prompt_override\` ACTIVO: el prompt generado y las ${lessons.length} lecciones del flywheel se están ignorando.\n\n`
+    : "";
+
+  const estadoActual = [
+    "## Estado actual",
+    `Modelo: ${cfg.modelOverride} · Idioma: ${language} · Autonomía: ${autonomyLevel}`,
+    `Tools habilitadas: ${cfg.enabledToolNames.join(", ") || "(ninguna)"}`,
+    `Tools deshabilitadas: ${disabledToolNames.join(", ") || "(ninguna)"}`,
+  ].join("\n");
+
+  const promptEfectivo = `## Prompt efectivo\n\`\`\`\n${cfg.systemPrompt}\n\`\`\``;
+
+  const leccionesSection = `## Lecciones aprendidas (${lessons.length} activas)\n${
+    lessons.length > 0 ? lessons.map((l, i) => `${i + 1}. ${l}`).join("\n") : "(ninguna)"
+  }`;
+
+  const changelog = renderChangelog(historyRows);
+
+  return [
+    `# Instrucción Maestra — ${env.BOT_NAME}`,
+    `> Generado: ${generatedAt} · ${env.BOT_NAME}`,
+    "",
+    avisos,
+    estadoActual,
+    "",
+    promptEfectivo,
+    "",
+    leccionesSection,
+    "",
+    changelog,
+  ].filter((s) => s !== "").join("\n");
 }
