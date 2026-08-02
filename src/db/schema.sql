@@ -61,6 +61,9 @@ CREATE TABLE IF NOT EXISTS tickets (
   status TEXT DEFAULT 'open',
   resolved_at INTEGER,
   resolved_by TEXT,
+  -- Liga el ticket a su solicitud de cambio de cita, cuando aplica. NULL para
+  -- todo ticket "normal" (billing/product/complaint/other) que no viene de Cal.com.
+  appointment_change_request_id INTEGER,
   created_at INTEGER NOT NULL,
   FOREIGN KEY (conversation_id) REFERENCES conversations(id) ON DELETE SET NULL
 );
@@ -220,3 +223,43 @@ CREATE TABLE IF NOT EXISTS settings_history (
   changed_at INTEGER NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_settings_history_changed ON settings_history(changed_at DESC);
+
+-- Citas agendadas vía Cal.com. Es la memoria que permite reagendar/cancelar
+-- después: sin esta tabla el bot crea la cita y la olvida, y no habría forma
+-- de saber a qué booking se refiere el cliente cuando vuelve a escribir.
+-- status: 'confirmed' | 'change_pending' | 'cancelled'
+CREATE TABLE IF NOT EXISTS appointments (
+  id               INTEGER PRIMARY KEY AUTOINCREMENT,
+  conversation_id  TEXT    NOT NULL,
+  calcom_uid       TEXT    NOT NULL,
+  event_type_id    INTEGER NOT NULL,
+  start            TEXT    NOT NULL,
+  status           TEXT    NOT NULL,
+  attendee_name    TEXT    NOT NULL,
+  attendee_email   TEXT    NOT NULL,
+  attendee_phone   TEXT,
+  created_at       INTEGER NOT NULL,
+  updated_at       INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_appointments_conv
+  ON appointments(conversation_id, status, start DESC);
+
+-- Solicitudes de cambio pendientes de aprobación humana. Cada intento es una
+-- fila nueva (nunca se sobreescribe una anterior): así el dueño ve el historial
+-- completo de cuántas veces se pidió mover cada cita, y el conteo de las
+-- 'approved' alimenta el tope de 3 reagendamientos.
+-- kind: 'reschedule' | 'cancel' · status: 'pending' | 'approved' | 'rejected'
+CREATE TABLE IF NOT EXISTS appointment_change_requests (
+  id               INTEGER PRIMARY KEY AUTOINCREMENT,
+  appointment_id   INTEGER NOT NULL,
+  conversation_id  TEXT    NOT NULL,
+  kind             TEXT    NOT NULL,
+  proposed_start   TEXT,
+  reason           TEXT,
+  status           TEXT    NOT NULL,
+  requested_at     INTEGER NOT NULL,
+  resolved_at      INTEGER,
+  FOREIGN KEY (appointment_id) REFERENCES appointments(id) ON DELETE CASCADE
+);
+CREATE INDEX IF NOT EXISTS idx_change_requests_appt
+  ON appointment_change_requests(appointment_id, status);
