@@ -304,3 +304,13 @@ CREATE TABLE IF NOT EXISTS review_requests (
   sent_at          INTEGER NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_review_requests_time ON review_requests(sent_at);
+
+-- Reactivación de leads fríos (Pro) — segundo toque, 2-7 días después del
+-- primer follow-up (followup/run.ts, que cubre 3-20h). PRIMARY KEY = claim
+-- de envío único de por vida. reason: "hot" (venta abierta) | "keyword".
+CREATE TABLE IF NOT EXISTS reengage_sends (
+  conversation_id TEXT    PRIMARY KEY,
+  reason           TEXT    NOT NULL,
+  sent_at          INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_reengage_sends_time ON reengage_sends(sent_at);

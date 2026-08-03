@@ -62,6 +62,9 @@ export const SETTING_KEYS = {
   // Inactiva hasta que además haya reviewUrl configurada.
   reviewRequests: "review_requests",
   reviewUrl: "review_url",
+  // Reactivación de leads fríos (Pro): interruptor del dueño, default OFF
+  // (opt-in, igual que los demás superpoderes de mensaje saliente).
+  reengageColdLeads: "reengage_cold_leads",
 } as const;
 
 export type SettingKey = (typeof SETTING_KEYS)[keyof typeof SETTING_KEYS];

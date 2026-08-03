@@ -287,6 +287,10 @@ export default {
     // y avisa al dueño si la calificación fue baja.
     const { captureSurveyResponses } = await import("./followup/surveyResponse");
     await captureSurveyResponses(env).catch((e) => console.error("surveyResponse:", e));
+    // Reactivación de leads fríos (Pro, opt-in): segundo toque, 2-7 días
+    // después del follow-up de arriba, una sola vez por conversación.
+    const { runReengage } = await import("./followup/reengage");
+    await runReengage(env).catch((e) => console.error("reengage:", e));
 
     // Watchdog: si el bot está fallando en cadena (3+ "Algo falló" en 30 min),
     // avisa al dueño por su canal de handoff. Throttle 6h. Lo ÚNICO que debe
