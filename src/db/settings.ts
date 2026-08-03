@@ -46,6 +46,13 @@ export const SETTING_KEYS = {
   // del bot sigue igual.
   blindajeChecks: "blindaje_checks",
   blindajeBlocked: "blindaje_blocked",
+  // Reporte diario (Pro): interruptor del dueño — "1" = encendido; ausente o
+  // cualquier otro valor = apagado (a diferencia de blindaje/sales_hunter,
+  // este SÍ default OFF: mandar un mensaje no pedido es un opt-in explícito).
+  dailyReport: "daily_report",
+  // Marca de tiempo del último envío — throttle para no duplicar en el
+  // doble-tick del cron.
+  dailyReportLastAt: "daily_report_last_at",
 } as const;
 
 export type SettingKey = (typeof SETTING_KEYS)[keyof typeof SETTING_KEYS];

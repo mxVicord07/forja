@@ -295,6 +295,11 @@ export default {
     await purgeOldSettingsHistory(env).catch((e) => console.error("purgeSettingsHistory:", e));
     // Corrida nocturna del Analista de insights (F2). No debe tumbar la purga.
     await analyzeConversations(env, { limit: 50 }).catch((e) => console.error("insights:", e));
+    // Reporte diario al dueño (Pro, opt-in): números de las últimas 24h por
+    // Telegram. Corre DESPUÉS del Analista — usa conversation_insights para
+    // leads calientes y clientes molestos.
+    const { sendDailyReport } = await import("./owner/dailyReport");
+    await sendDailyReport(env).catch((e) => console.error("dailyReport:", e));
     // Flywheel (F5): detecta huecos de KB y lecciones de takeovers → propone
     // mejoras en /admin/mejoras. Corre DESPUÉS del analizador (usa su output).
     const { runFlywheel } = await import("./flywheel/detect");
