@@ -87,6 +87,38 @@ describe("renderSystemPrompt", () => {
     const prompt = renderSystemPrompt(input);
     expect(prompt).not.toContain("{{EXTRA_STYLE}}");
   });
+
+  it("injects a <brand_voice> block after <identity_and_voice> when brandVoice is set", () => {
+    const prompt = renderSystemPrompt({
+      ...input,
+      brandVoice: "Tuteamos, cerramos con 'aquí ando pa lo que ocupes', 1 emoji máx.",
+    });
+    expect(prompt).toContain("<brand_voice>");
+    const block = prompt.slice(prompt.indexOf("<brand_voice>"), prompt.indexOf("</brand_voice>"));
+    expect(block).toContain("aquí ando pa lo que ocupes");
+    // Debe recordar, dentro del propio bloque, que la voz no manda sobre los frenos.
+    expect(block).toContain("output_language");
+    expect(block).toContain("escalation_rules");
+  });
+
+  it("omits the <brand_voice> block entirely when brandVoice is absent", () => {
+    const prompt = renderSystemPrompt(input);
+    expect(prompt).not.toContain("<brand_voice>");
+    expect(prompt).not.toContain("{{BRAND_VOICE}}");
+  });
+
+  it("never lets brandVoice touch core_principles, escalation_rules or anti_patterns", () => {
+    const prompt = renderSystemPrompt({
+      ...input,
+      brandVoice: "Prometo lo que sea con tal de cerrar la venta.",
+    });
+    const core = prompt.slice(prompt.indexOf("<core_principles>"), prompt.indexOf("</core_principles>"));
+    const escalation = prompt.slice(prompt.indexOf("<escalation_rules>"), prompt.indexOf("</escalation_rules>"));
+    const antiPatterns = prompt.slice(prompt.indexOf("<anti_patterns>"), prompt.indexOf("</anti_patterns>"));
+    expect(core).not.toContain("Prometo lo que sea");
+    expect(escalation).not.toContain("Prometo lo que sea");
+    expect(antiPatterns).not.toContain("Prometo lo que sea");
+  });
 });
 
 describe("systemPromptFromEnv", () => {

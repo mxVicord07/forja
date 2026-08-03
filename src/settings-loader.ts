@@ -3,7 +3,7 @@ import { Db } from "./db/client";
 import { SettingsRepo, SETTING_KEYS } from "./db/settings";
 import { systemPromptFromEnv } from "./system-prompt";
 import { renderBusinessContext } from "./businessContext";
-import { getBufferMs } from "./config";
+import { getBufferMs, isPro } from "./config";
 import { getNiche } from "./niches";
 import type { LlmOverrides } from "./llm/provider";
 
@@ -98,6 +98,9 @@ export async function resolveAgentConfig(env: Env, toolNames: string[]): Promise
   const escalationKeywords = parseCsvList(get(SETTING_KEYS.escalationKeywords));
   const formattingRules = get(SETTING_KEYS.formattingRules);
   const language = get(SETTING_KEYS.botLanguage);
+  // Voz de marca (skill /voz-de-marca): guía completa, solo Pro — igual que el
+  // resto de los superpoderes. En free el bot se queda con `tone` (3 tarjetas).
+  const brandVoice = isPro(env) ? get(SETTING_KEYS.brandVoice) : undefined;
 
   // Flywheel lessons (JSON array). Only injected into the GENERATED prompt —
   // a manual override replaces the whole prompt, lessons included.
@@ -120,6 +123,7 @@ export async function resolveAgentConfig(env: Env, toolNames: string[]): Promise
       botName,
       lessons,
       formattingRules,
+      brandVoice,
       language,
     });
 

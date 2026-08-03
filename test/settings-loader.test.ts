@@ -162,4 +162,18 @@ describe("resolveAgentConfig — learned lessons (flywheel)", () => {
     cfg = await resolveAgentConfig(env, TOOLS);
     expect(cfg.systemPrompt).not.toContain("<lecciones_aprendidas>");
   });
+
+  it("injects brand_voice into the prompt on Pro", async () => {
+    await repo.set(SETTING_KEYS.brandVoice, "Tuteamos, cerramos con 'aquí ando pa lo que ocupes'.");
+    const cfg = await resolveAgentConfig(env, TOOLS); // env.BOT_TIER = "pro"
+    expect(cfg.systemPrompt).toContain("<brand_voice>");
+    expect(cfg.systemPrompt).toContain("aquí ando pa lo que ocupes");
+  });
+
+  it("ignores brand_voice on free tier, aunque el setting exista", async () => {
+    await repo.set(SETTING_KEYS.brandVoice, "Tuteamos, cerramos con 'aquí ando pa lo que ocupes'.");
+    const cfg = await resolveAgentConfig({ ...env, BOT_TIER: "free" }, TOOLS);
+    expect(cfg.systemPrompt).not.toContain("<brand_voice>");
+    expect(cfg.systemPrompt).not.toContain("aquí ando pa lo que ocupes");
+  });
 });

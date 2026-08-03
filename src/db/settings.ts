@@ -32,6 +32,9 @@ export const SETTING_KEYS = {
   // detect and mirror the customer's language turn by turn instead of a
   // single fixed language.
   botLanguage: "bot_language",
+  // Guía de voz completa armada por el skill /voz-de-marca. Solo se aplica en
+  // Pro (gateado con isPro en settings-loader.ts) — free se queda con `tone`.
+  brandVoice: "brand_voice",
 } as const;
 
 export type SettingKey = (typeof SETTING_KEYS)[keyof typeof SETTING_KEYS];

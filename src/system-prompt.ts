@@ -11,6 +11,7 @@ export interface SystemPromptInput {
   extraEscalationKeywords?: string[]; // extra words that trigger a human handoff
   lessons?: string[];               // flywheel: rules distilled from owner takeovers
   formattingRules?: string;         // owner-defined bold/emoji rules, injected INSIDE <style_guide>
+  brandVoice?: string;              // full brand-voice guide from /voz-de-marca (Pro)
 }
 
 const TEMPLATE = `<output_language>
@@ -36,6 +37,8 @@ Si una pregunta no tiene respuesta en lo que sabes, escalas a un humano.
 - No prometas lo que no controlas. Reporta acciones concretas.
 - Si el cliente está frustrado, mantén calma, no espejees emoción.{{TONE_LINE}}
 </identity_and_voice>
+
+{{BRAND_VOICE}}
 
 <core_principles>
 1. Diagnostica con data, no adivines. Usa tools antes de explicar.
@@ -138,6 +141,22 @@ export function renderSystemPrompt(input: SystemPromptInput): string {
     ? `\n- IMPORTANTE — estas reglas de formato tienen prioridad sobre las anteriores de este bloque: ${formattingRules}`
     : "";
 
+  // Guía de voz completa del skill /voz-de-marca. Manda sobre el tono corto de
+  // arriba, pero JAMÁS sobre los frenos — por eso el bloque se lo recuerda a
+  // sí mismo en vez de confiar en que el modelo lo infiera por posición.
+  const brandVoice = input.brandVoice?.trim();
+  const brandVoiceBlock = brandVoice
+    ? `<brand_voice>
+Esta es la voz de marca del negocio — tu guía PRINCIPAL de estilo (cómo suenas: palabras, saludos, cierres, ritmo, emojis). Aplícala en cada respuesta.
+
+${brandVoice}
+
+Recuerda: la voz cambia CÓMO lo dices, nunca QUÉ puedes hacer. Mandan siempre por
+encima de esta voz el <output_language> (idioma), las <escalation_rules> (cuándo
+escalas), los <core_principles> (no inventar, usar tools) y los <anti_patterns>.
+</brand_voice>`
+    : "";
+
   const extraKeywords = (input.extraEscalationKeywords ?? [])
     .map((k) => k.trim())
     .filter(Boolean);
@@ -163,6 +182,7 @@ ${lessons.map((l) => `- ${l}`).join("\n")}
     .replaceAll("{{TOOL_LIST}}", toolList)
     .replaceAll("{{NICHO_PLAYBOOK}}", input.nichoPlaybook ?? "")
     .replaceAll("{{LECCIONES}}", lessonsBlock)
+    .replaceAll("{{BRAND_VOICE}}", brandVoiceBlock)
     .replaceAll("{{TONE_LINE}}", toneLine)
     .replaceAll("{{EXTRA_ESCALATION}}", extraEscalation)
     .replaceAll("{{EXTRA_STYLE}}", extraStyle);
@@ -174,6 +194,7 @@ export interface SystemPromptOverrides {
   botName?: string;
   lessons?: string[];
   formattingRules?: string;
+  brandVoice?: string;
   language?: string; // overrides env.BOT_LANGUAGE (e.g. "espejo")
 }
 
@@ -195,5 +216,6 @@ export function systemPromptFromEnv(
     extraEscalationKeywords: overrides?.extraEscalationKeywords,
     lessons: overrides?.lessons,
     formattingRules: overrides?.formattingRules,
+    brandVoice: overrides?.brandVoice,
   });
 }
