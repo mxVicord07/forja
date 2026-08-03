@@ -66,7 +66,7 @@ function resolveForm(ticketId: string): string {
     <input name="resolved_by" placeholder="tu email" required
            style="flex:1;background:var(--bg);border:1px solid var(--line);color:var(--cream);padding:9px 12px;font-size:12.5px;outline:none">
     <button class="bigbtn font-display font-bold text-[11.5px] cursor-pointer"
-            style="background:var(--accent);border:1px solid var(--accent);color:#1a1206;box-shadow:3px 3px 0 var(--linelit);padding:9px 16px">Resolver</button>
+            style="background:var(--accent);border:1px solid var(--accent);color:#ffffff;box-shadow:var(--shadow-card);padding:9px 16px">Resolver</button>
   </form>`;
 }
 
@@ -86,7 +86,7 @@ function changeActions(ticketId: string, cr: AppointmentChangeRequest, failed = 
     <div style="display:flex;gap:8px;align-items:flex-start;flex-wrap:wrap">
       <form method="POST" action="/admin/tickets/${ticketId}/approve-change">
         <button class="bigbtn font-display font-bold text-[11.5px] cursor-pointer"
-                style="background:var(--accent);border:1px solid var(--accent);color:#1a1206;box-shadow:3px 3px 0 var(--linelit);padding:9px 16px">Aprobar</button>
+                style="background:var(--accent);border:1px solid var(--accent);color:#ffffff;box-shadow:var(--shadow-card);padding:9px 16px">Aprobar</button>
       </form>
       <form method="POST" action="/admin/tickets/${ticketId}/reject-change" style="display:flex;gap:8px;flex:1;min-width:240px">
         <input name="note" placeholder="Nota para el cliente (opcional)"

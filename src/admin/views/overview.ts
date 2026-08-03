@@ -186,7 +186,7 @@ export async function renderOverview(env: Env): Promise<string> {
         </div>
       </div>
       <a href="/admin/agente" class="bigbtn font-display font-bold text-[12.5px] cursor-pointer flex items-center justify-center gap-2"
-         style="background:var(--accent);color:#1a1206;border:1px solid var(--accent);box-shadow:4px 4px 0 var(--linelit);padding:13px;margin-top:18px">
+         style="background:var(--accent);color:#ffffff;border:1px solid var(--accent);box-shadow:var(--shadow-card);padding:13px;margin-top:18px">
         <i data-lucide="settings-2" width="16" height="16"></i> Ajustar mi agente
       </a>
     </div>`;

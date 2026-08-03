@@ -67,7 +67,7 @@ function suggestionCard(s: Suggestion): string {
     <div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:14px">
       <form method="POST" action="/admin/mejoras/${encodeURIComponent(s.id)}/apply">
         <button class="bigbtn font-display font-bold text-[11.5px] cursor-pointer"
-                style="background:var(--accent);border:1px solid var(--accent);color:#1a1206;box-shadow:3px 3px 0 var(--linelit);padding:8px 16px">Aplicar</button>
+                style="background:var(--accent);border:1px solid var(--accent);color:#ffffff;box-shadow:var(--shadow-card);padding:8px 16px">Aplicar</button>
       </form>
       <form method="POST" action="/admin/mejoras/${encodeURIComponent(s.id)}/dismiss">
         <button class="ghostbtn cursor-pointer"
@@ -92,9 +92,9 @@ export async function renderMejoras(
   const copilot = autonomyRaw === "copilot";
 
   const banner = flash?.found !== undefined
-    ? `<div style="border:1px solid var(--ok);background:rgba(127,183,126,.1);color:var(--ok);padding:10px 14px;font-size:12.5px;margin-bottom:16px">Búsqueda completada: ${esc(flash.found)} ${flash.found === "1" ? "mejora nueva propuesta" : "mejoras nuevas propuestas"}.</div>`
+    ? `<div style="border:1px solid var(--ok);background:rgba(76,154,76,.1);color:var(--ok);padding:10px 14px;font-size:12.5px;margin-bottom:16px">Búsqueda completada: ${esc(flash.found)} ${flash.found === "1" ? "mejora nueva propuesta" : "mejoras nuevas propuestas"}.</div>`
     : flash?.applied
-      ? `<div style="border:1px solid var(--ok);background:rgba(127,183,126,.1);color:var(--ok);padding:10px 14px;font-size:12.5px;margin-bottom:16px">✓ Mejora aplicada — activa desde el siguiente mensaje.</div>`
+      ? `<div style="border:1px solid var(--ok);background:rgba(76,154,76,.1);color:var(--ok);padding:10px 14px;font-size:12.5px;margin-bottom:16px">✓ Mejora aplicada — activa desde el siguiente mensaje.</div>`
       : flash?.dismissed
         ? `<div style="border:1px solid var(--line);background:var(--panel2);color:var(--muted);padding:10px 14px;font-size:12.5px;margin-bottom:16px">Descartada. No se volverá a proponer.</div>`
         : "";
@@ -148,7 +148,7 @@ export async function renderMejoras(
       </div>
       <form method="POST" action="/admin/mejoras/run" style="margin-left:auto">
         <button class="bigbtn font-display font-bold text-[12.5px] cursor-pointer"
-                style="background:var(--accent);border:1px solid var(--accent);color:#1a1206;box-shadow:3px 3px 0 var(--linelit);padding:9px 16px;display:flex;align-items:center;gap:8px;white-space:nowrap">
+                style="background:var(--accent);border:1px solid var(--accent);color:#ffffff;box-shadow:var(--shadow-card);padding:9px 16px;display:flex;align-items:center;gap:8px;white-space:nowrap">
           <i data-lucide="sparkles" width="14" height="14"></i> Buscar mejoras ahora
         </button>
       </form>
@@ -169,7 +169,7 @@ export async function renderMejoras(
       </div>
       <form method="POST" action="/admin/mejoras/autonomy">
         <input type="hidden" name="level" value="${copilot ? "manual" : "copilot"}">
-        <button class="ghostbtn cursor-pointer" style="background:${copilot ? "var(--panel)" : "var(--accent)"};border:1px solid ${copilot ? "var(--line)" : "var(--accent)"};color:${copilot ? "var(--muted)" : "#1a1206"};padding:9px 16px;font-size:11.5px;font-weight:${copilot ? "400" : "700"};white-space:nowrap">
+        <button class="ghostbtn cursor-pointer" style="background:${copilot ? "var(--panel)" : "var(--accent)"};border:1px solid ${copilot ? "var(--line)" : "var(--accent)"};color:${copilot ? "var(--muted)" : "#ffffff"};padding:9px 16px;font-size:11.5px;font-weight:${copilot ? "400" : "700"};white-space:nowrap">
           ${copilot ? "Volver a manual" : "Activar copiloto"}
         </button>
       </form>

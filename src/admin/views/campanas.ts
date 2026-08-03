@@ -44,7 +44,7 @@ export async function renderCampanas(
   const pct = Math.min(100, Math.round((spent / cap) * 100));
 
   const banner = q.ok
-    ? `<div style="border:1px solid var(--ok);background:rgba(127,183,126,.08);padding:12px 16px;margin-bottom:18px;font-size:12.5px">
+    ? `<div style="border:1px solid var(--ok);background:rgba(76,154,76,.08);padding:12px 16px;margin-bottom:18px;font-size:12.5px">
         ✅ Campaña enviada — free-form: <b>${esc(q.ff ?? "0")}</b> · plantillas: <b>${esc(q.tp ?? "0")}</b>
         · ya la tenían (saltados): ${esc(q.dup ?? "0")} · sin cuota: ${esc(q.quota ?? "0")} · fallidos: ${esc(q.fail ?? "0")}
       </div>`

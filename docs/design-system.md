@@ -1,10 +1,9 @@
 # Forja Admin — Design System
 
-Retro-terminal dark theme for the bot admin dashboard. This is the **contract**
+Light-first BIRevX theme for the bot admin dashboard. This is the **contract**
 for every view under `src/admin/views/`. The shell (`layout.ts`) already loads
-the fonts, Tailwind config, tokens, lucide, htmx, the scanline overlay and all
-the component classes below. Views only render the **body** — write it to match
-this system.
+the fonts, Tailwind config, tokens, lucide, htmx and all the component classes
+below. Views only render the **body** — write it to match this system.
 
 Stack reminder: no build step. Views are TS template strings → HTML, styled with
 **Tailwind CDN utilities** (mapped to the tokens below) and/or inline
@@ -19,38 +18,51 @@ color** (for `class="…"`). Use whichever fits; they resolve to the same hex.
 
 | CSS var | Tailwind | Hex | Use |
 |---|---|---|---|
-| `--bg` | `bg-bg` | `#141009` | page background (already on `<body>`) |
-| `--panel` | `bg-panel` | `#1d1710` | card / panel surface |
-| `--panel2` | `bg-panel2` | `#241c13` | nested surface, row hover, inputs-on-panel |
-| `--raise` | `bg-raise` | `#2b2116` | raised chips / avatars |
-| `--line` | `border-line` | `#352a1d` | default border / divider |
-| `--linelit` | `border-linelit` | `#4c3a26` | lit border, hard-shadow color |
-| `--accent` | `text-accent` `bg-accent` `border-accent` | `#f07a3f` | primary accent (orange) |
-| `--accent-soft` | `bg-accent-soft` | `rgba(240,122,63,.14)` | accent wash / active bg |
-| `--accent-2` | `text-accent2` | `#f5a623` | secondary accent (amber): AI/insights |
-| `--cream` | `text-cream` | `#efe7da` | primary text |
-| `--muted` | `text-muted` | `#a1907b` | secondary text |
-| `--dim` | `text-dim` | `#726555` | tertiary text, labels, captions |
-| `--ok` | `text-ok` `border-ok` | `#7fb77e` | success / green (resolved, online) |
-| `--info` | `text-info` `border-info` | `#7aa2d6` | info / blue (WhatsApp, escalated) |
-| `--bad` | `text-bad` `border-bad` | `#d97a6a` | danger / red (angry, handoff, errors) |
-| `--violet` | `text-violet` | `#b99bd6` | model/memory accents in the flow canvas |
+| `--bg` | `bg-bg` | `#ffffff` | page background (already on `<body>`) |
+| `--panel` | `bg-panel` | `#ffffff` | card / panel surface |
+| `--panel2` | `bg-panel2` | `#f7f9fb` | nested surface, row hover, inputs-on-panel |
+| `--raise` | `bg-raise` | `#f4f6f8` | raised chips / avatars |
+| `--line` | `border-line` | `#e2e6ec` | default border / divider |
+| `--linelit` | `border-linelit` | `#c7cfda` | lit border, scrollbar thumb |
+| `--accent` | `text-accent` `bg-accent` `border-accent` | `#4297c7` | primary interactive accent (tech blue): buttons, active nav, links |
+| `--accent-soft` | `bg-accent-soft` | `rgba(66,151,199,.10)` | accent wash / active bg |
+| `--accent-2` | `text-accent2` | `#b7791f` | warning / attention accent (amber): PRO badges, near-limit warnings, channel badges, "función bloqueada" |
+| `--cream` | `text-cream` | `#1e266a` | primary text **and** brand-ink surface (deep navy) — headings, body copy, and the navy CTA background share this token |
+| `--muted` | `text-muted` | `#475569` | secondary text |
+| `--dim` | `text-dim` | `#8b96a8` | tertiary text, labels, captions |
+| `--ok` | `text-ok` `border-ok` | `#4c9a4c` | success / online status only — not a general accent |
+| `--info` | `text-info` `border-info` | `#2169a0` | info / blue (WhatsApp, escalated) |
+| `--bad` | `text-bad` `border-bad` | `#c4563f` | danger / errors — prefer icon + copy over color alone |
+| `--violet` | `text-violet` | `#7a6bb0` | model/memory accents in the flow canvas |
+| `--growth` | — | `#80c036` | **BIRevX growth green.** Reserved for ROI/upside/growth metrics — never a general accent, never a gradient |
+| `--growth-soft` | — | `rgba(128,192,54,.12)` | growth-metric wash (e.g. the "online" pill) |
+| `--shadow-card` | — | `0 1px 2px rgba(30,38,106,.04), 0 4px 14px rgba(30,38,106,.06)` | default resting shadow for cards/panels |
+| `--shadow-pop` | — | `0 8px 28px rgba(30,38,106,.16)` | elevated surfaces: modals, toasts, popovers |
 
-Buttons on `--accent` use text color `#1a1206` (near-black on orange) — there is
+Buttons on `--accent` or `--cream` (navy) use white text (`#ffffff`) — there is
 no token for it; write the hex.
 
 Legacy aliases (`--border`, `--border-lit`, `--green`, `--blue`, `--red`) are
-still defined so pasted mockup snippets don't break, but **prefer the names in
-the table above** in new code.
+still defined so older snippets don't break, but **prefer the names in the
+table above** in new code.
+
+**Brand anchor, not a decoration:** `--cream` (navy `#1e266a`) is BIRevX's
+primary brand color — it carries the logo's dominant hue. `--growth` (green
+`#80c036`) is the **only** non-blue accent and is reserved exclusively for
+quantified upside (ROI, growth %, positive deltas in MXN) — see
+`brand-voice-birevx.md` §2. Don't reach for green as a generic "success" color
+outside that role; use `--ok` for status instead.
 
 ---
 
 ## 2. Typography
 
-- Body / default: **JetBrains Mono** (already the `<body>` font, and Tailwind
-  `font-mono`). Everything is monospace unless you opt into display.
-- Headings / numbers / buttons: **Space Grotesk** → `font-display` (Tailwind) or
-  `style="font-family:'Space Grotesk'"`.
+- Body / default: **Inter** (already the `<body>` font, and Tailwind default
+  sans stack). Everything is sans-serif unless you opt into display.
+- Headings / big numbers / buttons: **Space Grotesk** → `font-display`
+  (Tailwind) or `style="font-family:'Space Grotesk'"`.
+- Data / technical strings only (URLs, slugs, command names, code): **JetBrains
+  Mono**, small and sparing — not the body font anymore.
 
 Hierarchy:
 
@@ -61,6 +73,7 @@ Hierarchy:
 | Big stat number | `font-display font-bold text-[30px] leading-none` (up to `38px` on the overview hero) |
 | Body text | `text-[12.5px] text-muted leading-relaxed` |
 | Label / caption | `text-[10px] tracking-[.2em] uppercase text-dim` |
+| Technical string (URL, slug) | `font-mono text-[11px] text-dim` |
 
 ---
 
@@ -70,45 +83,48 @@ Copy these. Sizes are the mockup's; keep them consistent.
 
 ### Card / panel
 ```html
-<div class="card bg-panel border border-line p-[18px]"> … </div>
+<div class="card bg-panel border border-line rounded-md p-[18px]" style="box-shadow:var(--shadow-card)"> … </div>
 ```
 `.card` adds the one-shot `rise` entrance animation. Drop it for static panels.
 
-### Primary button (brutalist, hard shadow)
+### Primary button (navy brand button)
 ```html
 <button class="bigbtn font-display font-bold text-[12.5px] cursor-pointer"
-  style="background:var(--accent);border:1px solid var(--accent);color:#1a1206;box-shadow:4px 4px 0 var(--linelit);padding:11px 16px;display:flex;align-items:center;gap:8px">
+  style="background:var(--cream);border:1px solid var(--cream);color:#ffffff;border-radius:6px;box-shadow:var(--shadow-card);padding:11px 16px;display:flex;align-items:center;gap:8px">
   <i data-lucide="check" width="16" height="16"></i> Guardar
 </button>
 ```
-`.bigbtn` handles the hover/active translate + shadow. Smaller variant: `padding:8px 16px;box-shadow:3px 3px 0 var(--linelit)`.
+`.bigbtn` handles the hover/active lift + soft shadow. Use `--accent` (tech
+blue) instead of `--cream` for secondary/inline CTAs (e.g. "copiar prompt") to
+keep navy reserved for the primary action on a page.
 
 ### Ghost / secondary button
 ```html
 <button class="ghostbtn text-muted cursor-pointer"
-  style="background:var(--panel);border:1px solid var(--line);padding:9px 14px;font-size:12.5px;transition:all .12s ease">…</button>
+  style="background:var(--panel);border:1px solid var(--line);border-radius:6px;padding:9px 14px;font-size:12.5px;transition:all .12s ease">…</button>
 ```
 
 ### Chip (filter / small action)
 ```html
 <span class="chip text-muted cursor-pointer"
-  style="border:1px solid var(--line);padding:5px 12px;font-size:11px;letter-spacing:.05em">Todas · 32</span>
+  style="border:1px solid var(--line);border-radius:20px;padding:5px 12px;font-size:11px;letter-spacing:.05em">Todas · 32</span>
 ```
 
 ### Pill / badge — variants by color
 Same shape, swap the color var. Text = border = the variant color.
 ```html
-<!-- accent -->  <span style="font-size:9px;color:var(--accent);border:1px solid var(--accent);padding:1px 6px">Lead</span>
-<!-- ok -->      <span style="font-size:9px;color:var(--ok);border:1px solid var(--ok);padding:1px 6px">Resuelta</span>
-<!-- warn -->    <span style="font-size:9px;color:var(--accent-2);border:1px solid var(--accent-2);padding:1px 6px">Sin resolver</span>
-<!-- bad -->     <span style="font-size:9px;color:var(--bad);border:1px solid var(--bad);padding:1px 6px">Handoff</span>
-<!-- info -->    <span style="font-size:9px;color:var(--info);border:1px solid var(--info);padding:1px 6px">WA</span>
+<!-- accent -->  <span style="font-size:9px;color:var(--accent);border:1px solid var(--accent);border-radius:20px;padding:1px 6px">Lead</span>
+<!-- ok -->      <span style="font-size:9px;color:var(--ok);border:1px solid var(--ok);border-radius:20px;padding:1px 6px">Resuelta</span>
+<!-- warn -->    <span style="font-size:9px;color:var(--accent-2);border:1px solid var(--accent-2);border-radius:20px;padding:1px 6px">Sin resolver</span>
+<!-- bad -->     <span style="font-size:9px;color:var(--bad);border:1px solid var(--bad);border-radius:20px;padding:1px 6px">Handoff</span>
+<!-- info -->    <span style="font-size:9px;color:var(--info);border:1px solid var(--info);border-radius:20px;padding:1px 6px">WA</span>
+<!-- growth -->  <span style="font-size:9px;color:var(--growth);border:1px solid var(--growth);border-radius:20px;padding:1px 6px">+18% ROI</span>
 ```
-Solid badge (counts): `background:var(--accent);color:#1a1206;font-weight:700;padding:1px 6px`.
+Solid badge (counts): `background:var(--cream);color:#ffffff;font-weight:700;border-radius:20px;padding:1px 6px`.
 
 ### Table / list row
-Rows sit inside a `bg-panel border border-line` container, separated by
-`border-top:1px solid var(--line)`. Add a hover class for interactivity:
+Rows sit inside a `bg-panel border border-line rounded-md` container, separated
+by `border-top:1px solid var(--line)`. Add a hover class for interactivity:
 ```html
 <div class="leadrow" style="display:grid;grid-template-columns:110px 1.1fr 1.1fr 1.6fr 130px;gap:12px;padding:13px 18px;border-top:1px solid var(--line);font-size:12.5px;align-items:center;transition:background .12s ease"> … </div>
 ```
@@ -117,37 +133,38 @@ Hover helpers available: `.leadrow`, `.datarow`, `.kbrow`, `.convrow` (all →
 
 ### Input / textarea / select
 ```html
-<input style="background:var(--bg);border:1px solid var(--line);color:var(--cream);padding:10px 12px;font-size:12.5px;outline:none">
+<input style="background:var(--bg);border:1px solid var(--line);border-radius:6px;color:var(--cream);padding:10px 12px;font-size:12.5px;outline:none">
 ```
 Textareas add `resize:vertical`. Placeholders are auto-styled to `--dim`. Range
 inputs are auto-accented (`accent-color:var(--accent)`).
 
 ### Stat card (big number)
 ```html
-<div class="bg-panel border border-line p-4">
-  <div class="font-display font-bold text-[30px] leading-none">142</div>
+<div class="bg-panel border border-line rounded-md p-4" style="box-shadow:var(--shadow-card)">
+  <div class="font-display font-bold text-[30px] leading-none" style="color:var(--cream)">142</div>
   <div class="text-[11px] text-muted mt-1">Conversaciones analizadas</div>
   <div class="text-[10px] text-dim mt-0.5">últimos 7 días</div>
 </div>
 ```
-Add `border-l-[3px]` in `--accent`/`--ok`/`--bad` to flag the hero metric.
+Add `border-l-[3px]` in `--accent`/`--growth`/`--bad` to flag the hero metric —
+use `--growth` specifically when the number is a positive ROI/growth figure.
 
 ### Progress bar
 ```html
-<div style="height:12px;background:var(--panel2);border:1px solid var(--line);overflow:hidden">
+<div style="height:12px;background:var(--panel2);border:1px solid var(--line);border-radius:20px;overflow:hidden">
   <div style="width:74%;height:100%;background:var(--accent)"></div>
 </div>
 ```
 
 ### Selectable option card (config)
 ```html
-<div class="cfgcard" style="border:1px solid var(--line);background:var(--panel2);padding:14px">…</div>
+<div class="cfgcard" style="border:1px solid var(--line);background:var(--panel2);border-radius:6px;padding:14px">…</div>
 <!-- selected: border:1px solid var(--accent);background:var(--accent-soft); label + icon in var(--accent) -->
 ```
 
 ### Flow-canvas node
-Use `.node` (canvas radiography) or `.node-card` — both get the lift + hard
-shadow on hover. Container: `background:var(--panel2);border:1px solid var(--linelit)`.
+Use `.node` (canvas radiography) or `.node-card` — both get the lift + soft
+shadow on hover. Container: `background:var(--panel2);border:1px solid var(--linelit);border-radius:6px`.
 
 ---
 
@@ -161,7 +178,6 @@ These are defined in `layout.ts` — **do not redefine them**, just use the clas
 - Canvas: `.node`, `.node-card`
 - Overlays (already wired to existing views): **`.modal-backdrop`**,
   **`.modal-card`**, **`.toast`** — keep using these exact names.
-- `.scanlines` is on `<body>` already.
 - Keyframes available: `blink`, `pulse`, `ring`, `rise`, `fadeIn`, `popIn`,
   `toastIn`, `toastOut`. All motion collapses under `prefers-reduced-motion`.
 
@@ -194,14 +210,24 @@ user-plus · `tickets` life-buoy · `agente` workflow · `kb` book-open · `mejo
 sparkles · `config` sliders-horizontal · `insights` scan-eye · `stats`
 bar-chart-3 · `costs` receipt.
 
+The sidebar brand mark is the BIRevX logo (`src/admin/assets/brand-logo.ts`,
+inlined as a data URI — no build step, no separate asset pipeline). Don't
+replace it with an icon or initial; if the mark ever needs to change, swap the
+source PNG there and regenerate the constant, don't hardcode a new image
+elsewhere.
+
 ---
 
 ## 6. PROHIBIDO
 
-- ❌ No light-theme colors: no `bg-white`, `bg-stone-50`, `text-stone-*`,
-  `bg-cyan-*`, `text-cyan-*`, `shadow-sm/md`, `rounded-2xl`, or any pale
-  surface. This theme is dark + square (hard corners, hard shadows).
+- ❌ No dark-theme surfaces: no near-black backgrounds, no scanline/CRT
+  overlays, no hard brutalist offset-shadows (`Npx Npx 0 var(--linelit)`).
+  This theme is **light-first** — soft shadows (`--shadow-card` /
+  `--shadow-pop`), not hard ones.
 - ❌ Don't invent new colors — use the tokens in §1 only.
+- ❌ Don't use `--growth` (green) as a generic accent or success color — it's
+  reserved for quantified ROI/growth figures only (see §1). Use `--ok` for
+  status instead.
 - ❌ Don't touch htmx attributes (`hx-*`), element `id`s, route paths, or form
   field `name`s. Restyle markup, don't rewire it.
 - ❌ Don't change visible text strings / labels (tests and users depend on them):

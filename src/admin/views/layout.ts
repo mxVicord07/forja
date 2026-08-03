@@ -1,7 +1,7 @@
-// Dashboard shell: a fixed 248px sidebar (grouped navigation) + a live-status
-// topbar, wrapping each tab's server-rendered body. Retro-terminal dark theme
-// ("Forja admin"): Space Grotesk + JetBrains Mono, brutalist buttons, scan
-// lines. Design tokens are exposed both as CSS custom properties (for inline
+// Dashboard shell: a fixed 250px sidebar (grouped navigation) + a live-status
+// topbar, wrapping each tab's server-rendered body. Light-first BIRevX theme:
+// Space Grotesk (display) + Inter (body), soft shadows, square-ish corners.
+// Design tokens are exposed both as CSS custom properties (for inline
 // styles) and mapped to Tailwind color names (for utility classes) — see
 // docs/design-system.md, the contract every view follows.
 //
@@ -12,6 +12,7 @@ import type { Env } from "../../env";
 import { isPro, PRO_ONLY_TABS } from "../../config";
 import { getNiche } from "../../niches";
 import type { NichePack } from "../../niches";
+import { BRAND_LOGO_DATA_URI } from "../assets/brand-logo";
 
 const UPGRADE_URL = "/admin/upgrade";
 
@@ -67,7 +68,7 @@ const NAV: Section[] = [
 const HEAD_ASSETS = `
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
   <script src="https://unpkg.com/htmx.org@2.0.4"></script>
   <script src="https://cdn.tailwindcss.com"></script>
   <script>
@@ -75,21 +76,21 @@ const HEAD_ASSETS = `
       theme: {
         extend: {
           colors: {
-            bg: "#141009",
-            panel: "#1d1710",
-            panel2: "#241c13",
-            raise: "#2b2116",
-            line: "#352a1d",
-            linelit: "#4c3a26",
-            accent: { DEFAULT: "#f07a3f", soft: "rgba(240,122,63,.14)" },
-            accent2: "#f5a623",
-            cream: "#efe7da",
-            muted: "#a1907b",
-            dim: "#726555",
-            ok: "#7fb77e",
-            info: "#7aa2d6",
-            bad: "#d97a6a",
-            violet: "#b99bd6",
+            bg: "#ffffff",
+            panel: "#ffffff",
+            panel2: "#f7f9fb",
+            raise: "#f4f6f8",
+            line: "#e2e6ec",
+            linelit: "#c7cfda",
+            accent: { DEFAULT: "#4297c7", soft: "rgba(66,151,199,.10)" },
+            accent2: "#b7791f",
+            cream: "#1e266a",
+            muted: "#475569",
+            dim: "#8b96a8",
+            ok: "#4c9a4c",
+            info: "#2169a0",
+            bad: "#c4563f",
+            violet: "#7a6bb0",
           },
           fontFamily: {
             display: ["'Space Grotesk'", "ui-sans-serif", "system-ui", "sans-serif"],
@@ -108,22 +109,26 @@ const HEAD_ASSETS = `
 const GLOBAL_STYLE = `
 <style>
   :root{
-    --bg:#141009; --panel:#1d1710; --panel2:#241c13; --raise:#2b2116;
-    --line:#352a1d; --linelit:#4c3a26;
-    --accent:#f07a3f; --accent-2:#f5a623; --accent-soft:rgba(240,122,63,.14);
-    --cream:#efe7da; --muted:#a1907b; --dim:#726555;
-    --ok:#7fb77e; --info:#7aa2d6; --bad:#d97a6a; --violet:#b99bd6;
+    --bg:#ffffff; --panel:#ffffff; --panel2:#f7f9fb; --raise:#f4f6f8;
+    --line:#e2e6ec; --linelit:#c7cfda;
+    --accent:#4297c7; --accent-2:#b7791f; --accent-soft:rgba(66,151,199,.10);
+    --cream:#1e266a; --muted:#475569; --dim:#8b96a8;
+    --ok:#4c9a4c; --info:#2169a0; --bad:#c4563f; --violet:#7a6bb0;
+    --growth:#80c036; --growth-soft:rgba(128,192,54,.12);
+    --on-accent:#ffffff;
+    --shadow-card:0 1px 2px rgba(30,38,106,.04),0 4px 14px rgba(30,38,106,.06);
+    --shadow-pop:0 8px 28px rgba(30,38,106,.16);
     /* legacy aliases kept so mockup-derived snippets keep working */
-    --border:#352a1d; --border-lit:#4c3a26; --green:#7fb77e; --blue:#7aa2d6; --red:#d97a6a;
+    --border:#e2e6ec; --border-lit:#c7cfda; --green:#4c9a4c; --blue:#2169a0; --red:#c4563f;
   }
   *{box-sizing:border-box}
   html,body{margin:0;padding:0;background:var(--bg);color:var(--cream);
-    font-family:'JetBrains Mono',ui-monospace,monospace;-webkit-font-smoothing:antialiased}
+    font-family:'Inter',ui-sans-serif,system-ui,sans-serif;-webkit-font-smoothing:antialiased}
   a{color:var(--accent);text-decoration:none}
   a:hover{color:var(--accent-2)}
   ::-webkit-scrollbar{width:10px;height:10px}
   ::-webkit-scrollbar-track{background:var(--bg)}
-  ::-webkit-scrollbar-thumb{background:var(--linelit);border-radius:0}
+  ::-webkit-scrollbar-thumb{background:var(--linelit);border-radius:6px}
   ::-webkit-scrollbar-thumb:hover{background:var(--accent)}
   input,textarea,select{font-family:inherit}
   input::placeholder,textarea::placeholder{color:var(--dim)}
@@ -132,17 +137,12 @@ const GLOBAL_STYLE = `
   /* keyframes */
   @keyframes blink{0%,49%{opacity:1}50%,100%{opacity:0}}
   @keyframes pulse{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.35;transform:scale(.82)}}
-  @keyframes ring{0%{box-shadow:0 0 0 0 rgba(127,183,126,.5)}100%{box-shadow:0 0 0 8px rgba(127,183,126,0)}}
+  @keyframes ring{0%{box-shadow:0 0 0 0 rgba(76,154,76,.5)}100%{box-shadow:0 0 0 8px rgba(76,154,76,0)}}
   @keyframes rise{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}
   @keyframes fadeIn{from{opacity:0}to{opacity:1}}
   @keyframes popIn{from{opacity:0;transform:scale(.94) translateY(8px)}to{opacity:1;transform:scale(1) translateY(0)}}
   @keyframes toastIn{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:translateY(0)}}
   @keyframes toastOut{to{opacity:0;transform:translateY(8px);visibility:hidden}}
-
-  /* scanline overlay (applied to <body>) */
-  .scanlines::after{content:"";position:fixed;inset:0;pointer-events:none;z-index:200;
-    background:repeating-linear-gradient(to bottom,rgba(0,0,0,0) 0,rgba(0,0,0,0) 2px,rgba(0,0,0,.12) 3px,rgba(0,0,0,0) 4px);
-    opacity:.5;mix-blend-mode:multiply}
 
   /* sidebar nav */
   .navlink:hover{background:var(--panel2);color:var(--cream)}
@@ -151,10 +151,10 @@ const GLOBAL_STYLE = `
   /* entrance + brutalist buttons */
   .card{animation:rise .4s cubic-bezier(.16,1,.3,1) both}
   .bigbtn{transition:transform .12s ease,box-shadow .12s ease}
-  .bigbtn:hover{transform:translate(-2px,-2px);box-shadow:6px 6px 0 var(--linelit)}
-  .bigbtn:active{transform:translate(0,0);box-shadow:2px 2px 0 var(--linelit)}
-  .ghostbtn:hover{border-color:var(--accent);color:var(--cream);background:var(--accent-soft)}
-  .glow{text-shadow:0 0 22px var(--accent-soft),0 0 40px rgba(240,122,63,.1)}
+  .bigbtn:hover{transform:translateY(-1px);box-shadow:0 6px 16px rgba(30,38,106,.22)}
+  .bigbtn:active{transform:translateY(0);box-shadow:0 2px 6px rgba(30,38,106,.18)}
+  .ghostbtn:hover{border-color:var(--accent);color:var(--accent-2);background:var(--accent-soft)}
+  .glow{text-shadow:0 0 22px var(--accent-soft),0 0 40px rgba(66,151,199,.12)}
 
   /* list / table rows + interactive bits reused across views */
   .convrow:hover{background:var(--panel2)}
@@ -175,16 +175,16 @@ const GLOBAL_STYLE = `
 
   /* flow-canvas node (mockup ".node") + the existing views' ".node-card" */
   .node{transition:transform .14s ease,border-color .14s ease,box-shadow .14s ease;cursor:pointer}
-  .node:hover{transform:translateY(-2px);border-color:var(--accent);box-shadow:4px 4px 0 var(--linelit)}
+  .node:hover{transform:translateY(-2px);border-color:var(--accent);box-shadow:var(--shadow-card)}
   .node-card{transition:transform .15s ease,box-shadow .15s ease,border-color .15s ease}
-  .node-card:hover{transform:translateY(-2px);border-color:var(--accent);box-shadow:4px 4px 0 var(--linelit)}
+  .node-card:hover{transform:translateY(-2px);border-color:var(--accent);box-shadow:var(--shadow-card)}
 
   /* modal + toast (class names kept from prior layout for existing views) */
   .modal-backdrop{position:fixed;inset:0;z-index:50;display:flex;align-items:center;justify-content:center;
-    padding:1rem;background:rgba(10,8,4,.6);animation:fadeIn .15s ease-out}
-  .modal-card{background:var(--panel);border:1px solid var(--linelit);box-shadow:8px 8px 0 rgba(0,0,0,.4);
+    padding:1rem;background:rgba(30,38,106,.35);animation:fadeIn .15s ease-out}
+  .modal-card{background:var(--panel);border:1px solid var(--line);box-shadow:var(--shadow-pop);
     animation:popIn .18s cubic-bezier(.16,1,.3,1);transform-origin:center}
-  .toast{background:var(--panel);border:1px solid var(--linelit);color:var(--cream);box-shadow:4px 4px 0 var(--linelit);
+  .toast{background:var(--cream);border:1px solid var(--cream);color:#fff;box-shadow:var(--shadow-pop);
     animation:toastIn .25s cubic-bezier(.16,1,.3,1),toastOut .3s ease-in 2.4s forwards}
 
   /* app shell */
@@ -192,7 +192,7 @@ const GLOBAL_STYLE = `
   .sb{border-right:1px solid var(--line);background:var(--panel);display:flex;flex-direction:column;position:sticky;top:0;height:100vh}
   .sb-nav{padding:14px 12px;display:flex;flex-direction:column;gap:2px;flex:1;overflow-y:auto}
   .sb-sec{font-size:9.5px;letter-spacing:.24em;text-transform:uppercase;padding:14px 10px 6px}
-  .live-pill{display:flex;align-items:center;gap:9px;background:var(--panel);border:1px solid var(--line);padding:8px 13px}
+  .live-pill{display:flex;align-items:center;gap:9px;background:var(--growth-soft);border:1px solid var(--ok);color:var(--ok);border-radius:20px;padding:7px 14px}
 
   @media (max-width:767px){
     .shell{grid-template-columns:1fr}
@@ -277,19 +277,17 @@ function sidebar(activeTab: string, pro: boolean, niche: NichePack | null): stri
   return `<aside class="sb">
     <div class="sb-brand" style="padding:20px 18px 16px;border-bottom:1px solid var(--line)">
       <div style="display:flex;align-items:center;gap:10px">
-        <div style="width:34px;height:34px;flex:none;border:1.5px solid var(--accent);display:flex;align-items:center;justify-content:center;background:var(--accent-soft);box-shadow:3px 3px 0 var(--linelit)">
-          <i data-lucide="terminal" width="18" height="18" style="color:var(--accent)"></i>
-        </div>
+        <img src="${BRAND_LOGO_DATA_URI}" alt="BIRevX" width="34" height="34" style="flex:none;border-radius:8px">
         <div style="line-height:1.05">
           <div style="font-family:'Space Grotesk';font-weight:700;font-size:15px;letter-spacing:-.02em">Forja</div>
-          <div style="font-size:9.5px;letter-spacing:.22em;color:var(--dim);text-transform:uppercase">Panel · ${pro ? "Pro" : "Free"}</div>
+          <div style="font-size:9px;letter-spacing:.18em;color:var(--dim);text-transform:uppercase">by BIRevX · ${pro ? "Pro" : "Free"}</div>
         </div>
       </div>
     </div>
     <nav class="sb-nav">${sections}</nav>
     <div class="sb-foot" style="padding:14px;border-top:1px solid var(--line)">
-      <div style="display:flex;align-items:center;gap:10px;padding:8px;border:1px solid var(--line)">
-        <div style="width:30px;height:30px;flex:none;background:var(--raise);border:1px solid var(--linelit);display:flex;align-items:center;justify-content:center;color:var(--accent)">
+      <div style="display:flex;align-items:center;gap:10px;padding:8px;border:1px solid var(--line);border-radius:6px">
+        <div style="width:30px;height:30px;flex:none;background:var(--raise);border:1px solid var(--linelit);border-radius:6px;display:flex;align-items:center;justify-content:center;color:var(--accent)">
           <i data-lucide="bot" width="16" height="16"></i>
         </div>
         <div style="line-height:1.2;overflow:hidden">
@@ -318,11 +316,11 @@ export function layout(opts: { title: string; activeTab: string; body: string; e
   ${HEAD_ASSETS}
   ${GLOBAL_STYLE}
 </head>
-<body class="scanlines">
+<body>
   <div class="shell">
     ${sidebar(opts.activeTab, pro, niche)}
     <div style="display:flex;flex-direction:column;min-width:0">
-      <header style="position:sticky;top:0;z-index:30;background:rgba(20,16,9,.9);backdrop-filter:blur(8px);border-bottom:1px solid var(--line);padding:14px 26px;display:flex;align-items:center;gap:20px">
+      <header style="position:sticky;top:0;z-index:30;background:rgba(255,255,255,.85);backdrop-filter:blur(8px);border-bottom:1px solid var(--line);padding:14px 26px;display:flex;align-items:center;gap:20px">
         <div style="min-width:0">
           <div style="font-size:10px;letter-spacing:.22em;color:var(--dim);text-transform:uppercase">${section.label} / ${item.label}</div>
           <h1 style="font-family:'Space Grotesk';font-weight:700;font-size:22px;margin:2px 0 0;letter-spacing:-.02em">${item.label}</h1>
@@ -349,8 +347,8 @@ export function layout(opts: { title: string; activeTab: string; body: string; e
       opts += '<option value="' + p.url.replace(/"/g,'&quot;') + '">' + p.name.replace(/</g,'&lt;') + '</option>';
     });
     el.innerHTML = '<select onchange="if(this.value.indexOf(\'http\')===0)window.location=this.value" ' +
-      'style="background:rgba(20,16,9,.9);color:var(--fg,#e8e0cf);border:1px solid var(--line);border-radius:8px;' +
-      'padding:6px 10px;font-family:\'JetBrains Mono\',monospace;font-size:11px;letter-spacing:.04em;cursor:pointer" ' +
+      'style="background:#ffffff;color:var(--cream,#1e266a);border:1px solid var(--line);border-radius:8px;' +
+      'padding:6px 10px;font-family:\'Inter\',sans-serif;font-size:11px;letter-spacing:.02em;cursor:pointer" ' +
       'title="Cambiar de proyecto">' + opts + '</select>';
   }).catch(function(){});
   </script>
@@ -382,8 +380,8 @@ export function renderUpgrade(env: Env, feature?: string): string {
 
   const body = `
     <div class="card" style="max-width:720px">
-      <div style="border:1px solid var(--linelit);background:var(--panel);box-shadow:6px 6px 0 var(--linelit);padding:28px">
-        <div style="display:inline-flex;align-items:center;gap:8px;border:1px solid var(--accent);color:var(--accent2);font-size:10px;letter-spacing:.16em;padding:4px 10px;text-transform:uppercase">
+      <div style="border:1px solid var(--line);background:var(--panel);box-shadow:var(--shadow-card);border-radius:6px;padding:28px">
+        <div style="display:inline-flex;align-items:center;gap:8px;border:1px solid var(--accent);color:var(--accent2);font-size:10px;letter-spacing:.16em;padding:4px 10px;border-radius:20px;text-transform:uppercase">
           <i data-lucide="lock" width="13" height="13"></i> Función Pro
         </div>
         <h2 style="font-family:'Space Grotesk';font-weight:700;font-size:24px;letter-spacing:-.02em;margin:14px 0 6px">
@@ -395,7 +393,7 @@ export function renderUpgrade(env: Env, feature?: string): string {
         </p>
         <div style="display:grid;gap:10px;margin-bottom:22px">${perks}</div>
         <a href="https://horizontesia.com" target="_blank" rel="noopener" class="bigbtn"
-          style="display:inline-flex;align-items:center;gap:8px;background:var(--accent);border:1px solid var(--accent);color:#1a1206;box-shadow:4px 4px 0 var(--linelit);padding:12px 20px;font-family:'Space Grotesk';font-weight:700;font-size:14px">
+          style="display:inline-flex;align-items:center;gap:8px;background:var(--cream);border:1px solid var(--cream);color:#ffffff;box-shadow:var(--shadow-card);border-radius:6px;padding:12px 20px;font-family:'Space Grotesk';font-weight:700;font-size:14px">
           <i data-lucide="arrow-up-right" width="17" height="17"></i> Subir a Pro con la comunidad
         </a>
       </div>
@@ -413,12 +411,10 @@ export function loginPage(error?: string): string {
   ${HEAD_ASSETS}
   ${GLOBAL_STYLE}
 </head>
-<body class="scanlines" style="min-height:100vh;display:flex;align-items:center;justify-content:center;padding:1rem">
-  <form method="POST" action="/admin/auth/request" style="background:var(--panel);border:1px solid var(--linelit);box-shadow:8px 8px 0 var(--linelit);padding:32px;max-width:360px;width:100%">
+<body style="min-height:100vh;display:flex;align-items:center;justify-content:center;padding:1rem;background:var(--panel2)">
+  <form method="POST" action="/admin/auth/request" style="background:var(--panel);border:1px solid var(--line);box-shadow:var(--shadow-pop);border-radius:8px;padding:32px;max-width:360px;width:100%">
     <div style="display:flex;align-items:center;gap:10px;margin-bottom:18px">
-      <div style="width:34px;height:34px;flex:none;border:1.5px solid var(--accent);display:flex;align-items:center;justify-content:center;background:var(--accent-soft);box-shadow:3px 3px 0 var(--linelit)">
-        <i data-lucide="terminal" width="18" height="18" style="color:var(--accent)"></i>
-      </div>
+      <img src="${BRAND_LOGO_DATA_URI}" alt="BIRevX" width="34" height="34" style="flex:none;border-radius:8px">
       <div>
         <h1 style="font-family:'Space Grotesk';font-weight:700;font-size:18px;margin:0;letter-spacing:-.02em">Dashboard del bot</h1>
         <p style="font-size:11px;color:var(--dim);margin:2px 0 0">Te mandamos un link a tu email para entrar.</p>
@@ -426,9 +422,9 @@ export function loginPage(error?: string): string {
     </div>
     ${error ? `<p style="color:var(--bad);font-size:12px;margin:0 0 12px">${error}</p>` : ""}
     <input name="email" type="email" required placeholder="tu@email.com"
-      style="width:100%;background:var(--bg);border:1px solid var(--line);color:var(--cream);padding:10px 12px;font-size:13px;outline:none;margin-bottom:14px">
+      style="width:100%;background:var(--bg);border:1px solid var(--line);color:var(--cream);padding:10px 12px;font-size:13px;border-radius:6px;outline:none;margin-bottom:14px">
     <button class="bigbtn" type="submit"
-      style="width:100%;background:var(--accent);border:1px solid var(--accent);color:#1a1206;box-shadow:4px 4px 0 var(--linelit);padding:11px;font-family:'Space Grotesk';font-weight:700;font-size:13px;cursor:pointer">
+      style="width:100%;background:var(--cream);border:1px solid var(--cream);color:#ffffff;box-shadow:var(--shadow-card);border-radius:6px;padding:11px;font-family:'Space Grotesk';font-weight:700;font-size:13px;cursor:pointer">
       Mandar link
     </button>
   </form>

@@ -13,7 +13,7 @@ describe("dashboard tier gating (nav)", () => {
     expect(html).not.toContain('href="/admin/insights"');
     expect(html).toContain('href="/admin/upgrade"');
     expect(html).toContain("PRO"); // badge en el item bloqueado
-    expect(html).toContain("Panel · Free");
+    expect(html).toContain("by BIRevX · Free");
   });
 
   it("free: los tabs básicos siguen accesibles", () => {
@@ -28,7 +28,7 @@ describe("dashboard tier gating (nav)", () => {
     for (const href of ["/admin/insights", "/admin/stats", "/admin/costs", "/admin/mejoras", "/admin/campanas"]) {
       expect(html).toContain(`href="${href}"`);
     }
-    expect(html).toContain("Panel · Pro");
+    expect(html).toContain("by BIRevX · Pro");
     expect(html).not.toContain('href="/admin/upgrade"');
   });
 
