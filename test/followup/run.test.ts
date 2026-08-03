@@ -26,6 +26,11 @@ vi.mock("../../src/replies/sender", () => ({
   pickAdapter: () => ({ sendReply: (...a: unknown[]) => sendReplyMock(...a) }),
 }));
 
+const notifyOwnerMock = vi.fn();
+vi.mock("../../src/tools/handoffHuman", () => ({
+  notifyOwner: (...args: unknown[]) => notifyOwnerMock(...args),
+}));
+
 import { createTestMiniflare } from "../helpers/miniflareSetup";
 import { Db } from "../../src/db/client";
 import { ConversationsRepo } from "../../src/db/conversations";
@@ -98,6 +103,7 @@ beforeEach(async () => {
   insights = new InsightsRepo(db);
   generateTextMock.mockReset().mockResolvedValue({ text: "¿Quedaste con alguna duda? Aquí ando." });
   sendReplyMock.mockReset().mockResolvedValue(undefined);
+  notifyOwnerMock.mockReset().mockResolvedValue(undefined);
 });
 
 describe("pickFollowupCandidates — selección", () => {
@@ -192,5 +198,72 @@ describe("runFollowups — envío y garantías", () => {
     const r = await runFollowups(env, { now: NOW });
     expect(r.sent).toBe(0);
     expect(sendReplyMock).not.toHaveBeenCalled();
+  });
+});
+
+describe("Cazador de ventas — superpoder Pro", () => {
+  it("en tier free no corre (aunque haya calientes)", async () => {
+    const hot = await seed("free1");
+    await markHot(hot);
+    const r = await runFollowups({ ...env, BOT_TIER: "free" }, { now: NOW });
+    expect(r).toEqual({ sent: 0, skipped: 0, errors: 0 });
+    expect(sendReplyMock).not.toHaveBeenCalled();
+  });
+
+  it("el dueño puede apagarlo con el toggle sales_hunter sin bajar de tier", async () => {
+    const { SettingsRepo, SETTING_KEYS } = await import("../../src/db/settings");
+    await new SettingsRepo(db).set(SETTING_KEYS.salesHunter, "0");
+    const hot = await seed("off1");
+    await markHot(hot);
+    const r = await runFollowups(env, { now: NOW });
+    expect(r.sent).toBe(0);
+    expect(sendReplyMock).not.toHaveBeenCalled();
+  });
+
+  it("recoge por palabra clave (keyword_hits) aunque no sea caliente ni activo", async () => {
+    const convId = await seed("kw1"); // 1 mensaje, sin sale_opportunity → no calificaría solo
+    await db.run(
+      "INSERT INTO keyword_hits (keyword, conversation_id, phase, created_at) VALUES (?, ?, ?, ?)",
+      ["QUIERO", convId, "interes", NOW - 60_000],
+    );
+
+    const c = await pickFollowupCandidates(env, NOW, 10);
+    const byId = Object.fromEntries(c.map((x) => [x.id, x.reason]));
+    expect(byId[convId]).toBe("keyword");
+  });
+
+  it("usa el nombre, tono y contexto de negocio reales del panel, no el genérico hardcodeado", async () => {
+    const { SettingsRepo, SETTING_KEYS } = await import("../../src/db/settings");
+    const settings = new SettingsRepo(db);
+    await settings.set(SETTING_KEYS.botName, "Pelusa");
+    await settings.set(SETTING_KEYS.tone, "divertido y relajado");
+    await settings.set(SETTING_KEYS.businessContext, "Vendemos pasteles artesanales en Monterrey.");
+
+    const hot = await seed("voice1");
+    await markHot(hot);
+    await runFollowups(env, { now: NOW });
+
+    const prompt = (generateTextMock.mock.calls[0][0] as { prompt: string }).prompt;
+    expect(prompt).toContain("Pelusa");
+    expect(prompt).toContain("divertido y relajado");
+    expect(prompt).toContain("pasteles artesanales");
+  });
+
+  it("avisa al dueño SOLO cuando reengancha una venta caliente (hot), no en active/keyword", async () => {
+    const hot = await seed("hotnotify");
+    await markHot(hot);
+    await runFollowups(env, { now: NOW });
+
+    expect(notifyOwnerMock).toHaveBeenCalledTimes(1);
+    const [, notice] = notifyOwnerMock.mock.calls[0] as [unknown, { reason: string; summary: string; ticketId: string }];
+    expect(notice.reason).toContain("Cazador de ventas");
+    expect(notice.summary).toContain("hotnotify");
+    expect(notice.ticketId).toContain(hot);
+  });
+
+  it("NO avisa al dueño en un toque 'active' (solo interés, no venta abierta)", async () => {
+    await seed("activenotify", { userMsgs: 4 });
+    await runFollowups(env, { now: NOW });
+    expect(notifyOwnerMock).not.toHaveBeenCalled();
   });
 });

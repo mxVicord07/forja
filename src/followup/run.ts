@@ -8,7 +8,8 @@
  *  • La conversación terminó con respuesta del bot (si terminó con el cliente
  *    hablando, eso es un pendiente del agente, no un follow-up).
  *  • Y es un lead que VALE el toque: venta abierta detectada por el Analista
- *    (sale_opportunity) o 4+ mensajes del cliente (engagement alto).
+ *    (sale_opportunity), 4+ mensajes del cliente (engagement alto), o mandó
+ *    una palabra clave de interés (keyword_hits, ya alimentada por segments.ts).
  *  • Nunca a conversaciones pausadas (takeover del dueño), nunca por el canal
  *    instagram oficial (apagado), y UNA sola vez por conversación de por vida
  *    (followup_sends es el claim). Cap por corrida y cap diario.
@@ -22,16 +23,20 @@ import type { Env } from "../env";
 import { Db } from "../db/client";
 import { MessagesRepo } from "../db/messages";
 import { ConversationsRepo } from "../db/conversations";
+import { SettingsRepo, SETTING_KEYS } from "../db/settings";
 import { resolveAgentConfig, loadLlmOverrides } from "../settings-loader";
+import { renderBusinessContext } from "../businessContext";
 import { createModel } from "../llm/provider";
 import { pickAdapter } from "../replies/sender";
+import { notifyOwner } from "../tools/handoffHuman";
+import { isPro } from "../config";
 import type { ChannelId } from "../channels/shared";
 
 /** Ventana de elegibilidad medida desde el último mensaje del cliente. */
 export const MIN_IDLE_MS = 3 * 60 * 60 * 1000; // 3 h
 export const MAX_IDLE_MS = 20 * 60 * 60 * 1000; // 20 h (margen vs. las 24 h)
 
-export type FollowupReason = "hot" | "active";
+export type FollowupReason = "hot" | "active" | "keyword";
 
 export interface FollowupCandidate {
   id: string;
@@ -48,6 +53,7 @@ interface CandidateRow {
   display_name: string | null;
   sale_opportunity: number | null;
   user_msgs: number;
+  kw_hits: number;
 }
 
 /** Conversaciones que ameritan follow-up ahora mismo. */
@@ -63,7 +69,8 @@ export async function pickFollowupCandidates(
          i.sale_opportunity,
          (SELECT MAX(created_at) FROM messages m WHERE m.conversation_id = c.id AND m.role = 'user') AS last_user_at,
          (SELECT COUNT(*) FROM messages m WHERE m.conversation_id = c.id AND m.role = 'user') AS user_msgs,
-         (SELECT role FROM messages m WHERE m.conversation_id = c.id ORDER BY m.created_at DESC LIMIT 1) AS last_role
+         (SELECT role FROM messages m WHERE m.conversation_id = c.id ORDER BY m.created_at DESC LIMIT 1) AS last_role,
+         (SELECT COUNT(*) FROM keyword_hits k WHERE k.conversation_id = c.id) AS kw_hits
        FROM conversations c
        LEFT JOIN conversation_insights i ON i.conversation_id = c.id
        LEFT JOIN followup_sends f ON f.conversation_id = c.id
@@ -74,7 +81,7 @@ export async function pickFollowupCandidates(
      WHERE last_user_at IS NOT NULL
        AND last_user_at <= ? AND last_user_at >= ?
        AND last_role = 'assistant'
-       AND (COALESCE(sale_opportunity, 0) = 1 OR user_msgs >= 4)
+       AND (COALESCE(sale_opportunity, 0) = 1 OR user_msgs >= 4 OR kw_hits > 0)
      ORDER BY COALESCE(sale_opportunity, 0) DESC, user_msgs DESC
      LIMIT ?`,
     [now, now - MIN_IDLE_MS, now - MAX_IDLE_MS, limit],
@@ -84,13 +91,14 @@ export async function pickFollowupCandidates(
     channel: r.channel,
     channel_user_id: r.channel_user_id,
     display_name: r.display_name,
-    reason: (r.sale_opportunity ?? 0) === 1 ? "hot" : "active",
+    reason: (r.sale_opportunity ?? 0) === 1 ? "hot" : r.kw_hits > 0 ? "keyword" : "active",
   }));
 }
 
 const REASON_HINT: Record<FollowupReason, string> = {
   hot: "El Analista detectó que quedó una venta o interés abierto sin cerrar.",
   active: "Hizo varias preguntas (interés alto) y luego dejó de responder.",
+  keyword: "Mandó una palabra clave de interés puntual y luego se enfrió.",
 };
 
 export interface RunFollowupsResult {
@@ -107,10 +115,20 @@ export async function runFollowups(
   const limit = opts.limit ?? 6;
   const dailyCap = opts.dailyCap ?? 30;
   const db = new Db(env.DB);
+  const empty: RunFollowupsResult = { sent: 0, skipped: 0, errors: 0 };
+
+  // Cazador de ventas = superpoder Pro. En free el follow-up no corre.
+  if (!isPro(env)) return empty;
+
+  const settings = new SettingsRepo(db);
+
+  // Interruptor del dueño (default ON en Pro): puede apagarlo sin bajar de
+  // tier — "0" = apagado, ausente/"1" = encendido.
+  if ((await settings.get(SETTING_KEYS.salesHunter)) === "0") return empty;
 
   // Respeta la pausa global del bot (el dueño lo apagó a propósito).
   const cfg = await resolveAgentConfig(env, []);
-  if (cfg.botPaused) return { sent: 0, skipped: 0, errors: 0 };
+  if (cfg.botPaused) return empty;
 
   // Cap diario global — el follow-up es un toque fino, no una campaña.
   const sentToday =
@@ -120,18 +138,26 @@ export async function runFollowups(
         [now - 24 * 60 * 60 * 1000],
       )
     )?.n ?? 0;
-  if (sentToday >= dailyCap) return { sent: 0, skipped: 0, errors: 0 };
+  if (sentToday >= dailyCap) return empty;
 
   const candidates = await pickFollowupCandidates(
     env,
     now,
     Math.min(limit, dailyCap - sentToday),
   );
-  if (candidates.length === 0) return { sent: 0, skipped: 0, errors: 0 };
+  if (candidates.length === 0) return empty;
 
   const msgs = new MessagesRepo(db);
   const convs = new ConversationsRepo(db);
   const { model, modelId } = createModel(env, "fast", await loadLlmOverrides(env));
+
+  // Voz REAL del negocio (no hardcodeada): así un follow-up de una cafetería
+  // suena a la cafetería, no a un genérico "Ana" de ejemplo.
+  const botName = (await settings.get(SETTING_KEYS.botName)) || env.BOT_NAME;
+  const tone = ((await settings.get(SETTING_KEYS.tone)) || "").trim();
+  const businessContext = (
+    (await settings.get(SETTING_KEYS.businessContext)) || renderBusinessContext()
+  ).slice(0, 800);
 
   let sent = 0;
   let skipped = 0;
@@ -157,15 +183,15 @@ export async function runFollowups(
 
       const result = await generateText({
         model,
-        prompt: `Eres ${env.BOT_NAME}, respondiendo chats de ${env.BUSINESS_NAME} en primera persona: humano, breve, español mexicano casual, sin emojis, nunca pushy.
+        prompt: `Eres ${botName}, el asistente de ${env.BUSINESS_NAME}. Escribes los seguimientos en primera persona, como parte del negocio: humano, breve, cercano, sin emojis y nunca pushy.${tone ? ` Tu tono es ${tone}.` : ""}
 
 Este cliente mostró interés y luego dejó de responder. ${REASON_HINT[cand.reason]}
 ${cand.display_name ? `Se llama ${cand.display_name}.` : ""}
-
+${businessContext ? `\nSobre el negocio (para que suenes tú, NO lo copies literal):\n${businessContext}\n` : ""}
 Últimos mensajes:
 ${transcript}
 
-Escribe UN solo mensaje de seguimiento MUY breve (máximo 2 líneas): retoma con naturalidad lo último que hablaron y pregúntale si necesita ayuda o le quedó alguna duda. NO repitas links que ya le mandaste salvo que sea natural. Responde SOLO con el mensaje, sin comillas ni explicación.`,
+Escribe UN solo mensaje de seguimiento MUY breve (máximo 2 líneas): retoma con naturalidad lo último que hablaron y pregúntale si necesita ayuda o le quedó alguna duda. NO inventes precios, ofertas ni datos que no estén arriba. NO repitas links que ya le mandaste salvo que sea natural. Responde SOLO con el mensaje, sin comillas ni explicación.`,
       });
 
       const text = result.text.trim();
@@ -185,6 +211,17 @@ Escribe UN solo mensaje de seguimiento MUY breve (máximo 2 líneas): retoma con
         env,
       );
       sent++;
+
+      // Aviso al dueño SOLO en leads calientes (venta abierta detectada): que
+      // sepa que el bot está re-enganchando una venta y pueda entrarle a
+      // cerrar. Los toques "active"/"keyword" no avisan para no hacer ruido.
+      if (cand.reason === "hot") {
+        await notifyOwner(env, {
+          reason: "Cazador de ventas · venta caliente re-enganchada",
+          summary: `Le escribí a ${cand.display_name ?? "un cliente"} por ${cand.channel}: tenía una venta abierta y se había enfriado.\n\nMi mensaje:\n"${text}"`,
+          ticketId: `hunter:${cand.id}`,
+        }).catch((e) => console.error("[followup] notifyOwner failed:", e));
+      }
     } catch (e) {
       // El claim se queda (no reintentamos a este cliente): mejor un follow-up
       // perdido que un cliente recibiendo dos toques por errores transitorios.

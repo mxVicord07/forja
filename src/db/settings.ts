@@ -35,6 +35,9 @@ export const SETTING_KEYS = {
   // Guía de voz completa armada por el skill /voz-de-marca. Solo se aplica en
   // Pro (gateado con isPro en settings-loader.ts) — free se queda con `tone`.
   brandVoice: "brand_voice",
+  // Cazador de ventas (Pro): interruptor del dueño, independiente del tier.
+  // "0" = apagado; ausente o "1" = encendido (default ON en Pro).
+  salesHunter: "sales_hunter",
 } as const;
 
 export type SettingKey = (typeof SETTING_KEYS)[keyof typeof SETTING_KEYS];
