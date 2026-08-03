@@ -38,6 +38,14 @@ export const SETTING_KEYS = {
   // Cazador de ventas (Pro): interruptor del dueño, independiente del tier.
   // "0" = apagado; ausente o "1" = encendido (default ON en Pro).
   salesHunter: "sales_hunter",
+  // Blindaje anti-invento (Pro): interruptor del dueño ("off" = apagado,
+  // ausente/cualquier otro valor = encendido — viene ON por default en Pro).
+  blindajeEnabled: "blindaje_enabled",
+  // Contadores cosméticos para el panel: cuántas veces verificó, cuántas
+  // reemplazó. Nunca ruta crítica — si D1 falla al escribirlos, el envío
+  // del bot sigue igual.
+  blindajeChecks: "blindaje_checks",
+  blindajeBlocked: "blindaje_blocked",
 } as const;
 
 export type SettingKey = (typeof SETTING_KEYS)[keyof typeof SETTING_KEYS];

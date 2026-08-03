@@ -1,4 +1,4 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi } from "vitest";
 import { buildTools, type ToolContext } from "../../src/tools/index";
 
 function makeCtx(tier: "free" | "pro", niche?: string): ToolContext {
@@ -67,5 +67,19 @@ describe("buildTools", () => {
       expect(tools.registrarProspecto).toBeUndefined();
       expect(tools.reservarHospedaje).toBeUndefined();
     }
+  });
+
+  it("onSearchKb llega hasta searchKbTool: se dispara al ejecutar la tool", async () => {
+    const ctx = makeCtx("free");
+    ctx.env.AI = { run: async () => ({ data: [[0.1, 0.2]] }) } as any;
+    ctx.env.KB = { query: async () => ({ matches: [{ score: 0.8, metadata: { title: "T", content: "C" } }] }) } as any;
+    const onSearchKb = vi.fn();
+
+    const tools = buildTools({ ...ctx, onSearchKb });
+    const execute = tools.searchKb.execute as (input: { query: string }) => Promise<any>;
+    await execute({ query: "algo" });
+
+    expect(onSearchKb).toHaveBeenCalledTimes(1);
+    expect(onSearchKb.mock.calls[0][0][0].title).toBe("T");
   });
 });

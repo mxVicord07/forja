@@ -18,6 +18,10 @@ import { CustomerFactsRepo } from "./db/facts";
 import { createModel } from "./llm/provider";
 import { costOfUsage } from "./pricing";
 import type { ChannelId } from "./channels/shared";
+import { guardReply } from "./blindaje/verify";
+import type { SearchKbResult } from "./tools/searchKb";
+import { SettingsRepo, SETTING_KEYS } from "./db/settings";
+import { renderBusinessContext } from "./businessContext";
 
 export interface SupportAgentState {
   conversationId: string | null;
@@ -237,10 +241,23 @@ export class SupportAgent extends Agent<Env, SupportAgentState> {
       }
     }
 
+    // Blindaje anti-invento: pasajes de KB consultados ESTE turno. searchKb
+    // los reporta vía callback — el verificador pre-envío los usa como fuente
+    // de verdad. De paso revive lastSearchKbScore (antes era un campo muerto:
+    // se leía para selectModel pero nunca se actualizaba con el score real).
+    let turnKbPassages: SearchKbResult[] = [];
+    let turnUsedKb = false;
+    let lastKbTopScore = 1;
+
     // Build tools registry (tier-gated in buildTools)
     const tools = buildTools({
       env: this.env,
       getConversationId: () => convId,
+      onSearchKb: (results) => {
+        turnUsedKb = true;
+        turnKbPassages = [...turnKbPassages, ...results].slice(-10);
+        lastKbTopScore = results[0]?.score ?? 0;
+      },
     });
     const toolNames = Object.keys(tools);
 
@@ -405,6 +422,35 @@ export class SupportAgent extends Agent<Env, SupportAgentState> {
       }
     }
 
+    // ── Blindaje anti-invento (Pro): verificación pre-envío ──────────────────
+    // Antes de mandar una respuesta que afirme datos (precio/horario/promesa),
+    // se contrasta contra los pasajes de KB del turno + contexto del negocio +
+    // el system prompt activo. Sin respaldo → sale un "déjame confirmarlo" y
+    // se avisa al dueño (ticket, misma maquinaria del handoff). FAIL-OPEN:
+    // cualquier error/timeout del verificador manda la respuesta original
+    // intacta — jamás bloquea un envío.
+    if (assistantText) {
+      try {
+        const settings = new SettingsRepo(db);
+        const businessContext =
+          (await settings.get(SETTING_KEYS.businessContext)) || renderBusinessContext();
+        const guard = await guardReply(this.env, {
+          replyText: assistantText,
+          turnUsedKb,
+          kbPassages: turnKbPassages,
+          businessContext,
+          systemPrompt: cfg.systemPrompt,
+          conversationId: convId,
+          llm: cfg.llm,
+        });
+        if (guard.action === "replaced") {
+          assistantText = guard.finalText;
+        }
+      } catch (e) {
+        console.warn("[blindaje] guard falló — fail-open, va la respuesta original:", e);
+      }
+    }
+
     // Persist assistant message (with usage + model_used + tool calls)
     await msgs.append(convId, "assistant", assistantText, {
       modelUsed: usedModelId,
@@ -414,10 +460,14 @@ export class SupportAgent extends Agent<Env, SupportAgentState> {
       toolCalls: toolCallsMade.length > 0 ? toolCallsMade : undefined,
     });
 
-    // Update state for next turn
+    // Update state for next turn. lastSearchKbScore = score top-1 de la última
+    // búsqueda en KB del turno: si vino débil (<0.5) el selector sube a "smart"
+    // el siguiente turno (upgrade/modelSelector). Sin búsqueda este turno
+    // regresa a neutral (1) — el boost dura un turno.
     this.setState({
       ...this.state,
       toolCallsInLast2Turns: toolCallCount,
+      lastSearchKbScore: turnUsedKb ? lastKbTopScore : 1,
     });
 
     // Chunk + send via the channel adapter

@@ -1,6 +1,6 @@
 import type { Env } from "../env";
 import { isPro } from "../config";
-import { searchKbTool } from "./searchKb";
+import { searchKbTool, type SearchKbResult } from "./searchKb";
 import { handoffHumanTool } from "./handoffHuman";
 import { pauseBotTool } from "./pauseBot";
 import { snoozeUserTool } from "./snoozeUser";
@@ -14,6 +14,8 @@ import { cancelAppointmentTool } from "./cancelAppointment";
 export interface ToolContext {
   env: Env;
   getConversationId: () => string | null;
+  /** Blindaje/selector de modelo: se entera de qué trajo searchKb ESTE turno. */
+  onSearchKb?: (results: SearchKbResult[]) => void;
 }
 
 export function buildTools(ctx: ToolContext) {
@@ -21,7 +23,7 @@ export function buildTools(ctx: ToolContext) {
   // captura prospectos — es el valor central de un bot de ventas. Lo Pro son las
   // tools más avanzadas por nicho (agendar citas, consultar catálogo/inventario).
   const tools: Record<string, any> = {
-    searchKb: searchKbTool(ctx.env),
+    searchKb: searchKbTool(ctx.env, ctx.onSearchKb),
     handoffHuman: handoffHumanTool(ctx.env, ctx.getConversationId),
     pauseBot: pauseBotTool(ctx.env, ctx.getConversationId),
     snoozeUser: snoozeUserTool(ctx.env, ctx.getConversationId),
