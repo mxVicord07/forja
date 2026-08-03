@@ -273,3 +273,34 @@ CREATE TABLE IF NOT EXISTS risk_alerts (
   sent_at          INTEGER NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_risk_alerts_time ON risk_alerts(sent_at);
+
+-- Encuestas de satisfacción (Pro) — una fila por conversación que ever
+-- recibió la encuesta. PRIMARY KEY = claim de envío único de por vida.
+-- score 1-5 se llena cuando el cliente responde — sin respuesta queda NULL.
+CREATE TABLE IF NOT EXISTS survey_sends (
+  conversation_id TEXT    PRIMARY KEY,
+  sent_at          INTEGER NOT NULL,
+  score            INTEGER,
+  responded_at     INTEGER
+);
+CREATE INDEX IF NOT EXISTS idx_survey_sends_time ON survey_sends(sent_at);
+
+-- Opiniones abiertas de la encuesta (modo "abierto"/"ambos"): el texto libre
+-- que el cliente escribe en vez de/además del número. Complementa el score
+-- de survey_sends. Tabla aparte para no requerir ALTER en bases existentes.
+CREATE TABLE IF NOT EXISTS survey_open_responses (
+  conversation_id TEXT    PRIMARY KEY,
+  response_text    TEXT    NOT NULL,
+  created_at       INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_survey_open_time ON survey_open_responses(created_at);
+
+-- Pide reseñas (Pro) — una fila por conversación que ever recibió la
+-- invitación a dejar reseña. Comparte selección/clasificación con las
+-- encuestas (mismo cron, ver followup/outreach.ts) — inactiva hasta que el
+-- dueño configure review_url.
+CREATE TABLE IF NOT EXISTS review_requests (
+  conversation_id TEXT    PRIMARY KEY,
+  sent_at          INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_review_requests_time ON review_requests(sent_at);

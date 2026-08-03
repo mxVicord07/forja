@@ -53,6 +53,15 @@ export const SETTING_KEYS = {
   // Marca de tiempo del último envío — throttle para no duplicar en el
   // doble-tick del cron.
   dailyReportLastAt: "daily_report_last_at",
+  // Encuesta de satisfacción (Pro): interruptor del dueño — "1" = encendido,
+  // default OFF (opt-in, igual que daily_report).
+  satisfactionSurvey: "satisfaction_survey",
+  // "numerico" (default) | "abierto" | "ambos" — qué le pide la encuesta al cliente.
+  surveyMode: "survey_mode",
+  // Pide reseñas (Pro): comparte motor con la encuesta (followup/outreach.ts).
+  // Inactiva hasta que además haya reviewUrl configurada.
+  reviewRequests: "review_requests",
+  reviewUrl: "review_url",
 } as const;
 
 export type SettingKey = (typeof SETTING_KEYS)[keyof typeof SETTING_KEYS];

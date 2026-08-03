@@ -279,6 +279,15 @@ export default {
     const { runFollowups } = await import("./followup/run");
     await runFollowups(env).catch((e) => console.error("followups:", e));
 
+    // Outreach post-conversación (Pro, opt-in): encuesta de satisfacción y/o
+    // invitación a reseña, un toque por conversación de por vida.
+    const { runOutreach } = await import("./followup/outreach");
+    await runOutreach(env).catch((e) => console.error("outreach:", e));
+    // Captura la respuesta a la encuesta (el número que el cliente contestó)
+    // y avisa al dueño si la calificación fue baja.
+    const { captureSurveyResponses } = await import("./followup/surveyResponse");
+    await captureSurveyResponses(env).catch((e) => console.error("surveyResponse:", e));
+
     // Watchdog: si el bot está fallando en cadena (3+ "Algo falló" en 30 min),
     // avisa al dueño por su canal de handoff. Throttle 6h. Lo ÚNICO que debe
     // despertarlo en la noche.
