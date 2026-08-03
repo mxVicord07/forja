@@ -263,3 +263,13 @@ CREATE TABLE IF NOT EXISTS appointment_change_requests (
 );
 CREATE INDEX IF NOT EXISTS idx_change_requests_appt
   ON appointment_change_requests(appointment_id, status);
+
+-- Vigilante con IA (Pro): claim de "ya se avisó" para no alertar dos veces la
+-- misma conversación. PRIMARY KEY en conversation_id = una alerta de por vida
+-- por conversación, sin importar cuántas veces se re-analice.
+CREATE TABLE IF NOT EXISTS risk_alerts (
+  conversation_id TEXT    PRIMARY KEY,
+  reason           TEXT    NOT NULL,
+  sent_at          INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_risk_alerts_time ON risk_alerts(sent_at);

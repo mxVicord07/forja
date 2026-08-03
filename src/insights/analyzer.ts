@@ -10,6 +10,9 @@
  * Insights tab). TODO: also wire into `scheduled()` in src/index.ts for a
  * nightly run — deferred while that file is being reworked on another branch
  * of work (channels/meta).
+ *
+ * Also runs the Vigilante risk-alert hook (./alerts.ts) after each grading:
+ * whatever triggers this function automatically covers Vigilante too.
  */
 import { generateText } from "ai";
 import { z } from "zod";
@@ -20,6 +23,7 @@ import { InsightsRepo, type UpsertInsightInput } from "../db/insights";
 import { CustomerFactsRepo } from "../db/facts";
 import { createModel } from "../llm/provider";
 import { loadLlmOverrides } from "../settings-loader";
+import { maybeAlertRisk } from "./alerts";
 
 /** A conversation counts as "closed" after this much silence. */
 export const IDLE_MS = 3 * 60 * 60 * 1000; // 3h
@@ -206,6 +210,27 @@ export async function analyzeConversations(
       if (insight.customer_facts.length > 0) {
         await new CustomerFactsRepo(db).addMany(conv.id, insight.customer_facts);
       }
+
+      // [Vigilante] Alerta de riesgo (Pro): cliente molesto o venta abierta
+      // sin resolver → aviso al dueño (misma maquinaria que handoff).
+      // Best-effort: el análisis YA quedó guardado arriba — una falla del
+      // aviso se loguea y jamás cuenta como error del Analista.
+      try {
+        await maybeAlertRisk(
+          env,
+          conv.id,
+          {
+            sentiment: insight.sentiment,
+            resolution: insight.resolution,
+            saleOpportunity: insight.sale_opportunity,
+            summary: insight.summary,
+          },
+          now,
+        );
+      } catch (e) {
+        console.error(`[insights] risk alert failed for ${conv.id}:`, e);
+      }
+
       analyzed++;
     } catch (e) {
       errors++;
