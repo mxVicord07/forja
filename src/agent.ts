@@ -22,6 +22,7 @@ import { guardReply } from "./blindaje/verify";
 import type { SearchKbResult } from "./tools/searchKb";
 import { SettingsRepo, SETTING_KEYS } from "./db/settings";
 import { renderBusinessContext } from "./businessContext";
+import { maskTelegramToken, unmaskTelegramToken } from "./telegramFiles";
 
 export interface SupportAgentState {
   conversationId: string | null;
@@ -143,9 +144,11 @@ export class SupportAgent extends Agent<Env, SupportAgentState> {
           (processedText || "") +
           "\n(El cliente mandó una imagen, pero tu plan no soporta análisis de imágenes.)";
       } else {
+        // Telegram file URLs carry the bot token (see src/telegramFiles.ts) —
+        // mask it before this text is persisted to D1.
         processedText =
           (processedText || "(imagen sin caption)") +
-          `\n[IMAGE_URL: ${payload.imageUrl}]`;
+          `\n[IMAGE_URL: ${maskTelegramToken(payload.imageUrl)}]`;
       }
     }
 
@@ -231,7 +234,9 @@ export class SupportAgent extends Agent<Env, SupportAgentState> {
     if (lastUserMsg) {
       const imgMatch = lastUserMsg.content.match(/\[IMAGE_URL: (.+?)\]/);
       if (imgMatch && isPro(this.env)) {
-        const imageUrl = imgMatch[1];
+        // Put the token back (if this was a masked Telegram URL) right before
+        // fetching the file — see src/telegramFiles.ts.
+        const imageUrl = unmaskTelegramToken(imgMatch[1], this.env.TELEGRAM_BOT_TOKEN);
         const cleanText = lastUserMsg.content
           .replace(/\n?\[IMAGE_URL: .+?\]/, "")
           .trim();
