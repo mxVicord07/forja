@@ -30,30 +30,46 @@ describe("normalizeForSpam", () => {
 });
 
 describe("isRepeatSpam", () => {
+  const NOW = 1_800_000_000_000;
+
   it("mismo mensaje por 3ª vez entre los últimos 5 → spam", async () => {
-    await addUserMsg("compra mi curso ya", 1000);
-    await addUserMsg("hola", 2000);
-    await addUserMsg("COMPRA MI CURSO YA", 3000);
-    expect(await isRepeatSpam(db, convId, "compra mi curso ya!")).toBe(false); // "!" lo hace distinto
-    expect(await isRepeatSpam(db, convId, "Compra mi curso ya")).toBe(true);
+    await addUserMsg("compra mi curso ya", NOW - 3000);
+    await addUserMsg("hola", NOW - 2000);
+    await addUserMsg("COMPRA MI CURSO YA", NOW - 1000);
+    expect(await isRepeatSpam(db, convId, "compra mi curso ya!", NOW)).toBe(false); // "!" lo hace distinto
+    expect(await isRepeatSpam(db, convId, "Compra mi curso ya", NOW)).toBe(true);
   });
 
   it("una repetición aislada no es spam", async () => {
-    await addUserMsg("¿cuánto cuesta?", 1000);
-    expect(await isRepeatSpam(db, convId, "¿cuánto cuesta?")).toBe(false);
+    await addUserMsg("¿cuánto cuesta?", NOW - 1000);
+    expect(await isRepeatSpam(db, convId, "¿cuánto cuesta?", NOW)).toBe(false);
   });
 
   it("solo mira los últimos 5 mensajes", async () => {
-    await addUserMsg("promo", 1000);
-    await addUserMsg("promo", 2000);
-    for (let i = 0; i < 5; i++) await addUserMsg(`otro ${i}`, 3000 + i);
-    expect(await isRepeatSpam(db, convId, "promo")).toBe(false);
+    await addUserMsg("promo", NOW - 6000);
+    await addUserMsg("promo", NOW - 5000);
+    for (let i = 0; i < 5; i++) await addUserMsg(`otro ${i}`, NOW - 4000 + i);
+    expect(await isRepeatSpam(db, convId, "promo", NOW)).toBe(false);
   });
 
   it("mensajes ultracortos no cuentan", async () => {
-    await addUserMsg("k", 1000);
-    await addUserMsg("k", 2000);
-    expect(await isRepeatSpam(db, convId, "k")).toBe(false);
+    await addUserMsg("k", NOW - 2000);
+    await addUserMsg("k", NOW - 1000);
+    expect(await isRepeatSpam(db, convId, "k", NOW)).toBe(false);
+  });
+
+  it("una despedida repetida a lo largo de DÍAS distintos no es spam (incidente 2026-08-11)", async () => {
+    await addUserMsg("Gracias", NOW - 4 * 24 * 3600_000);
+    await addUserMsg("Gracias!", NOW - 3 * 24 * 3600_000);
+    await addUserMsg("Gracias", NOW - 2 * 24 * 3600_000);
+    await addUserMsg("Gracias!", NOW - 1 * 24 * 3600_000);
+    expect(await isRepeatSpam(db, convId, "gracias", NOW)).toBe(false);
+  });
+
+  it("flood real — 2 repeticiones en minutos SÍ es spam", async () => {
+    await addUserMsg("compra mi curso ya", NOW - 5 * 60_000);
+    await addUserMsg("compra mi curso ya", NOW - 2 * 60_000);
+    expect(await isRepeatSpam(db, convId, "compra mi curso ya", NOW)).toBe(true);
   });
 });
 

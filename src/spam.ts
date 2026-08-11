@@ -1,9 +1,16 @@
 // Guardrail anti-spam determinístico — corre ANTES del LLM, así el spam no
 // cuesta ni un token. Si el mensaje entrante es idéntico (normalizado) a 2+ de
-// los últimos 5 mensajes del usuario (es decir, va por la 3ª vez), la
-// conversación se manda "a descansar": paused_until = ahora + 1 hora y el bot
-// la ignora por completo. El caso abusivo-pero-variado (insultos, bots que
-// varían el texto) lo cubre la tool snoozeUser, que decide el LLM.
+// los últimos 5 mensajes del usuario EN LA VENTANA RECIENTE (SPAM_WINDOW_MS —
+// es decir, va por la 3ª vez EN POCO TIEMPO), la conversación se manda "a
+// descansar": paused_until = ahora + 1 hora y el bot la ignora por completo.
+// El caso abusivo-pero-variado (insultos, bots que varían el texto) lo cubre
+// la tool snoozeUser, que decide el LLM.
+//
+// La ventana de tiempo existe porque sin ella, una despedida habitual como
+// "Gracias" repetida a lo largo de DÍAS distintos (cerrar cada conversación
+// así, no flood) contaba igual que 3 mensajes idénticos en segundos — pausaba
+// al cliente por una hora sin ningún error visible. Incidente real:
+// 2026-08-11, conversación whatsapp:524441796793.
 import { Db } from "./db/client";
 
 export const SPAM_SNOOZE_MS = 60 * 60_000;
@@ -11,6 +18,9 @@ export const SPAM_SNOOZE_MS = 60 * 60_000;
 const SPAM_LOOKBACK = 5;
 // El entrante + 2 iguales previos = 3ª repetición → cooldown.
 const SPAM_REPEATS = 2;
+// Solo cuentan repeticiones dentro de esta ventana — flood real es cuestión de
+// minutos, no un mismo cierre de conversación reaparecido días después.
+const SPAM_WINDOW_MS = 15 * 60_000;
 
 /** "  ¡HOLA!! " → "¡hola!!" no — quita acentos/espacios extra y baja a minúsculas. */
 export function normalizeForSpam(text: string): string {
@@ -26,14 +36,15 @@ export async function isRepeatSpam(
   db: Db,
   conversationId: string,
   text: string,
+  now = Date.now(),
 ): Promise<boolean> {
   const norm = normalizeForSpam(text);
   if (norm.length < 2) return false; // "ok"/"sí" sueltos no cuentan como spam
   const rows = await db.all<{ content: string }>(
     `SELECT content FROM messages
-     WHERE conversation_id = ? AND role = 'user'
+     WHERE conversation_id = ? AND role = 'user' AND created_at > ?
      ORDER BY created_at DESC LIMIT ?`,
-    [conversationId, SPAM_LOOKBACK],
+    [conversationId, now - SPAM_WINDOW_MS, SPAM_LOOKBACK],
   );
   const same = rows.filter((r) => normalizeForSpam(r.content) === norm).length;
   return same >= SPAM_REPEATS;
