@@ -77,6 +77,11 @@ export interface Env {
   YCLOUD_WEBHOOK_SECRET?: string;  // whsec_… del endpoint: firma entrante + URLs de media
   YCLOUD_WA_FROM?: string;         // número emisor en E.164, p.ej. +524444237875
 
+  // Export externo de leads capturados (captureLead) — hoy apunta al workflow
+  // "BIRevX_Forja_Lead_to_Odoo" en n8n, que crea el crm.lead en Odoo BIRevX.
+  // Ausente = sin export, el lead solo queda en D1 (comportamiento actual).
+  LEAD_EXPORT_WEBHOOK_URL?: string;
+
   // ── Cal.com (agenda real para scheduleAppointment) ───────────────────────
   // Con estas vars, el bot consulta disponibilidad real y reserva en Cal.com.
   // Sin ellas, scheduleAppointment solo registra la cita para que el dueño la confirme.

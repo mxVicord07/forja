@@ -39,6 +39,7 @@ BUFFER_SECONDS = "15"
 DASHBOARD_BASE_URL = "https://birevx-support-bot.victor-m-426.workers.dev"
 WA_PROVIDER = "ycloud"
 YCLOUD_WA_FROM = "+524444237875"
+LEAD_EXPORT_WEBHOOK_URL = "https://n8n.birevx.com/webhook/forja-lead-to-odoo"
 
 # Secrets (set with `wrangler secret put <NAME>` — never commit values):
 #   ANTHROPIC_API_KEY          required — Claude API
