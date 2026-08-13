@@ -154,48 +154,59 @@ app.get("/webhooks/whatsapp", (c) => {
 // evento = un mensaje. Con Meta (default, comportamiento original e intacto):
 // X-Hub-Signature-256 y un POST puede traer varios mensajes.
 app.post("/webhooks/whatsapp", async (c) => {
-  const raw = await c.req.text();
-  const origin = c.env.DASHBOARD_BASE_URL || new URL(c.req.url).origin;
+  // Sin este try/catch, cualquier excepción (D1/DO momentáneamente lento,
+  // etc.) caía al error handler genérico de Hono — "Internal Server Error"
+  // sin loggear nada nuestro. YCloud reintenta con backoff, así que el
+  // mensaje eventualmente llega, pero nosotros nos quedábamos ciegos:
+  // el único rastro del fallo vivía en el panel de reintentos de YCloud,
+  // no en nuestros propios logs. Mismo patrón que ya usa routeToAgent().
+  try {
+    const raw = await c.req.text();
+    const origin = c.env.DASHBOARD_BASE_URL || new URL(c.req.url).origin;
 
-  if (resolveWaProvider(c.env) === "ycloud") {
-    const ok = await verifyYCloudSignature(
-      raw,
-      c.req.header("YCloud-Signature"),
-      c.env.YCLOUD_WEBHOOK_SECRET ?? "",
-    );
-    if (!ok) return c.text("bad signature", 403);
+    if (resolveWaProvider(c.env) === "ycloud") {
+      const ok = await verifyYCloudSignature(
+        raw,
+        c.req.header("YCloud-Signature"),
+        c.env.YCLOUD_WEBHOOK_SECRET ?? "",
+      );
+      if (!ok) return c.text("bad signature", 403);
+      let body: unknown;
+      try {
+        body = JSON.parse(raw);
+      } catch {
+        return c.text("bad json", 400);
+      }
+      // Un evento = un mensaje (YCloud no batchea). null = recibo de estado o
+      // tipo no soportado: 200 igual, o YCloud reintenta.
+      const msg = await parseYCloudEvent(body, c.env, origin);
+      if (msg) {
+        const doId = c.env.AGENT.idFromName(`${msg.channel}:${msg.channelUserId}`);
+        await c.env.AGENT.get(doId).ingest(msg);
+      }
+      return c.text("EVENT_RECEIVED", 200);
+    }
+
+    // --- Cloud API directo de Meta (comportamiento original) ---
+    const sig = c.req.header("x-hub-signature-256");
+    const secret = c.env.WHATSAPP_APP_SECRET || c.env.META_APP_SECRET;
+    const valid = !!secret && (await verifyMetaSignature(raw, sig, secret));
+    if (!valid) return c.text("bad signature", 403);
     let body: unknown;
     try {
       body = JSON.parse(raw);
     } catch {
       return c.text("bad json", 400);
     }
-    // Un evento = un mensaje (YCloud no batchea). null = recibo de estado o
-    // tipo no soportado: 200 igual, o YCloud reintenta.
-    const msg = await parseYCloudEvent(body, c.env, origin);
-    if (msg) {
+    for (const msg of await parseWhatsAppEvents(body as any, c.env, origin)) {
       const doId = c.env.AGENT.idFromName(`${msg.channel}:${msg.channelUserId}`);
       await c.env.AGENT.get(doId).ingest(msg);
     }
     return c.text("EVENT_RECEIVED", 200);
+  } catch (e: any) {
+    console.error("[webhooks/whatsapp] error:", e);
+    return c.text(`err: ${e?.message ?? e}`, 500);
   }
-
-  // --- Cloud API directo de Meta (comportamiento original) ---
-  const sig = c.req.header("x-hub-signature-256");
-  const secret = c.env.WHATSAPP_APP_SECRET || c.env.META_APP_SECRET;
-  const valid = !!secret && (await verifyMetaSignature(raw, sig, secret));
-  if (!valid) return c.text("bad signature", 403);
-  let body: unknown;
-  try {
-    body = JSON.parse(raw);
-  } catch {
-    return c.text("bad json", 400);
-  }
-  for (const msg of await parseWhatsAppEvents(body as any, c.env, origin)) {
-    const doId = c.env.AGENT.idFromName(`${msg.channel}:${msg.channelUserId}`);
-    await c.env.AGENT.get(doId).ingest(msg);
-  }
-  return c.text("EVENT_RECEIVED", 200);
 });
 
 // Proxy FIRMADO del media entrante de WhatsApp Cloud (audio/imagen). Hace el
