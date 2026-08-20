@@ -21,7 +21,14 @@ export default defineConfig({
     environment: "node",
     include: ["test/**/*.test.ts"],
     pool: "forks",
-    poolOptions: { forks: { singleFork: true } },
+    // Vitest 4 ELIMINÓ `poolOptions`; el antiguo `forks.singleFork` se ignoraba
+    // en silencio y cada archivo levantaba su propio workerd en paralelo, lo que
+    // agota el loopback (EADDRNOTAVAIL al bind de 127.0.0.1). Casi todos estos
+    // tests arrancan un Miniflare real con el esquema D1 completo, así que la
+    // serialización no es una preferencia: es un requisito.
+    // Medido el 2026-08-19: en paralelo 96/717 fallan por bind; serializado
+    // 717/717 pasan. Equivale a `--no-file-parallelism`.
+    fileParallelism: false,
     // Most tests spin up a real Miniflare (workerd process + full D1 schema)
     // in beforeEach; under machine load that alone can blow the 5s default.
     // These are integration tests — give them real headroom.
