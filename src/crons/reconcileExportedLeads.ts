@@ -26,10 +26,10 @@ export async function reconcileExportedLeads(env: Env): Promise<void> {
 
   for (const lead of candidates) {
     try {
-      // La fila de `leads` no guarda el canal de origen (no hay columna
-      // `channel` en el schema) — si nunca se capturó en el momento de
-      // captureLead, se pierde. Limitación aceptable de este job de
-      // reconciliación: no vale la pena rediseñar el schema solo por esto.
+      // `leads` no tiene columna `channel` propia, pero conversation_id tiene
+      // la forma "<channel>:<channelUserId>" (db/conversations.ts) — se
+      // recupera el canal real de ahí sin tocar el schema ni hacer un JOIN.
+      const channel = lead.conversation_id?.split(":")[0] || "unknown";
       const { exported, externalId } = await exportLeadToOdoo(env, {
         leadId: lead.id,
         conversationId: lead.conversation_id,
@@ -37,7 +37,7 @@ export async function reconcileExportedLeads(env: Env): Promise<void> {
         contact: lead.contact ?? undefined,
         intent: lead.intent,
         notes: lead.notes ?? undefined,
-        channel: "unknown",
+        channel,
       });
       if (exported) {
         await leads.setExported(lead.id, "odoo", externalId!);

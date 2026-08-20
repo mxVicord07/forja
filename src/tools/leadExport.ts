@@ -6,7 +6,11 @@ export interface ParsedContact {
   otherContact?: string;
 }
 
-const EMAIL_RE = /[\w.+-]+@[\w-]+\.[a-zA-Z]{2,}/;
+// Dominios de más de una etiqueta (".com.mx", ".correo.uaslp.mx") son
+// cotidianos en México — sin el grupo repetido, la regex cortaba el dominio
+// en la primera etiqueta y mandaba a Odoo un correo sintácticamente válido
+// pero inexistente (misma clase de bug que el de producción del 20-ago).
+const EMAIL_RE = /[\w.+-]+@[\w-]+(?:\.[\w-]+)*\.[a-zA-Z]{2,}/;
 // Secuencia de dígitos con separadores típicos de teléfono (espacios, guiones,
 // paréntesis, +) intercalados — 7 a 15 dígitos tras limpiar no-dígitos.
 const PHONE_RE = /(?:\+?\d[\d\s\-().]*){7,20}/;
@@ -39,16 +43,13 @@ export function parseContactInfo(raw: string | undefined): ParsedContact {
     }
   }
 
-  // Limpia separadores sueltos que quedaron entre las partes removidas
-  // ("/", ",", " y ", espacios extra) y basura de puntuación pura.
-  const leftover = rest
-    .replace(/[/,]/g, " ")
-    .replace(/\by\b/gi, " ")
-    .replace(/\s+/g, " ")
-    .trim();
-
-  if (leftover.length > 2 && /[a-zA-Z0-9]/.test(leftover)) {
-    result.otherContact = leftover;
+  // Solo se captura un alias reconocible (@handle) del texto sobrante, NO
+  // el texto libre completo — frases naturales como "mi whats es X y mi
+  // correo es Y" dejaban basura tipo "mi whats es mi correo" en otherContact,
+  // que viajaba tal cual al chatter del CRM.
+  const handleMatch = rest.match(/@[\w.]{2,}/);
+  if (handleMatch) {
+    result.otherContact = handleMatch[0];
   }
 
   return result;

@@ -11,12 +11,25 @@ describe("parseContactInfo", () => {
   it("alias de Instagram junto a teléfono", () => {
     const result = parseContactInfo("@mi_negocio_ig, tel 5551234567");
     expect(result.phone).toBe("5551234567");
-    expect(result.otherContact).toContain("@mi_negocio_ig");
+    expect(result.otherContact).toBe("@mi_negocio_ig");
   });
 
   it("solo email", () => {
     const result = parseContactInfo("cliente@ejemplo.com");
     expect(result).toEqual({ email: "cliente@ejemplo.com" });
+  });
+
+  it("correo con dominio de más de una etiqueta (.com.mx) no se trunca", () => {
+    const result = parseContactInfo("juan@empresa.com.mx");
+    expect(result.email).toBe("juan@empresa.com.mx");
+    expect(result.otherContact).toBeUndefined();
+  });
+
+  it("frase natural en español no ensucia otherContact con texto suelto", () => {
+    const result = parseContactInfo("mi whats es 5551234567 y mi correo perro@gmail.com");
+    expect(result.phone).toBe("5551234567");
+    expect(result.email).toBe("perro@gmail.com");
+    expect(result.otherContact).toBeUndefined();
   });
 
   it("solo teléfono", () => {
@@ -35,6 +48,6 @@ describe("parseContactInfo", () => {
     const result = parseContactInfo("en instagram soy @tal_negocio");
     expect(result.phone).toBeUndefined();
     expect(result.email).toBeUndefined();
-    expect(result.otherContact).toContain("@tal_negocio");
+    expect(result.otherContact).toBe("@tal_negocio");
   });
 });

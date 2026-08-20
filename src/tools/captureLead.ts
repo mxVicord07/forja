@@ -43,8 +43,16 @@ export function captureLeadTool(
         notes,
         channel: getChannel() ?? env.BOT_NAME,
       });
+      // try/catch propio: si setExported falla (D1), NO debe propagarse — un
+      // throw aquí tumba la generación, dispara el failover de agent.ts, y el
+      // modelo re-ejecuta esta misma tool (segundo lead + segunda exportación).
+      // El lead ya está a salvo en D1; el cron de reconciliación lo recoge.
       if (exported) {
-        await leads.setExported(leadId, "odoo", externalId!);
+        try {
+          await leads.setExported(leadId, "odoo", externalId!);
+        } catch (err) {
+          console.error("[captureLead] setExported falló (D1):", err);
+        }
       }
 
       return { leadId, message: "Lead capturado." };
