@@ -3,8 +3,13 @@ import { z } from "zod";
 import type { Env } from "../env";
 import { Db } from "../db/client";
 import { LeadsRepo } from "../db/leads";
+import { exportLeadToOdoo } from "./leadExport";
 
-export function captureLeadTool(env: Env, getConversationId: () => string | null) {
+export function captureLeadTool(
+  env: Env,
+  getConversationId: () => string | null,
+  getChannel: () => string | null,
+) {
   return tool({
     description:
       "Captura un lead (cliente interesado) para que el dueño venda después. Guarda en D1 + opcionalmente lo exporta a Odoo (vía webhook n8n) si LEAD_EXPORT_WEBHOOK_URL está configurado.",
@@ -26,34 +31,20 @@ export function captureLeadTool(env: Env, getConversationId: () => string | null
         notes,
       });
 
-      // Optional external export — hoy: push a Odoo BIRevX vía workflow n8n
-      // (BIRevX_Forja_Lead_to_Odoo). Nunca bloquea ni rompe la respuesta al
-      // usuario: si el webhook falla, no responde JSON, o no está
-      // configurado, el lead ya quedó a salvo en D1 arriba.
-      if (env.LEAD_EXPORT_WEBHOOK_URL) {
-        try {
-          const res = await fetch(env.LEAD_EXPORT_WEBHOOK_URL, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              leadId,
-              conversationId: convId,
-              name,
-              contact,
-              intent,
-              notes,
-              channel: env.BOT_NAME,
-            }),
-          });
-          // El workflow responde { ok: true, odoo_lead_id: <id numérico> } —
-          // ese es el ID real del crm.lead recién creado en Odoo.
-          const data = (await res.json()) as { ok?: boolean; odoo_lead_id?: number };
-          if (data?.ok && data.odoo_lead_id != null) {
-            await leads.setExported(leadId, "odoo", String(data.odoo_lead_id));
-          }
-        } catch (err) {
-          console.error("[captureLead] export a Odoo falló:", err);
-        }
+      // Export opcional a Odoo (vía workflow n8n BIRevX_Forja_Lead_to_Odoo).
+      // Fail-soft: exportLeadToOdoo nunca truena, así que esto nunca bloquea
+      // ni rompe la respuesta al usuario — el lead ya quedó a salvo en D1.
+      const { exported, externalId } = await exportLeadToOdoo(env, {
+        leadId,
+        conversationId: convId,
+        name,
+        contact,
+        intent,
+        notes,
+        channel: getChannel() ?? env.BOT_NAME,
+      });
+      if (exported) {
+        await leads.setExported(leadId, "odoo", externalId!);
       }
 
       return { leadId, message: "Lead capturado." };

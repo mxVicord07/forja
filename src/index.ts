@@ -11,6 +11,7 @@ import { resolveWaProvider } from "./replies/sender";
 import { adminApp } from "./admin/routes";
 import { purgeOldMessages } from "./crons/purgeOldMessages";
 import { purgeOldSettingsHistory } from "./crons/purgeOldSettingsHistory";
+import { reconcileExportedLeads } from "./crons/reconcileExportedLeads";
 import { reindexKb } from "./kb/reindex";
 import { analyzeConversations } from "./insights/analyzer";
 import { Db } from "./db/client";
@@ -308,6 +309,11 @@ export default {
     // despertarlo en la noche.
     const { checkBotHealth } = await import("./watchdog");
     await checkBotHealth(env).catch((e) => console.error("watchdog:", e));
+
+    // Reconciliación de leads sin exportar a Odoo (webhook caído/timeout en el
+    // momento de captureLead). Corre cada hora — reintento a lo sumo con ~1h
+    // de retraso, ventana de 72h. Nunca truena por un lead individual.
+    await reconcileExportedLeads(env).catch((e) => console.error("reconcileExportedLeads:", e));
 
     // Los trabajos nocturnos SOLO corren en el tick diario (3am UTC) — un tick
     // más frecuente (si el miembro lo configura) no debe purgar/analizar de más.

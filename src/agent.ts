@@ -263,6 +263,7 @@ export class SupportAgent extends Agent<Env, SupportAgentState> {
         turnKbPassages = [...turnKbPassages, ...results].slice(-10);
         lastKbTopScore = results[0]?.score ?? 0;
       },
+      getChannel: () => this.state.channel ?? null,
     });
     const toolNames = Object.keys(tools);
 

@@ -93,6 +93,14 @@ export class LeadsRepo {
     );
   }
 
+  /** Leads sin exportar aún (exported_to IS NULL), creados desde `sinceMs`, para el cron de reconciliación. */
+  async listUnexported(sinceMs: number, limit: number): Promise<Lead[]> {
+    return this.db.all<Lead>(
+      "SELECT * FROM leads WHERE exported_to IS NULL AND created_at >= ? ORDER BY created_at ASC LIMIT ?",
+      [sinceMs, limit],
+    );
+  }
+
   async setExported(id: string, target: string, externalId: string): Promise<void> {
     await this.db.run(
       "UPDATE leads SET exported_to = ?, external_id = ?, updated_at = ? WHERE id = ?",

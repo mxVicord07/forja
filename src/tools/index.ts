@@ -16,6 +16,10 @@ export interface ToolContext {
   getConversationId: () => string | null;
   /** Blindaje/selector de modelo: se entera de qué trajo searchKb ESTE turno. */
   onSearchKb?: (results: SearchKbResult[]) => void;
+  /** Canal real de la conversación (telegram, whatsapp…) — usado por captureLead al exportar.
+   *  Opcional para no romper callers que solo listan nombres de tools (admin/*); si falta,
+   *  captureLeadTool cae a env.BOT_NAME como antes. */
+  getChannel?: () => string | null;
 }
 
 export function buildTools(ctx: ToolContext) {
@@ -27,7 +31,7 @@ export function buildTools(ctx: ToolContext) {
     handoffHuman: handoffHumanTool(ctx.env, ctx.getConversationId),
     pauseBot: pauseBotTool(ctx.env, ctx.getConversationId),
     snoozeUser: snoozeUserTool(ctx.env, ctx.getConversationId),
-    captureLead: captureLeadTool(ctx.env, ctx.getConversationId),
+    captureLead: captureLeadTool(ctx.env, ctx.getConversationId, ctx.getChannel ?? (() => null)),
   };
 
   // Pro tier additions

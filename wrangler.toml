@@ -67,7 +67,10 @@ YCLOUD_WA_FROM = "+524444237875"
 #   CONTROL_PLANE_URL          optional (var) — base URL of the control plane (future reports / license check)
 
 [triggers]
-crons = ["0 3 * * *"]  # daily 3am UTC: purge old messages
+crons = [
+  "0 3 * * *",  # daily 3am UTC: purge old messages + nightly analysis/reports (guarded in index.ts)
+  "0 * * * *",  # hourly: evalúa ventanas de follow-up/outreach/reengage a tiempo (2026-08-20)
+]
 
 # DASHBOARD_PASSWORD  (secret) — HTTP Basic Auth password for the admin dashboard; username is always "admin".
 # Set it with: wrangler secret put DASHBOARD_PASSWORD
