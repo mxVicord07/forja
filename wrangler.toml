@@ -39,9 +39,15 @@ BUFFER_SECONDS = "15"
 DASHBOARD_BASE_URL = "https://birevx-support-bot.victor-m-426.workers.dev"
 WA_PROVIDER = "ycloud"
 YCLOUD_WA_FROM = "+524444237875"
-LEAD_EXPORT_WEBHOOK_URL = "https://n8n.birevx.com/webhook/forja-lead-to-odoo"
 
 # Secrets (set with `wrangler secret put <NAME>` — never commit values):
+#   LEAD_EXPORT_WEBHOOK_URL    optional — webhook de n8n que hace el upsert del lead
+#                              en Odoo. Vivia aqui en [vars] hasta 2026-08-19, pero
+#                              [vars] SE COMMITEA y este fork es publico: la URL
+#                              quedaba expuesta y el endpoint no autentica nada, o
+#                              sea que cualquiera podia inyectar leads en el CRM.
+#                              Ahora es secret, con ruta no adivinable.
+#                              set con: wrangler secret put LEAD_EXPORT_WEBHOOK_URL
 #   ANTHROPIC_API_KEY          required — Claude API
 #   DASHBOARD_PASSWORD         required (Pro) — HTTP Basic Auth for /admin (user: admin)
 #   KB_REINDEX_TOKEN           required — guards POST /kb/reindex (header: X-Reindex-Token)
