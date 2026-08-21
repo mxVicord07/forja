@@ -24,6 +24,8 @@ export interface AgentConfig {
   monthlyBudgetUsd?: number;
   /** BYO-LLM del dashboard (proveedor / API key / modelo). */
   llm: LlmOverrides;
+  /** Mostrar "escribiendo…" mientras se prepara la respuesta (default ON). */
+  typingIndicator: boolean;
 }
 
 /** Extract the BYO-LLM overrides from a settings snapshot. */
@@ -137,6 +139,8 @@ export async function resolveAgentConfig(env: Env, toolNames: string[]): Promise
   const interChunkDelayMs = clamp(parseIntOr(get(SETTING_KEYS.interChunkDelayMs), 1000), 0, 5000);
   const modelOverride = normalizeModelOverride(get(SETTING_KEYS.modelOverride));
   const botPaused = get(SETTING_KEYS.botPaused) === "1";
+  // Default ON: solo un "0" explícito lo apaga.
+  const typingIndicator = get(SETTING_KEYS.typingIndicator) !== "0";
 
   const tempRaw = get(SETTING_KEYS.temperature);
   let temperature: number | undefined;
@@ -163,5 +167,6 @@ export async function resolveAgentConfig(env: Env, toolNames: string[]): Promise
     temperature,
     monthlyBudgetUsd,
     llm: llmOverridesFrom(settings),
+    typingIndicator,
   };
 }

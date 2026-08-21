@@ -1,4 +1,4 @@
-import type { ChannelAdapter, IncomingMessage, OutgoingReply } from "./shared";
+import type { ChannelAdapter, IncomingMessage, OutgoingReply, TypingContext } from "./shared";
 import type { Env } from "../env";
 
 const TG_API = "https://api.telegram.org/bot";
@@ -130,7 +130,12 @@ export const telegramAdapter: ChannelAdapter = {
     }
   },
 
-  async showTyping(channelUserId: string, env: Env): Promise<void> {
+  /**
+   * `sendChatAction: typing` — Telegram lo apaga solo a los ~5s o en cuanto
+   * llega el mensaje, así que el keepalive de src/replies/typing.ts lo
+   * re-enciende mientras el LLM piensa. No necesita `ctx`.
+   */
+  async showTyping(channelUserId: string, env: Env, _ctx: TypingContext): Promise<void> {
     const token = env.TELEGRAM_BOT_TOKEN;
     if (!token) return;
     await fetch(`${TG_API}${token}/sendChatAction`, {

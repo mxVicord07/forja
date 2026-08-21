@@ -99,6 +99,14 @@ describe("resolveAgentConfig", () => {
     await repo.set(SETTING_KEYS.botPaused, "0");
     expect((await resolveAgentConfig(env, TOOLS)).botPaused).toBe(false);
   });
+
+  it('typing_indicator viene encendido por default y solo un "0" explícito lo apaga', async () => {
+    expect((await resolveAgentConfig(env, TOOLS)).typingIndicator).toBe(true);
+    await repo.set(SETTING_KEYS.typingIndicator, "0");
+    expect((await resolveAgentConfig(env, TOOLS)).typingIndicator).toBe(false);
+    await repo.set(SETTING_KEYS.typingIndicator, "1");
+    expect((await resolveAgentConfig(env, TOOLS)).typingIndicator).toBe(true);
+  });
 });
 
 describe("resolveAgentConfig — disabled_tools", () => {

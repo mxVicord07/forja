@@ -16,7 +16,7 @@
 //    ambos producen idéntico channelUserId (unificado en el commit 90dd6a0;
 //    antes de ese fix whatsapp.ts NO normalizaba, así que este comentario
 //    habría sido falso).
-import type { ChannelAdapter, IncomingMessage, OutgoingReply } from "./shared";
+import type { ChannelAdapter, IncomingMessage, OutgoingReply, TypingContext } from "./shared";
 import { hmacHex, timingSafeEqual, normalizePhone, toWhatsAppMarkdown } from "./shared";
 import type { Env } from "../env";
 
@@ -116,6 +116,8 @@ export async function parseYCloudEvent(
   return {
     channel: "whatsapp",
     channelUserId: normalizePhone(from),
+    // Id del mensaje entrante (wamid): lo exige el indicador de "escribiendo…".
+    providerMessageId: m.id,
     displayName: m.customerProfile?.name,
     text,
     audioUrl,
@@ -226,6 +228,15 @@ export async function serveYCloudMedia(
 
 const SEND_URL = "https://api.ycloud.com/v2/whatsapp/messages";
 
+/**
+ * Acuse de lectura + "escribiendo…" en un solo POST, igual que Cloud API pero
+ * con forma propia de YCloud: la ruta lleva el id del mensaje ENTRANTE y no
+ * hay cuerpo. Se apaga solo al responder o a los 25s.
+ * https://docs.ycloud.com/reference/whatsapp_inbound_message-typing
+ */
+const TYPING_URL = (messageId: string) =>
+  `https://api.ycloud.com/v2/whatsapp/inboundMessages/${encodeURIComponent(messageId)}/typing`;
+
 export const ycloudAdapter: ChannelAdapter = {
   // Existe por la interfaz ChannelAdapter; el webhook usa parseYCloudEvent
   // directamente, porque puede devolver null (eventos de estado) y la
@@ -266,6 +277,20 @@ export const ycloudAdapter: ChannelAdapter = {
         const errBody = await res.text().catch(() => "");
         console.error(`ycloud sendReply ${res.status}: ${errBody}`);
       }
+    }
+  },
+
+  /** Ver TYPING_URL. Sin wamid del mensaje entrante no hay a qué colgarlo. */
+  async showTyping(_channelUserId: string, env: Env, ctx: TypingContext): Promise<void> {
+    const apiKey = env.YCLOUD_API_KEY;
+    const messageId = ctx.providerMessageId;
+    if (!apiKey || !messageId) return;
+    const res = await fetch(TYPING_URL(messageId), {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "X-API-Key": apiKey },
+    });
+    if (!res.ok) {
+      console.warn(`ycloud showTyping ${res.status}: ${await res.text().catch(() => "")}`);
     }
   },
 };

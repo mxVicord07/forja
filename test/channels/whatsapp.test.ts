@@ -184,3 +184,63 @@ describe("serveWhatsAppMedia", () => {
     expect(fetchMock).not.toHaveBeenCalled();
   });
 });
+
+describe("whatsappAdapter.showTyping", () => {
+  afterEach(() => vi.restoreAllMocks());
+
+  const env = { WHATSAPP_PHONE_NUMBER_ID: "1234", WHATSAPP_ACCESS_TOKEN: "tok" } as any;
+
+  it("manda acuse de lectura + typing_indicator sobre el wamid entrante", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response("{}", { status: 200 }));
+    await whatsappAdapter.showTyping!("5215512345678", env, {
+      channel: "whatsapp",
+      providerMessageId: "wamid.ABC",
+    });
+    const [url, init] = fetchMock.mock.calls[0] as any;
+    expect(url).toContain("/1234/messages");
+    expect(JSON.parse(init.body)).toEqual({
+      messaging_product: "whatsapp",
+      status: "read",
+      message_id: "wamid.ABC",
+      typing_indicator: { type: "text" },
+    });
+  });
+
+  it("no llama a nada sin wamid ni sin credenciales", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response("{}", { status: 200 }));
+    await whatsappAdapter.showTyping!("52", env, { channel: "whatsapp" });
+    await whatsappAdapter.showTyping!("52", {} as any, { channel: "whatsapp", providerMessageId: "x" });
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("no lanza si Meta responde error", async () => {
+    vi.spyOn(console, "warn").mockImplementation(() => {});
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response("err", { status: 400 }));
+    await expect(
+      whatsappAdapter.showTyping!("52", env, { channel: "whatsapp", providerMessageId: "x" }),
+    ).resolves.toBeUndefined();
+  });
+});
+
+describe("parseWhatsAppEvents — providerMessageId", () => {
+  it("conserva el wamid del mensaje entrante (lo exige el indicador de escribiendo)", async () => {
+    const body = {
+      object: "whatsapp_business_account",
+      entry: [
+        {
+          changes: [
+            {
+              field: "messages",
+              value: {
+                messages: [{ from: "5215512345678", id: "wamid.XYZ", type: "text", text: { body: "hola" } }],
+              },
+            },
+          ],
+        },
+      ],
+    };
+    const [msg] = await parseWhatsAppEvents(body as any, {} as any, ORIGIN);
+    expect(msg.providerMessageId).toBe("wamid.XYZ");
+  });
+});
+

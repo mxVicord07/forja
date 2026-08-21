@@ -521,7 +521,14 @@ export async function renderNodeModal(env: Env, nodeId: string, saved = false): 
         name: "inter_chunk_delay_s", label: "Pausa entre mensajes",
         min: 0, max: 5, step: 0.25, value: +(d.cfg.interChunkDelayMs / 1000).toFixed(2), unit: " s",
         hint: "El tiempo que 'escribe' entre un mensaje y el siguiente.",
-      })}`), saved);
+      })}
+      <div class="mb-5">
+        <label class="text-[12.5px] text-cream" style="display:flex;align-items:center;gap:8px;cursor:pointer">
+          <input type="checkbox" name="typing_indicator" value="1" ${d.cfg.typingIndicator ? "checked" : ""}>
+          Mostrar "escribiendo…" mientras prepara la respuesta
+        </label>
+        <p class="text-[10.5px] mt-1.5" style="color:var(--dim)">Los tres puntitos del chat, como cuando escribe una persona. En WhatsApp además marca el mensaje como leído (palomitas azules). Telegram, WhatsApp, Messenger e Instagram; no aplica en ManyChat ni Twilio.</p>
+      </div>`), saved);
   }
 
   if (nodeId === "model") {

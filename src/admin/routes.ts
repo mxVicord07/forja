@@ -354,6 +354,14 @@ adminApp.post("/agente/node/:id/save", async (c) => {
         String(Math.round(clamp(delayS, 0, 5) * 1000)),
         "owner",
       );
+    // Checkbox: si está apagado NO viaja en el form, así que la ausencia es
+    // justamente el "0". Solo se escribe cuando el modal de Respuesta se
+    // guarda (los otros nodos no traen este campo y no deben tocarlo).
+    await repo.set(
+      SETTING_KEYS.typingIndicator,
+      form.get("typing_indicator") === "1" ? "1" : "0",
+      "owner",
+    );
   } else if (id === "model") {
     const m = String(form.get("model_override") ?? "");
     if (m === "auto" || m === "haiku" || m === "sonnet")

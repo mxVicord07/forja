@@ -26,6 +26,14 @@ export function isChannelId(value: string): value is ChannelId {
 export interface IncomingMessage {
   channel: ChannelId;
   channelUserId: string;
+  /**
+   * Id del mensaje del LADO DEL PROVEEDOR (wamid de WhatsApp, mid de Meta,
+   * message_id de Telegram). Solo se usa para el indicador de "escribiendo…":
+   * WhatsApp (Cloud API y YCloud) exige el id del mensaje entrante para
+   * encenderlo — el indicador viaja sobre el mismo endpoint que el acuse de
+   * lectura. Los canales que no lo necesitan pueden dejarlo vacío.
+   */
+  providerMessageId?: string;
   displayName?: string;
   text?: string;
   audioUrl?: string;
@@ -42,10 +50,34 @@ export interface OutgoingReply {
   interChunkDelayMs?: number;
 }
 
+/**
+ * Contexto para `showTyping`. `providerMessageId` es obligatorio en WhatsApp
+ * (ambos proveedores) e ignorado por el resto; sin él, esos adapters no pueden
+ * encender el indicador y se saltan la llamada en silencio.
+ */
+export interface TypingContext {
+  /** Canal concreto del hilo. metaAdapter atiende messenger E instagram, que
+   *  se envían por hosts y tokens distintos: sin este dato no podría saber
+   *  cuál de los dos está atendiendo. */
+  channel: ChannelId;
+  providerMessageId?: string;
+}
+
 export interface ChannelAdapter {
   parseIncoming(request: Request, env: any): Promise<IncomingMessage>;
   sendReply(reply: OutgoingReply, env: any): Promise<void>;
-  showTyping?(channelUserId: string, env: any): Promise<void>;
+  /**
+   * Enciende el indicador nativo de "escribiendo…" del canal. SIEMPRE es
+   * best-effort: nunca debe lanzar ni bloquear el envío de la respuesta (ver
+   * src/replies/typing.ts, que es quien lo llama). Los canales que no lo
+   * soportan (ManyChat, Twilio) simplemente no implementan el método.
+   *
+   * Cada canal apaga el indicador solo, sin llamada de "typing_off": Telegram
+   * a los ~5s, Messenger/Instagram a los ~20s, WhatsApp a los 25s — y en todos,
+   * en cuanto llega el mensaje real. Por eso el keepalive lo re-enciende
+   * mientras el LLM piensa.
+   */
+  showTyping?(channelUserId: string, env: any, ctx: TypingContext): Promise<void>;
 }
 
 /**

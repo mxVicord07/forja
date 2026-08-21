@@ -8,7 +8,7 @@
 // El webhook necesita 2 cosas que ManyChat ocultaba:
 //  • GET de verificación (handshake con META_VERIFY_TOKEN) — lo maneja index.ts.
 //  • Validar la firma X-Hub-Signature-256 de cada POST — verifyMetaSignature().
-import type { ChannelAdapter, IncomingMessage, OutgoingReply, ChannelId } from "./shared";
+import type { ChannelAdapter, IncomingMessage, OutgoingReply, ChannelId, TypingContext } from "./shared";
 import type { Env } from "../env";
 
 const GRAPH_VERSION = "v21.0";
@@ -60,6 +60,7 @@ export function parseMetaEvents(body: MetaWebhookBody): IncomingMessage[] {
       out.push({
         channel,
         channelUserId: String(sender),
+        providerMessageId: m.mid,
         text: m.text || undefined,
         audioUrl: audio?.payload?.url,
         imageUrl: image?.payload?.url,
@@ -119,6 +120,35 @@ async function instagramSenderId(token: string): Promise<string> {
   }
 }
 
+/**
+ * Resuelve a DÓNDE y con QUÉ token se le habla a este hilo. Dos rutas según
+ * cómo se conectó Instagram:
+ *  • "Instagram API con Instagram Login" (token IGAA…) → graph.instagram.com
+ *    + INSTAGRAM_ACCESS_TOKEN.
+ *  • Messenger / IG ligado a una Página de Facebook → graph.facebook.com
+ *    + META_PAGE_ACCESS_TOKEN.
+ * Messenger envía como `me` (la Página). Instagram Login debe enviar como el
+ * user_id (dueño del hilo), no como `me` (app-scoped id) → si no, 2534037.
+ *
+ * Vive fuera de sendReply porque el indicador de "escribiendo…" (sender
+ * actions) pega al MISMO endpoint: si cada uno resolviera el destino por su
+ * cuenta, podrían discrepar y los puntitos saldrían por una ruta y el mensaje
+ * por otra.
+ */
+async function resolveSendTarget(
+  channel: ChannelId,
+  env: Env,
+): Promise<{ url: string; token: string; useIG: boolean; node: string }> {
+  const useIG = channel === "instagram" && !!env.INSTAGRAM_ACCESS_TOKEN;
+  const base = useIG ? "https://graph.instagram.com" : "https://graph.facebook.com";
+  const token = useIG ? env.INSTAGRAM_ACCESS_TOKEN : env.META_PAGE_ACCESS_TOKEN;
+  if (!token) {
+    throw new Error("Meta: falta INSTAGRAM_ACCESS_TOKEN (IG Login) o META_PAGE_ACCESS_TOKEN (Messenger).");
+  }
+  const node = useIG ? await instagramSenderId(token) : "me";
+  return { url: `${base}/${GRAPH_VERSION}/${node}/messages`, token, useIG, node };
+}
+
 export const metaAdapter: ChannelAdapter = {
   // Existe por la interfaz ChannelAdapter; el webhook /webhooks/meta usa
   // parseMetaEvents directamente (un POST puede traer varios mensajes).
@@ -130,21 +160,7 @@ export const metaAdapter: ChannelAdapter = {
   },
 
   async sendReply(reply: OutgoingReply, env: Env): Promise<void> {
-    // Dos rutas de envío según cómo se conectó Instagram:
-    //  • "Instagram API con Instagram Login" (token IGAA…) → graph.instagram.com
-    //    + INSTAGRAM_ACCESS_TOKEN.
-    //  • Messenger / IG ligado a una Página de Facebook → graph.facebook.com
-    //    + META_PAGE_ACCESS_TOKEN.
-    const useIG = reply.channel === "instagram" && !!env.INSTAGRAM_ACCESS_TOKEN;
-    const base = useIG ? "https://graph.instagram.com" : "https://graph.facebook.com";
-    const token = useIG ? env.INSTAGRAM_ACCESS_TOKEN : env.META_PAGE_ACCESS_TOKEN;
-    if (!token) {
-      throw new Error("Meta: falta INSTAGRAM_ACCESS_TOKEN (IG Login) o META_PAGE_ACCESS_TOKEN (Messenger).");
-    }
-    // Messenger envía como `me` (la Página). Instagram Login debe enviar como el
-    // user_id (dueño del hilo), no como `me` (app-scoped id) → si no, 2534037.
-    const node = useIG ? await instagramSenderId(token) : "me";
-    const url = `${base}/${GRAPH_VERSION}/${node}/messages`;
+    const { url, token, useIG, node } = await resolveSendTarget(reply.channel, env);
     console.log("meta out:", JSON.stringify({ useIG, node, to: reply.channelUserId }));
     for (let i = 0; i < reply.chunks.length; i++) {
       const delay = i === 0 ? 0 : reply.interChunkDelayMs ?? 1000;
@@ -168,6 +184,34 @@ export const metaAdapter: ChannelAdapter = {
       if (!res.ok) {
         const errBody = await res.text().catch(() => "");
         console.error(`meta sendReply ${res.status} ${useIG ? "IG" : "FB"}: ${errBody}`);
+      }
+    }
+  },
+
+  /**
+   * "Escribiendo…" de Messenger e Instagram: sender actions de la Send API.
+   * Manda `mark_seen` (visto) y luego `typing_on` — dos POST separados porque
+   * Meta exige que el cuerpo traiga SOLO `recipient` + `sender_action`, nada
+   * más. No hace falta `typing_off`: el indicador se apaga solo al llegar la
+   * respuesta (o a los ~20s).
+   * https://developers.facebook.com/docs/messenger-platform/send-messages/sender-actions
+   *
+   * En Instagram Login (graph.instagram.com) Meta documenta sender actions
+   * sobre el host de Graph; si esa ruta rechazara la acción, el warning queda
+   * en el log y el mensaje sale igual — nunca se bloquea el envío.
+   */
+  async showTyping(channelUserId: string, env: Env, ctx: TypingContext): Promise<void> {
+    const { url, token, useIG } = await resolveSendTarget(ctx.channel, env);
+    for (const action of ["mark_seen", "typing_on"] as const) {
+      const res = await fetch(url, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ recipient: { id: channelUserId }, sender_action: action }),
+      });
+      if (!res.ok) {
+        console.warn(
+          `meta showTyping(${action}) ${res.status} ${useIG ? "IG" : "FB"}: ${await res.text().catch(() => "")}`,
+        );
       }
     }
   },

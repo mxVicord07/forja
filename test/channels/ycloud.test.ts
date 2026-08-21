@@ -265,3 +265,32 @@ describe("ycloudAdapter.sendReply", () => {
     ).rejects.toThrow(/YCLOUD/);
   });
 });
+
+describe("ycloudAdapter.showTyping", () => {
+  it("pega al endpoint de typing del mensaje entrante con X-API-Key", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response("{}", { status: 200 }));
+    await ycloudAdapter.showTyping!("525512345678", { YCLOUD_API_KEY: "key" } as any, {
+      channel: "whatsapp",
+      providerMessageId: "wamid.HBgM",
+    });
+    const [url, init] = fetchMock.mock.calls[0] as any;
+    expect(url).toBe("https://api.ycloud.com/v2/whatsapp/inboundMessages/wamid.HBgM/typing");
+    expect(init.method).toBe("POST");
+    expect(init.headers["X-API-Key"]).toBe("key");
+  });
+
+  it("no llama a nada sin wamid (no hay a qué colgar el indicador)", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response("{}", { status: 200 }));
+    await ycloudAdapter.showTyping!("525512345678", { YCLOUD_API_KEY: "key" } as any, { channel: "whatsapp" });
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("no lanza si YCloud responde error", async () => {
+    vi.spyOn(console, "warn").mockImplementation(() => {});
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response("nope", { status: 404 }));
+    await expect(
+      ycloudAdapter.showTyping!("5", { YCLOUD_API_KEY: "key" } as any, { channel: "whatsapp", providerMessageId: "x" }),
+    ).resolves.toBeUndefined();
+  });
+});
+

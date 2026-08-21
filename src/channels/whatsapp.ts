@@ -11,7 +11,7 @@
 // (Bearer) → url, y GET url (Bearer) → bytes. Para reusar transcribe/vision sin
 // tocarlas, lo servimos por un proxy FIRMADO (/webhooks/whatsapp/media/:id): la
 // URL es pública pero con HMAC + expiración, y el token queda del lado del server.
-import type { ChannelAdapter, IncomingMessage, OutgoingReply } from "./shared";
+import type { ChannelAdapter, IncomingMessage, OutgoingReply, TypingContext } from "./shared";
 import { hmacHex, timingSafeEqual, normalizePhone, toWhatsAppMarkdown } from "./shared";
 import type { Env } from "../env";
 
@@ -108,6 +108,9 @@ export async function parseWhatsAppEvents(
           // (`whatsapp:<channelUserId>`) y la búsqueda en D1, y por eso
           // conservan el historial el día que se migre de YCloud a Meta.
           channelUserId: normalizePhone(from),
+          // wamid del mensaje entrante: el indicador de "escribiendo…" lo exige
+          // (viaja sobre el mismo endpoint que el acuse de lectura).
+          providerMessageId: m.id,
           displayName: nameByWaId.get(from),
           text,
           audioUrl,
@@ -196,6 +199,36 @@ export const whatsappAdapter: ChannelAdapter = {
         const errBody = await res.text().catch(() => "");
         console.error(`whatsapp sendReply ${res.status}: ${errBody}`);
       }
+    }
+  },
+
+  /**
+   * "Escribiendo…" de WhatsApp. En Cloud API NO es un endpoint aparte: viaja
+   * dentro del acuse de lectura del mensaje entrante (`status:"read"` +
+   * `typing_indicator`), y por eso EXIGE el wamid — sin él no hay a qué
+   * mensaje colgarlo, así que se sale sin llamar. Efecto secundario deliberado:
+   * el cliente ve las palomitas azules además de los puntitos, que es
+   * exactamente la señal de "ya te leí, ahí voy".
+   * Se apaga solo al responder o a los 25s.
+   * https://developers.facebook.com/docs/whatsapp/cloud-api/typing-indicators/
+   */
+  async showTyping(_channelUserId: string, env: Env, ctx: TypingContext): Promise<void> {
+    const phoneId = env.WHATSAPP_PHONE_NUMBER_ID;
+    const token = env.WHATSAPP_ACCESS_TOKEN;
+    const messageId = ctx.providerMessageId;
+    if (!phoneId || !token || !messageId) return;
+    const res = await fetch(`https://graph.facebook.com/${GRAPH_VERSION}/${phoneId}/messages`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+      body: JSON.stringify({
+        messaging_product: "whatsapp",
+        status: "read",
+        message_id: messageId,
+        typing_indicator: { type: "text" },
+      }),
+    });
+    if (!res.ok) {
+      console.warn(`whatsapp showTyping ${res.status}: ${await res.text().catch(() => "")}`);
     }
   },
 };

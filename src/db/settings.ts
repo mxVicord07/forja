@@ -65,6 +65,11 @@ export const SETTING_KEYS = {
   // Reactivación de leads fríos (Pro): interruptor del dueño, default OFF
   // (opt-in, igual que los demás superpoderes de mensaje saliente).
   reengageColdLeads: "reengage_cold_leads",
+  // Indicador nativo de "escribiendo…" (los tres puntitos) mientras el bot
+  // prepara la respuesta. "0" = apagado; ausente o cualquier otro valor =
+  // encendido. Default ON: es señal de vida, no un mensaje saliente no pedido
+  // (a diferencia de daily_report/encuesta, que sí son opt-in explícito).
+  typingIndicator: "typing_indicator",
 } as const;
 
 export type SettingKey = (typeof SETTING_KEYS)[keyof typeof SETTING_KEYS];
