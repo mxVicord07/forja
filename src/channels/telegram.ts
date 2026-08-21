@@ -138,10 +138,17 @@ export const telegramAdapter: ChannelAdapter = {
   async showTyping(channelUserId: string, env: Env, _ctx: TypingContext): Promise<void> {
     const token = env.TELEGRAM_BOT_TOKEN;
     if (!token) return;
-    await fetch(`${TG_API}${token}/sendChatAction`, {
+    const res = await fetch(`${TG_API}${token}/sendChatAction`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ chat_id: channelUserId, action: "typing" }),
-    }).catch(() => {});
+    });
+    // El .catch(() => {}) original solo atrapaba fallos de RED (fetch no
+    // lanza por un 4xx/ok:false) — así que un error real de la API (chat_id
+    // inválido, bot bloqueado, etc.) se perdía en silencio. Ahora sí se loguea,
+    // igual que los demás adapters, sin dejar de ser fail-open.
+    if (!res.ok) {
+      console.warn(`telegram showTyping ${res.status}: ${await res.text().catch(() => "")}`);
+    }
   },
 };
