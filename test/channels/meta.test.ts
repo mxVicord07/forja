@@ -55,3 +55,34 @@ describe("metaAdapter.showTyping", () => {
     ).resolves.toBeUndefined();
   });
 });
+
+describe("metaAdapter.sendDocument", () => {
+  afterEach(() => vi.restoreAllMocks());
+
+  it("Messenger: manda un attachment tipo file por la Página", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response("{}", { status: 200 }));
+    await metaAdapter.sendDocument!(
+      { channel: "messenger", channelUserId: "psid-1", url: "https://bot.example/files/web?exp=1&sig=a", filename: "x.pdf", mimeType: "application/pdf" },
+      { META_PAGE_ACCESS_TOKEN: "tok" } as any,
+    );
+    const [url, init] = fetchMock.mock.calls[0] as any;
+    expect(url).toContain("https://graph.facebook.com/");
+    expect(url).toContain("/me/messages");
+    expect(JSON.parse(init.body)).toEqual({
+      recipient: { id: "psid-1" },
+      message: { attachment: { type: "file", payload: { url: "https://bot.example/files/web?exp=1&sig=a", is_reusable: true } } },
+    });
+  });
+
+  it("no lanza si Meta rechaza el adjunto", async () => {
+    vi.spyOn(console, "warn").mockImplementation(() => {});
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response("nope", { status: 400 }));
+    await expect(
+      metaAdapter.sendDocument!(
+        { channel: "messenger", channelUserId: "psid-1", url: "https://x/y", filename: "x.pdf", mimeType: "application/pdf" },
+        { META_PAGE_ACCESS_TOKEN: "tok" } as any,
+      ),
+    ).resolves.toBeUndefined();
+  });
+});
+

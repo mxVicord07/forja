@@ -106,6 +106,13 @@ export interface Env {
   // Set via `wrangler secret put KB_REINDEX_TOKEN`.
   KB_REINDEX_TOKEN: string;
 
+  // Firma las URLs públicas de /files/:id (documentos comerciales que el bot
+  // comparte — ver src/files/share.ts). Opcional: sin ella cae a
+  // KB_REINDEX_TOKEN, que ya es un secreto server-only garantizado en todo
+  // despliegue existente. Define esta var aparte solo si quieres rotarla
+  // independiente del reindex de KB.
+  FILES_SIGNING_SECRET?: string;
+
   // Gate global de learn-mode: "1" | "true" (insensible a mayúsculas, con
   // trim) prende; cualquier otra cosa, incluida la ausencia, apaga (default
   // OFF). La feature está incompleta — el lado de escritura funciona pero

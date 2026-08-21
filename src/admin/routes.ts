@@ -37,6 +37,8 @@ import { analyzeConversations } from "../insights/analyzer";
 import { renderAgentePage, renderAgenteCanvas, renderNodeModal, toggleTool, toastOob } from "./views/agente";
 import { renderKbList, renderKbEditor } from "./views/kb";
 import { KbDocsRepo, indexDoc, removeDocVectors, reindexAll, MAX_DOC_CHARS } from "../kb/docs";
+import { renderDocumentosList } from "./views/documentos";
+import { DocumentsRepo } from "../db/documents";
 import { renderMejoras } from "./views/mejoras";
 import { runFlywheel, getLessons, saveLessons } from "../flywheel/detect";
 import { applySuggestion, dismissSuggestion } from "../flywheel/apply";
@@ -187,6 +189,70 @@ adminApp.post("/kb/:id/delete", async (c) => {
 adminApp.post("/kb/reindex", async (c) => {
   const r = await reindexAll(c.env);
   return c.redirect(`/admin/kb?reindexed=${r.indexed}`);
+});
+
+// --- Documentos comerciales (F-docs): archivos que el bot MANDA -------------
+
+const MAX_DOCUMENT_BYTES = 15 * 1024 * 1024; // 15 MB — de sobra para un PDF de ventas, corto para no comerse el budget de subrequests del Worker.
+
+adminApp.get("/documentos", async (c) =>
+  c.html(
+    await renderDocumentosList(c.env, {
+      saved: c.req.query("saved") === "1",
+      deleted: c.req.query("deleted") === "1",
+      error: c.req.query("error") ?? undefined,
+    }),
+  ),
+);
+
+// Sube el archivo a R2 (bucket CATALOG) y su metadata a D1 en el mismo POST —
+// a diferencia de KB (texto puro, sin binario), acá SÍ hay un archivo real
+// que subir antes de poder guardar la fila.
+adminApp.post("/documentos/save", async (c) => {
+  const form = await c.req.formData();
+  const title = String(form.get("title") ?? "").trim().slice(0, 200);
+  const description = String(form.get("description") ?? "").trim().slice(0, 300);
+  const file = form.get("file");
+
+  // `instanceof File` no type-checkea acá: @cloudflare/workers-types y los
+  // tipos de "node" (undici) declaran `File` distinto y TS no logra
+  // unificarlos. Duck-typing en su lugar — un FormDataEntryValue que no es
+  // string y trae arrayBuffer() es un File en runtime, venga de donde venga.
+  const isFile = (v: unknown): v is { name: string; type: string; size: number; arrayBuffer(): Promise<ArrayBuffer> } =>
+    typeof v === "object" && v !== null && typeof (v as any).arrayBuffer === "function";
+
+  if (!title || !description || !isFile(file) || file.size === 0) {
+    return c.redirect("/admin/documentos?error=" + encodeURIComponent("Falta título, descripción o archivo."));
+  }
+  if (file.size > MAX_DOCUMENT_BYTES) {
+    return c.redirect("/admin/documentos?error=" + encodeURIComponent("El archivo pesa más de 15 MB."));
+  }
+
+  const id = crypto.randomUUID();
+  const filename = file.name || "documento.pdf";
+  const r2Key = `documents/${id}/${filename}`;
+  await c.env.CATALOG.put(r2Key, await file.arrayBuffer(), {
+    httpMetadata: { contentType: file.type || "application/pdf" },
+  });
+  await new DocumentsRepo(new Db(c.env.DB)).upsert({
+    id,
+    title,
+    description,
+    filename,
+    r2Key,
+    mimeType: file.type || "application/pdf",
+    sizeBytes: file.size,
+  });
+  return c.redirect("/admin/documentos?saved=1");
+});
+
+adminApp.post("/documentos/:id/delete", async (c) => {
+  const id = c.req.param("id");
+  const repo = new DocumentsRepo(new Db(c.env.DB));
+  const doc = await repo.getById(id);
+  if (doc) await c.env.CATALOG.delete(doc.r2_key);
+  await repo.delete(id);
+  return c.redirect("/admin/documentos?deleted=1");
 });
 
 // --- Handoff: plantilla HSM del aviso al dueño ---------------------------------

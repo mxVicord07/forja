@@ -294,3 +294,42 @@ describe("ycloudAdapter.showTyping", () => {
   });
 });
 
+describe("ycloudAdapter.sendDocument", () => {
+  it("manda type=document al mismo endpoint de texto, con + de vuelta", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response("{}", { status: 200 }));
+    await ycloudAdapter.sendDocument!(
+      { channel: "whatsapp", channelUserId: "525512345678", url: "https://bot.example/files/web?exp=1&sig=a", filename: "birevx-website-services.pdf", mimeType: "application/pdf", caption: "Paquetes" },
+      { YCLOUD_API_KEY: "key", YCLOUD_WA_FROM: "+524444237875" } as any,
+    );
+    const [url, init] = fetchMock.mock.calls[0] as any;
+    expect(url).toBe("https://api.ycloud.com/v2/whatsapp/messages");
+    expect(init.headers["X-API-Key"]).toBe("key");
+    expect(JSON.parse(init.body)).toEqual({
+      from: "+524444237875",
+      to: "+525512345678",
+      type: "document",
+      document: { link: "https://bot.example/files/web?exp=1&sig=a", filename: "birevx-website-services.pdf", caption: "Paquetes" },
+    });
+  });
+
+  it("no llama a nada sin configuración", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response("{}", { status: 200 }));
+    await ycloudAdapter.sendDocument!(
+      { channel: "whatsapp", channelUserId: "52", url: "https://x/y", filename: "a.pdf", mimeType: "application/pdf" },
+      {} as any,
+    );
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("no lanza si YCloud responde error", async () => {
+    vi.spyOn(console, "warn").mockImplementation(() => {});
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response("nope", { status: 400 }));
+    await expect(
+      ycloudAdapter.sendDocument!(
+        { channel: "whatsapp", channelUserId: "52", url: "https://x/y", filename: "a.pdf", mimeType: "application/pdf" },
+        { YCLOUD_API_KEY: "key", YCLOUD_WA_FROM: "+524444237875" } as any,
+      ),
+    ).resolves.toBeUndefined();
+  });
+});
+

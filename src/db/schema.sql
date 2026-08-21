@@ -314,3 +314,20 @@ CREATE TABLE IF NOT EXISTS reengage_sends (
   sent_at          INTEGER NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_reengage_sends_time ON reengage_sends(sent_at);
+
+-- Documentos comerciales compartibles (F-docs) — PDFs u otros archivos que el
+-- bot puede MANDAR al cliente (no solo consultar como texto vía KB). El
+-- archivo real vive en R2 (bucket CATALOG), esta fila es su metadata: lo que
+-- el LLM ve para decidir cuándo compartirlo (título/descripción) y lo que el
+-- endpoint /files/:id necesita para servirlo (r2_key/mime/filename).
+CREATE TABLE IF NOT EXISTS documents (
+  id          TEXT    PRIMARY KEY,
+  title       TEXT    NOT NULL,
+  description TEXT    NOT NULL,
+  filename    TEXT    NOT NULL,
+  r2_key      TEXT    NOT NULL,
+  mime_type   TEXT    NOT NULL,
+  size_bytes  INTEGER NOT NULL,
+  created_at  INTEGER NOT NULL,
+  updated_at  INTEGER NOT NULL
+);

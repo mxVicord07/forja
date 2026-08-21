@@ -51,6 +51,24 @@ export interface OutgoingReply {
 }
 
 /**
+ * Un documento (PDF, típicamente) que el bot manda además del texto — ver
+ * src/tools/shareDocument.ts y src/files/share.ts. `url` es SIEMPRE la URL
+ * pública firmada de /files/:id, nunca el r2_key crudo: los proveedores
+ * (WhatsApp/Meta) la descargan ellos mismos, Telegram la usa directo.
+ */
+export interface OutgoingDocument {
+  channel: ChannelId;
+  channelUserId: string;
+  url: string;
+  filename: string;
+  mimeType: string;
+  /** Texto corto junto al archivo. Solo Telegram y WhatsApp lo soportan
+   *  (Messenger/Instagram no tienen caption en su Send API) — el adapter que
+   *  no lo soporte simplemente lo ignora. */
+  caption?: string;
+}
+
+/**
  * Contexto para `showTyping`. `providerMessageId` es obligatorio en WhatsApp
  * (ambos proveedores) e ignorado por el resto; sin él, esos adapters no pueden
  * encender el indicador y se saltan la llamada en silencio.
@@ -78,6 +96,14 @@ export interface ChannelAdapter {
    * mientras el LLM piensa.
    */
   showTyping?(channelUserId: string, env: any, ctx: TypingContext): Promise<void>;
+  /**
+   * Manda un documento como archivo adjunto nativo del canal (no un link de
+   * texto). Igual que showTyping: SIEMPRE best-effort — el llamador
+   * (src/agent.ts) nunca deja que un fallo acá tumbe el turno, porque el
+   * texto de la respuesta ya salió antes. Canales sin soporte (ManyChat,
+   * Twilio) simplemente no implementan el método.
+   */
+  sendDocument?(doc: OutgoingDocument, env: any): Promise<void>;
 }
 
 /**

@@ -244,3 +244,45 @@ describe("parseWhatsAppEvents — providerMessageId", () => {
   });
 });
 
+describe("whatsappAdapter.sendDocument", () => {
+  afterEach(() => vi.restoreAllMocks());
+  const env = { WHATSAPP_PHONE_NUMBER_ID: "1234", WHATSAPP_ACCESS_TOKEN: "tok" } as any;
+
+  it("manda type=document con link/filename/caption", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response("{}", { status: 200 }));
+    await whatsappAdapter.sendDocument!(
+      { channel: "whatsapp", channelUserId: "5215512345678", url: "https://bot.example/files/web?exp=1&sig=a", filename: "birevx-website-services.pdf", mimeType: "application/pdf", caption: "Paquetes" },
+      env,
+    );
+    const [url, init] = fetchMock.mock.calls[0] as any;
+    expect(url).toContain("/1234/messages");
+    expect(JSON.parse(init.body)).toEqual({
+      messaging_product: "whatsapp",
+      recipient_type: "individual",
+      to: "5215512345678",
+      type: "document",
+      document: { link: "https://bot.example/files/web?exp=1&sig=a", filename: "birevx-website-services.pdf", caption: "Paquetes" },
+    });
+  });
+
+  it("no llama a nada sin credenciales", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response("{}", { status: 200 }));
+    await whatsappAdapter.sendDocument!(
+      { channel: "whatsapp", channelUserId: "52", url: "https://x/y", filename: "a.pdf", mimeType: "application/pdf" },
+      {} as any,
+    );
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("no lanza si Meta responde error", async () => {
+    vi.spyOn(console, "warn").mockImplementation(() => {});
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response("err", { status: 400 }));
+    await expect(
+      whatsappAdapter.sendDocument!(
+        { channel: "whatsapp", channelUserId: "52", url: "https://x/y", filename: "a.pdf", mimeType: "application/pdf" },
+        env,
+      ),
+    ).resolves.toBeUndefined();
+  });
+});
+

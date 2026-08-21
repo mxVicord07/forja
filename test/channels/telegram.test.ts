@@ -144,3 +144,43 @@ describe("toTelegramMarkdown", () => {
     expect(toTelegramMarkdown("Hola, ¿en qué te ayudo?")).toBe("Hola, ¿en qué te ayudo?");
   });
 });
+
+describe("telegramAdapter.sendDocument", () => {
+  afterEach(() => vi.restoreAllMocks());
+
+  it("manda el documento con la URL directa y caption", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response("{}", { status: 200 }));
+    await telegramAdapter.sendDocument!(
+      { channel: "telegram", channelUserId: "42", url: "https://bot.example/files/web?exp=1&sig=a", filename: "x.pdf", mimeType: "application/pdf", caption: "Paquetes" },
+      { TELEGRAM_BOT_TOKEN: "tok" } as any,
+    );
+    const [url, init] = fetchMock.mock.calls[0] as any;
+    expect(url).toContain("/sendDocument");
+    expect(JSON.parse(init.body)).toEqual({
+      chat_id: "42",
+      document: "https://bot.example/files/web?exp=1&sig=a",
+      caption: "Paquetes",
+    });
+  });
+
+  it("no llama a nada sin token", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response("{}", { status: 200 }));
+    await telegramAdapter.sendDocument!(
+      { channel: "telegram", channelUserId: "42", url: "https://x/y", filename: "x.pdf", mimeType: "application/pdf" },
+      {} as any,
+    );
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("no lanza si Telegram responde error", async () => {
+    vi.spyOn(console, "warn").mockImplementation(() => {});
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response("nope", { status: 400 }));
+    await expect(
+      telegramAdapter.sendDocument!(
+        { channel: "telegram", channelUserId: "42", url: "https://x/y", filename: "x.pdf", mimeType: "application/pdf" },
+        { TELEGRAM_BOT_TOKEN: "tok" } as any,
+      ),
+    ).resolves.toBeUndefined();
+  });
+});
+

@@ -20,6 +20,8 @@ import { createModel } from "./llm/provider";
 import { costOfUsage } from "./pricing";
 import type { ChannelId } from "./channels/shared";
 import { guardReply } from "./blindaje/verify";
+import type { DocumentRow } from "./db/documents";
+import { signedFileUrl } from "./files/share";
 import type { SearchKbResult } from "./tools/searchKb";
 import { SettingsRepo, SETTING_KEYS } from "./db/settings";
 import { renderBusinessContext } from "./businessContext";
@@ -289,6 +291,9 @@ export class SupportAgent extends Agent<Env, SupportAgentState> {
     let turnKbPassages: SearchKbResult[] = [];
     let turnUsedKb = false;
     let lastKbTopScore = 1;
+    // Documento que shareDocument decidió mandar este turno (si lo hubo). Se
+    // envía DESPUÉS del texto de la respuesta — ver el bloque de envío abajo.
+    let docToShare: DocumentRow | null = null;
 
     // Build tools registry (tier-gated in buildTools)
     const tools = buildTools({
@@ -298,6 +303,9 @@ export class SupportAgent extends Agent<Env, SupportAgentState> {
         turnUsedKb = true;
         turnKbPassages = [...turnKbPassages, ...results].slice(-10);
         lastKbTopScore = results[0]?.score ?? 0;
+      },
+      onShareDocument: (doc) => {
+        docToShare = doc;
       },
       getChannel: () => this.state.channel ?? null,
     });
@@ -545,6 +553,40 @@ export class SupportAgent extends Agent<Env, SupportAgentState> {
         },
         this.env,
       );
+
+      // ── Documento compartible (shareDocument) ───────────────────────────
+      // Va DESPUÉS del texto a propósito: el cliente primero lee la
+      // explicación del bot, luego recibe el PDF — como lo haría una
+      // persona. Nunca bloquea nada: sin soporte del canal (ManyChat,
+      // Twilio) o sin URL firmada (falta DASHBOARD_BASE_URL) se salta con un
+      // warn, el turno ya se considera exitoso porque el texto ya salió.
+      // `as DocumentRow | null`: docToShare solo se reasigna dentro del closure
+      // onShareDocument (arriba), y TS no ve esa escritura como parte del flujo
+      // lineal — lo narrowea a `null` para siempre y `if (docToShare)` da
+      // `never`. El cast restaura el tipo declarado sin cambiar nada en runtime.
+      const doc = docToShare as DocumentRow | null;
+      if (doc && adapter.sendDocument) {
+        try {
+          const url = await signedFileUrl(doc.id, this.env, "");
+          if (url) {
+            await adapter.sendDocument(
+              {
+                channel,
+                channelUserId: this.state.channelUserId,
+                url,
+                filename: doc.filename,
+                mimeType: doc.mime_type,
+                caption: doc.title,
+              },
+              this.env,
+            );
+          } else {
+            console.warn("[shareDocument] sin DASHBOARD_BASE_URL/secret — no se pudo firmar la URL");
+          }
+        } catch (e) {
+          console.warn("[shareDocument] no se pudo enviar el documento:", e);
+        }
+      }
 
       console.log(
         `[SupportAgent.processBuffer] sent ${chunks.length} chunks, model=${usedModelId}, cost=$${costOfUsage(

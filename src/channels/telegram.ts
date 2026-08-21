@@ -1,4 +1,4 @@
-import type { ChannelAdapter, IncomingMessage, OutgoingReply, TypingContext } from "./shared";
+import type { ChannelAdapter, IncomingMessage, OutgoingReply, OutgoingDocument, TypingContext } from "./shared";
 import type { Env } from "../env";
 
 const TG_API = "https://api.telegram.org/bot";
@@ -149,6 +149,28 @@ export const telegramAdapter: ChannelAdapter = {
     // igual que los demás adapters, sin dejar de ser fail-open.
     if (!res.ok) {
       console.warn(`telegram showTyping ${res.status}: ${await res.text().catch(() => "")}`);
+    }
+  },
+
+  /**
+   * `sendDocument` acepta un URL directo en el campo `document` (no hace
+   * falta subir el archivo antes) — Telegram lo descarga él mismo.
+   * https://core.telegram.org/bots/api#senddocument
+   */
+  async sendDocument(doc: OutgoingDocument, env: Env): Promise<void> {
+    const token = env.TELEGRAM_BOT_TOKEN;
+    if (!token) return;
+    const res = await fetch(`${TG_API}${token}/sendDocument`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        chat_id: doc.channelUserId,
+        document: doc.url,
+        ...(doc.caption ? { caption: doc.caption } : {}),
+      }),
+    });
+    if (!res.ok) {
+      console.warn(`telegram sendDocument ${res.status}: ${await res.text().catch(() => "")}`);
     }
   },
 };

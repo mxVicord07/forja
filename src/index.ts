@@ -7,6 +7,7 @@ import { twilioAdapter } from "./channels/twilio";
 import { parseMetaEvents, verifyMetaSignature } from "./channels/meta";
 import { parseWhatsAppEvents, serveWhatsAppMedia } from "./channels/whatsapp";
 import { parseYCloudEvent, serveYCloudMedia, verifyYCloudSignature } from "./channels/ycloud";
+import { serveDocument } from "./files/serve";
 import { resolveWaProvider } from "./replies/sender";
 import { adminApp } from "./admin/routes";
 import { purgeOldMessages } from "./crons/purgeOldMessages";
@@ -221,6 +222,14 @@ app.get("/webhooks/whatsapp/media/:id", (c) =>
 // colisionan en Hono porque una tiene segmento de path y la otra no.
 app.get("/webhooks/whatsapp/media", (c) =>
   serveYCloudMedia(c.req.query("u") ?? null, c.req.query("exp") ?? null, c.req.query("sig") ?? null, c.env),
+);
+
+// Proxy firmado de documentos comerciales que el bot comparte (PDFs de
+// precios/paquetes, brochures — ver shareDocument.ts). A diferencia de los
+// proxies de arriba (que sirven media que LLEGÓ del cliente), este sirve
+// archivos que el DUEÑO subió desde /admin/documentos.
+app.get("/files/:id", (c) =>
+  serveDocument(c.req.param("id"), c.req.query("exp") ?? null, c.req.query("sig") ?? null, c.env),
 );
 
 // Universal webhook LEARN endpoint. When learn mode is ON for `:channel`, this

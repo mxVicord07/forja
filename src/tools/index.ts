@@ -1,6 +1,8 @@
 import type { Env } from "../env";
 import { isPro } from "../config";
 import { searchKbTool, type SearchKbResult } from "./searchKb";
+import { shareDocumentTool } from "./shareDocument";
+import type { DocumentRow } from "../db/documents";
 import { handoffHumanTool } from "./handoffHuman";
 import { pauseBotTool } from "./pauseBot";
 import { snoozeUserTool } from "./snoozeUser";
@@ -16,6 +18,8 @@ export interface ToolContext {
   getConversationId: () => string | null;
   /** Blindaje/selector de modelo: se entera de qué trajo searchKb ESTE turno. */
   onSearchKb?: (results: SearchKbResult[]) => void;
+  /** El agente se entera de qué documento hay que mandar tras el texto (ver shareDocument.ts). */
+  onShareDocument?: (doc: DocumentRow) => void;
   /** Canal real de la conversación (telegram, whatsapp…) — usado por captureLead al exportar.
    *  Opcional para no romper callers que solo listan nombres de tools (admin/*); si falta,
    *  captureLeadTool cae a env.BOT_NAME como antes. */
@@ -32,6 +36,10 @@ export function buildTools(ctx: ToolContext) {
     pauseBot: pauseBotTool(ctx.env, ctx.getConversationId),
     snoozeUser: snoozeUserTool(ctx.env, ctx.getConversationId),
     captureLead: captureLeadTool(ctx.env, ctx.getConversationId, ctx.getChannel ?? (() => null)),
+    // No es Pro-only a propósito: compartir un PDF de precios es infra básica
+    // de ventas, igual que captureLead — no consume tokens de visión ni cuesta
+    // más que un mensaje normal.
+    shareDocument: shareDocumentTool(ctx.env, ctx.onShareDocument),
   };
 
   // Pro tier additions

@@ -11,7 +11,7 @@
 // (Bearer) → url, y GET url (Bearer) → bytes. Para reusar transcribe/vision sin
 // tocarlas, lo servimos por un proxy FIRMADO (/webhooks/whatsapp/media/:id): la
 // URL es pública pero con HMAC + expiración, y el token queda del lado del server.
-import type { ChannelAdapter, IncomingMessage, OutgoingReply, TypingContext } from "./shared";
+import type { ChannelAdapter, IncomingMessage, OutgoingReply, OutgoingDocument, TypingContext } from "./shared";
 import { hmacHex, timingSafeEqual, normalizePhone, toWhatsAppMarkdown } from "./shared";
 import type { Env } from "../env";
 
@@ -229,6 +229,35 @@ export const whatsappAdapter: ChannelAdapter = {
     });
     if (!res.ok) {
       console.warn(`whatsapp showTyping ${res.status}: ${await res.text().catch(() => "")}`);
+    }
+  },
+
+  /**
+   * Documento por `link`: Cloud API lo descarga ella misma desde la URL
+   * firmada, no hace falta subirlo antes por el endpoint de media.
+   * https://developers.facebook.com/docs/whatsapp/cloud-api/reference/messages#document-object
+   */
+  async sendDocument(doc: OutgoingDocument, env: Env): Promise<void> {
+    const phoneId = env.WHATSAPP_PHONE_NUMBER_ID;
+    const token = env.WHATSAPP_ACCESS_TOKEN;
+    if (!phoneId || !token) return;
+    const res = await fetch(`https://graph.facebook.com/${GRAPH_VERSION}/${phoneId}/messages`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+      body: JSON.stringify({
+        messaging_product: "whatsapp",
+        recipient_type: "individual",
+        to: doc.channelUserId,
+        type: "document",
+        document: {
+          link: doc.url,
+          filename: doc.filename,
+          ...(doc.caption ? { caption: doc.caption } : {}),
+        },
+      }),
+    });
+    if (!res.ok) {
+      console.warn(`whatsapp sendDocument ${res.status}: ${await res.text().catch(() => "")}`);
     }
   },
 };

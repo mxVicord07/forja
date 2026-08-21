@@ -16,7 +16,7 @@
 //    ambos producen idéntico channelUserId (unificado en el commit 90dd6a0;
 //    antes de ese fix whatsapp.ts NO normalizaba, así que este comentario
 //    habría sido falso).
-import type { ChannelAdapter, IncomingMessage, OutgoingReply, TypingContext } from "./shared";
+import type { ChannelAdapter, IncomingMessage, OutgoingReply, OutgoingDocument, TypingContext } from "./shared";
 import { hmacHex, timingSafeEqual, normalizePhone, toWhatsAppMarkdown } from "./shared";
 import type { Env } from "../env";
 
@@ -291,6 +291,35 @@ export const ycloudAdapter: ChannelAdapter = {
     });
     if (!res.ok) {
       console.warn(`ycloud showTyping ${res.status}: ${await res.text().catch(() => "")}`);
+    }
+  },
+
+  /**
+   * Mismo endpoint que el texto (SEND_URL), tipo "document" con `link`: YCloud
+   * refleja el contrato de mensajes de WhatsApp Business API igual que hace
+   * con "text" arriba — descarga la URL firmada del lado de ellos.
+   */
+  async sendDocument(doc: OutgoingDocument, env: Env): Promise<void> {
+    const apiKey = env.YCLOUD_API_KEY;
+    const from = env.YCLOUD_WA_FROM;
+    if (!apiKey || !from) return;
+    const to = `+${normalizePhone(doc.channelUserId)}`;
+    const res = await fetch(SEND_URL, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "X-API-Key": apiKey },
+      body: JSON.stringify({
+        from,
+        to,
+        type: "document",
+        document: {
+          link: doc.url,
+          filename: doc.filename,
+          ...(doc.caption ? { caption: doc.caption } : {}),
+        },
+      }),
+    });
+    if (!res.ok) {
+      console.warn(`ycloud sendDocument ${res.status}: ${await res.text().catch(() => "")}`);
     }
   },
 };

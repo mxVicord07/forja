@@ -49,6 +49,7 @@ const NAV: Section[] = [
     items: [
       { id: "agente", label: "Flujo", href: "/admin/agente", icon: "workflow" },
       { id: "kb", label: "Conocimiento", href: "/admin/kb", icon: "book-open" },
+      { id: "documentos", label: "Documentos", href: "/admin/documentos", icon: "file-text" },
       { id: "mejoras", label: "Mejoras", href: "/admin/mejoras", icon: "sparkles" },
       { id: "conexiones", label: "Conexiones", href: "/admin/conexiones", icon: "plug-zap" },
       { id: "config", label: "Configuración", href: "/admin/config", icon: "sliders-horizontal" },

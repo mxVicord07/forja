@@ -8,7 +8,7 @@
 // El webhook necesita 2 cosas que ManyChat ocultaba:
 //  • GET de verificación (handshake con META_VERIFY_TOKEN) — lo maneja index.ts.
 //  • Validar la firma X-Hub-Signature-256 de cada POST — verifyMetaSignature().
-import type { ChannelAdapter, IncomingMessage, OutgoingReply, ChannelId, TypingContext } from "./shared";
+import type { ChannelAdapter, IncomingMessage, OutgoingReply, OutgoingDocument, ChannelId, TypingContext } from "./shared";
 import type { Env } from "../env";
 
 const GRAPH_VERSION = "v21.0";
@@ -213,6 +213,27 @@ export const metaAdapter: ChannelAdapter = {
           `meta showTyping(${action}) ${res.status} ${useIG ? "IG" : "FB"}: ${await res.text().catch(() => "")}`,
         );
       }
+    }
+  },
+
+  /**
+   * Adjunto tipo "file" vía URL: Meta lo descarga ella misma. La Send API no
+   * tiene un campo de caption para archivos — el texto ya salió antes como
+   * mensaje aparte (agent.ts manda el texto y LUEGO el documento).
+   * https://developers.facebook.com/docs/messenger-platform/send-messages#file_attachment
+   */
+  async sendDocument(doc: OutgoingDocument, env: Env): Promise<void> {
+    const { url, token, useIG } = await resolveSendTarget(doc.channel, env);
+    const res = await fetch(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+      body: JSON.stringify({
+        recipient: { id: doc.channelUserId },
+        message: { attachment: { type: "file", payload: { url: doc.url, is_reusable: true } } },
+      }),
+    });
+    if (!res.ok) {
+      console.warn(`meta sendDocument ${res.status} ${useIG ? "IG" : "FB"}: ${await res.text().catch(() => "")}`);
     }
   },
 };
