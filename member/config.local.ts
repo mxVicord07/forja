@@ -27,9 +27,11 @@ export const businessConfig = {
     "Quiénes somos":
       "BIRevX es una agencia de consultoría en automatización con IA. Su marca hermana BSEBI aporta la ingeniería de infraestructura de negocio. Juntas diseñan, construyen y evolucionan la infraestructura digital de una PyME para que sea sostenible, escalable y de su propiedad.",
     Servicios:
-      "Infraestructura digital (VPS/hosting autoalojado), CRM, ERP, dashboards y reportes (Power BI/Excel/SQL), automatización de flujos con IA, integración de IA (API keys), asistentes operativos de WhatsApp con IA, agentes de voz, diseño/rediseño de sitios web, y marketing con IA (avatares y video).",
+      "Infraestructura digital (VPS/hosting autoalojado), CRM, ERP, dashboards y reportes (Power BI/Excel/SQL), automatización de flujos con IA, integración de IA (API keys), asistentes operativos de WhatsApp con IA, agentes de voz, diseño/rediseño de sitios web (desde $6,490 MXN — ver 'Precios de sitios web' abajo), y marketing con IA (avatares y video).",
     Precios:
-      "Cada proyecto se cotiza según su alcance — rango típico $17,500-$70,000 MXN (aprox. $1,000-4,000 USD), según los servicios combinados. Para inversiones grandes: pago en bloques. El precio exacto se define después de un diagnóstico inicial sin costo — nunca antes.",
+      "Este rango aplica SOLO a automatización, CRM, ERP e integraciones de IA — NO a diseño/rediseño de sitios web, que tiene su propio precio fijo por plan (ver el campo siguiente). Automatización/CRM/ERP: cada proyecto se cotiza según su alcance — rango típico $17,500-$70,000 MXN (aprox. $1,000-4,000 USD), según los servicios combinados. Para inversiones grandes: pago en bloques. El precio exacto se define después de un diagnóstico inicial sin costo — nunca antes.",
+    "Precios de sitios web":
+      "Diseño/rediseño web tiene planes con precio fijo, no cotización a la medida: Start $6,490 MXN, Business $9,890 MXN (más popular), Growth desde $14,890 MXN, Proyecto Especial desde $22,000 MXN — todos + IVA. Rediseño de un sitio existente: $4,500 a $25,000 MXN según qué tanto cambia. Detalle completo (qué incluye cada plan, proceso) en la base de conocimiento — búscalo ahí antes de responder con números de sitios web, y comparte el PDF de paquetes con shareDocument si lo piden por escrito.",
     "Formas de pago próximamente": "Stripe (en integración, aún no disponible).",
     "Contacto directo": "WhatsApp — https://wa.me/message/ZP7XYEAVEBJ7H1",
   } as Record<string, string>,
