@@ -433,7 +433,7 @@ export async function renderInbox(env: Env, p: InboxParams): Promise<string> {
     <div class="grid grid-cols-1 md:grid-cols-[320px_1fr] overflow-hidden" style="border:1px solid var(--line);background:var(--panel);height:calc(100vh - 200px);min-height:480px">
       <div class="border-r border-line flex flex-col" style="min-height:0">
         <div id="conv-list" class="overflow-y-auto flex-1"
-             hx-get="${listPollUrl}" hx-trigger="every 10s" hx-swap="innerHTML">
+             hx-get="${listPollUrl}" hx-trigger="every 30s" hx-swap="innerHTML">
           ${list}
         </div>
       </div>

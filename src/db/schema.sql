@@ -51,6 +51,7 @@ CREATE TABLE IF NOT EXISTS leads (
 );
 CREATE INDEX IF NOT EXISTS idx_leads_status ON leads(status);
 CREATE INDEX IF NOT EXISTS idx_leads_created ON leads(created_at);
+CREATE INDEX IF NOT EXISTS idx_leads_conv ON leads(conversation_id);
 
 CREATE TABLE IF NOT EXISTS tickets (
   id TEXT PRIMARY KEY,
@@ -68,6 +69,7 @@ CREATE TABLE IF NOT EXISTS tickets (
   FOREIGN KEY (conversation_id) REFERENCES conversations(id) ON DELETE SET NULL
 );
 CREATE INDEX IF NOT EXISTS idx_tickets_status ON tickets(status);
+CREATE INDEX IF NOT EXISTS idx_tickets_conv ON tickets(conversation_id);
 
 CREATE TABLE IF NOT EXISTS admin_emails (
   email TEXT PRIMARY KEY,
