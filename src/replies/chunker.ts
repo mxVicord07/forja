@@ -1,5 +1,26 @@
 const DEFAULT_MAX_CHUNKS = 3;
 
+/**
+ * Aplana el Markdown a texto legible: para los canales que NO renderizan
+ * ningún marcado (Messenger/Instagram, ManyChat, widget web — que pinta con
+ * textContent), donde un `**texto**` crudo le llega tal cual al cliente.
+ *
+ * OJO — no se aplica en `chunkReply`, a propósito. Upstream lo puso ahí como
+ * red de seguridad global partiendo de que "ningún canal renderiza Markdown",
+ * pero eso no es exacto: Telegram (legacy Markdown) y WhatsApp SÍ renderizan
+ * negrita, solo que con *un* asterisco. Por eso cada adapter decide: Telegram
+ * usa toTelegramMarkdown(), WhatsApp/YCloud/Twilio usan toWhatsAppMarkdown(),
+ * y los canales sin marcado usan esta función. Sanear en el embudo mataría la
+ * negrita real que ya está verificada en producción en Telegram y WhatsApp.
+ */
+export function stripMarkdown(text: string): string {
+  return text
+    .replace(/(\*\*|__)([^\n]+?)\1/g, "$2") // **negrita** / __negrita__ → negrita
+    .replace(/`([^`\n]+)`/g, "$1") //          `código` → código
+    .replace(/^\s{0,3}#{1,6}\s+/gm, "") //     # Encabezado → sin marcador
+    .replace(/^[ \t]*[-*]\s+/gm, "• "); //     viñeta "- " / "* " → "• "
+}
+
 export function chunkReply(text: string, maxChunks: number = DEFAULT_MAX_CHUNKS): string[] {
   const cap = Math.max(1, Math.floor(maxChunks));
   const trimmed = text.trim();

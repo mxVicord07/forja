@@ -223,6 +223,19 @@ const GLOBAL_SCRIPT = `
   (function(){ var n=0; var t=setInterval(function(){ if(window.lucide){drawIcons();clearInterval(t);} if(++n>25) clearInterval(t); },120); })();
   document.body.addEventListener("htmx:afterSwap", drawIcons);
   document.body.addEventListener("htmx:oobAfterSwap", drawIcons);
+  // Pausa del polling: no refresques el inbox mientras el usuario lee (o si la
+  // pestaña está en segundo plano). htmx evalúa este filtro en cada tick de
+  // 'every Ns[...]' y solo dispara la petición si devuelve true. En el hilo
+  // (contenedor flex column-reverse) "al día" = scroll pegado al final, donde
+  // scrollTop ≈ 0; leer historial lo aleja (positivo en Chrome, negativo en
+  // Firefox), de ahí el Math.abs. Al volver al final, el siguiente tick se pone
+  // al día solo.
+  window.puedeRefrescar = function(id){
+    if (document.hidden) return false;
+    var el = document.getElementById(id);
+    if (!el) return true;
+    return Math.abs(el.scrollTop) < 40;
+  };
   document.addEventListener("keydown", function(e){
     if (e.key === "Escape") {
       var root = document.getElementById("modal-root");
@@ -347,9 +360,13 @@ export function layout(opts: { title: string; activeTab: string; body: string; e
     d.peers.forEach(function(p){
       opts += '<option value="' + p.url.replace(/"/g,'&quot;') + '">' + p.name.replace(/</g,'&lt;') + '</option>';
     });
-    el.innerHTML = '<select onchange="if(this.value.indexOf(\'http\')===0)window.location=this.value" ' +
+    // Las comillas simples van como &#39;: este bloque vive dentro de un
+    // template literal, así que los \' del código fuente NO llegan al navegador
+    // y cerraban la cadena JS de golpe (SyntaxError en cada carga del panel).
+    // El parser de HTML las decodifica antes de que corran el onchange y el CSS.
+    el.innerHTML = '<select onchange="if(this.value.indexOf(&#39;http&#39;)===0)window.location=this.value" ' +
       'style="background:#ffffff;color:var(--cream,#1e266a);border:1px solid var(--line);border-radius:8px;' +
-      'padding:6px 10px;font-family:\'Inter\',sans-serif;font-size:11px;letter-spacing:.02em;cursor:pointer" ' +
+      'padding:6px 10px;font-family:&#39;Inter&#39;,sans-serif;font-size:11px;letter-spacing:.02em;cursor:pointer" ' +
       'title="Cambiar de proyecto">' + opts + '</select>';
   }).catch(function(){});
   </script>

@@ -1,5 +1,6 @@
-import { describe, it, expect } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import {
+  currentDateLine,
   renderSystemPrompt,
   systemPromptFromEnv,
   type SystemPromptInput,
@@ -50,6 +51,23 @@ describe("renderSystemPrompt", () => {
   it("injects business context", () => {
     const prompt = renderSystemPrompt(input);
     expect(prompt).toContain("Horarios: Lun-Sáb 10am-8pm");
+  });
+
+  it("renders customInstructions as an additive block and omits it when absent", () => {
+    const withInstructions = renderSystemPrompt({
+      ...input,
+      customInstructions: "Siempre ofrece agendar una cita al final.",
+    });
+    expect(withInstructions).toContain("<instrucciones_del_negocio>");
+    expect(withInstructions).toContain("Siempre ofrece agendar una cita al final.");
+
+    const without = renderSystemPrompt(input);
+    expect(without).not.toContain("<instrucciones_del_negocio>");
+    expect(without).not.toContain("{{INSTRUCCIONES}}");
+
+    // Espacios en blanco cuentan como "sin instrucciones":
+    const blank = renderSystemPrompt({ ...input, customInstructions: "   " });
+    expect(blank).not.toContain("<instrucciones_del_negocio>");
   });
 
   it("inserts nichoPlaybook when provided and empty string when omitted", () => {
@@ -121,7 +139,33 @@ describe("renderSystemPrompt", () => {
   });
 });
 
+describe("currentDateLine", () => {
+  afterEach(() => vi.useRealTimers());
+
+  it("ancla jueves 2026-08-27 en Europe/Madrid", () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-08-27T15:00:00.000Z"));
+    const line = currentDateLine("Europe/Madrid");
+    expect(line).toContain("2026-08-27");
+    expect(line.toLowerCase()).toContain("jueves");
+    expect(line).toContain("Europe/Madrid");
+  });
+});
+
 describe("systemPromptFromEnv", () => {
+  it("asks the model to pass relative date words, not a self-computed YYYY-MM-DD", () => {
+    const env = {
+      BOT_NAME: "Bot",
+      BUSINESS_NAME: "Acme",
+      BOT_LANGUAGE: "es",
+      CALCOM_TIMEZONE: "Europe/Madrid",
+    } as any;
+    const prompt = systemPromptFromEnv(env, ["scheduleAppointment"], "ctx");
+    expect(prompt).toContain("<contexto_temporal>");
+    expect(prompt).toContain("PALABRAS del cliente");
+    expect(prompt).not.toContain("y para toda fecha que pases a las tools");
+  });
+
   it("pulls botName/businessName/language from env", () => {
     const env = {
       BOT_NAME: "Bot",

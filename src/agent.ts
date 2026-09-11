@@ -1,5 +1,4 @@
 import { Agent } from "agents";
-import { streamText } from "ai";
 import type { SystemModelMessage } from "ai";
 import type { Env } from "./env";
 import { Db } from "./db/client";
@@ -17,6 +16,8 @@ import type { Tier } from "./upgrade/modelSelector";
 import { monthIaCostUsd, applyBudgetGuard } from "./budget";
 import { CustomerFactsRepo } from "./db/facts";
 import { createModel } from "./llm/provider";
+import { formatLlmError } from "./llm/errorDetail";
+import { runLlmTurn } from "./llm/runTurn";
 import { costOfUsage } from "./pricing";
 import type { ChannelId } from "./channels/shared";
 import { guardReply } from "./blindaje/verify";
@@ -183,6 +184,9 @@ export class SupportAgent extends Agent<Env, SupportAgentState> {
         // mask it before this text is persisted to D1.
         processedText =
           (processedText || "(imagen sin caption)") +
+          // MASKED: a Telegram file URL carries the bot token inside, and this
+          // marker gets persisted in D1 (and shown in the dashboard, and
+          // included in exports). See src/telegramFiles.ts.
           `\n[IMAGE_URL: ${maskTelegramToken(payload.imageUrl)}]`;
       }
     }
@@ -216,7 +220,15 @@ export class SupportAgent extends Agent<Env, SupportAgentState> {
     // cf_agents_schedules table, so raw ctx.storage.setAlarm() alone won't
     // invoke our code. We upsert a fixed 'msg-buffer' row (so rapid messages
     // debounce to a single fire) and set the raw alarm as the trigger.
-    const alarmAt = Date.now() + cfg.bufferMs;
+    // Rescue for stranded messages: a Cloudflare alarm can silently fail to
+    // fire. When that happens the customer's message sits in the buffer until
+    // they write again — we saw a real customer wait 11 minutes before typing
+    // "Hola?". If the oldest buffered message is already older than 2x the
+    // normal wait, don't wait a whole buffer window again: process almost
+    // immediately.
+    const oldestAt = pending[0]?.receivedAt ?? Date.now();
+    const hasStranded = Date.now() - oldestAt > cfg.bufferMs * 2;
+    const alarmAt = Date.now() + (hasStranded ? 500 : cfg.bufferMs);
     const alarmAtSec = Math.floor(alarmAt / 1000);
     this.sql`
       INSERT OR REPLACE INTO cf_agents_schedules
@@ -225,6 +237,12 @@ export class SupportAgent extends Agent<Env, SupportAgentState> {
         ('msg-buffer', 'processBuffer', '{}', 'delayed', ${alarmAtSec}, unixepoch())
     `;
     await this.ctx.storage.setAlarm(alarmAt);
+    // Cheap guard against the lost alarm: if it didn't get registered, retry
+    // once and leave a trace in the log.
+    if ((await this.ctx.storage.getAlarm()) === null) {
+      console.error("[ingest] alarm was not armed — retrying");
+      await this.ctx.storage.setAlarm(alarmAt);
+    }
     this.setState({ ...this.state, lastAlarmAt: alarmAt });
 
     return { acknowledged: true };
@@ -272,9 +290,12 @@ export class SupportAgent extends Agent<Env, SupportAgentState> {
     if (lastUserMsg) {
       const imgMatch = lastUserMsg.content.match(/\[IMAGE_URL: (.+?)\]/);
       if (imgMatch && isPro(this.env)) {
-        // Put the token back (if this was a masked Telegram URL) right before
-        // fetching the file — see src/telegramFiles.ts.
-        const imageUrl = unmaskTelegramToken(imgMatch[1], this.env.TELEGRAM_BOT_TOKEN);
+        // The token was masked before storing; it goes back in only here, to
+        // fetch the file. It never leaves this call.
+        const imageUrl = unmaskTelegramToken(
+          imgMatch[1],
+          this.env.TELEGRAM_BOT_TOKEN,
+        );
         const cleanText = lastUserMsg.content
           .replace(/\n?\[IMAGE_URL: .+?\]/, "")
           .trim();
@@ -416,7 +437,7 @@ export class SupportAgent extends Agent<Env, SupportAgentState> {
 
       // Corre el loop del LLM con un modelo dado; deja los resultados en las vars.
       const attempt = async (m: any) => {
-        const result = streamText({
+        const turn = await runLlmTurn({
           model: m,
           system,
           messages: aiMessages,
@@ -424,25 +445,14 @@ export class SupportAgent extends Agent<Env, SupportAgentState> {
           stopWhen: ({ steps }) => steps.length >= 6,
           ...(cfg.temperature !== undefined ? { temperature: cfg.temperature } : {}),
         });
-        let text = "";
-        for await (const chunk of result.textStream) {
-          text += chunk;
-        }
-        assistantText = text;
-        const usage = await result.usage;
-        inputTokens = usage?.inputTokens ?? 0;
-        outputTokens = usage?.outputTokens ?? 0;
-        cachedTokens = usage?.cachedInputTokens ?? 0;
-        const steps = await result.steps;
-        toolCallCount = steps.reduce((n, s) => n + (s.toolCalls?.length ?? 0), 0);
+        assistantText = turn.text;
+        inputTokens = turn.inputTokens;
+        outputTokens = turn.outputTokens;
+        cachedTokens = turn.cachedTokens;
+        toolCallCount = turn.toolCallCount;
         // Persist what the agent DID (not just what it said): tool name + input,
         // feeding the dashboard's thread chips, stats and the Mi Agente counters.
-        toolCallsMade = steps.flatMap((s) =>
-          (s.toolCalls ?? []).map((tc: any) => ({
-            toolName: tc.toolName as string,
-            input: tc.input,
-          })),
-        );
+        toolCallsMade = turn.toolCallsMade;
       };
 
       try {
@@ -453,7 +463,7 @@ export class SupportAgent extends Agent<Env, SupportAgentState> {
         // mayoría; si no, se prueba el proveedor alterno (también con un segundo
         // intento). El jitter des-sincroniza mensajes que llegaron en el mismo
         // segundo. El bot no puede quedarse mudo el día del evento.
-        console.error("[SupportAgent.processBuffer] streamText failed:", e);
+        console.error("[SupportAgent.processBuffer] streamText failed:", formatLlmError(e));
         const backoff = (ms: number) => new Promise((r) => setTimeout(r, ms));
         const { fallbackModel } = await import("./llm/provider");
         const primary = createModel(this.env, tier, cfg.llm);
@@ -465,7 +475,7 @@ export class SupportAgent extends Agent<Env, SupportAgentState> {
           await attempt(model);
           ok = true;
         } catch (e1: any) {
-          console.error("[SupportAgent.processBuffer] primary retry failed:", e1);
+          console.error("[SupportAgent.processBuffer] primary retry failed:", formatLlmError(e1));
         }
 
         if (!ok && fb) {
@@ -477,14 +487,14 @@ export class SupportAgent extends Agent<Env, SupportAgentState> {
             usedModelId = fb.modelId;
             ok = true;
           } catch (e2: any) {
-            console.error("[SupportAgent.processBuffer] fallback failed:", e2);
+            console.error("[SupportAgent.processBuffer] fallback failed:", formatLlmError(e2));
             await backoff(2500 + Math.floor(Math.random() * 1500));
             try {
               await attempt(fb.model);
               usedModelId = fb.modelId;
               ok = true;
             } catch (e3: any) {
-              console.error("[SupportAgent.processBuffer] fallback retry failed:", e3);
+              console.error("[SupportAgent.processBuffer] fallback retry failed:", formatLlmError(e3));
             }
           }
         }

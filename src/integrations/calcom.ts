@@ -1,4 +1,5 @@
 import type { Env } from "../env";
+import { businessTimeZone, DEFAULT_TZ, todayInTz } from "../time/resolveDate";
 
 // Cliente de Cal.com API v2 para los nichos de cita. Dos capacidades:
 //  - getAvailableSlots: horarios reales libres de un event type en un día.
@@ -40,7 +41,7 @@ async function fetchCalcom(url: string, init?: RequestInit): Promise<Response> {
   return await fetch(url, init);
 }
 
-export const DEFAULT_TZ = "America/Mexico_City";
+export { DEFAULT_TZ, todayInTz };
 
 /** ¿El dueño ya conectó Cal.com? (API key + al menos un event type). */
 export function calcomConfigured(env: Env): boolean {
@@ -48,7 +49,7 @@ export function calcomConfigured(env: Env): boolean {
 }
 
 export function calcomTimeZone(env: Env): string {
-  return (env.CALCOM_TIMEZONE || "").trim() || DEFAULT_TZ;
+  return businessTimeZone(env);
 }
 
 /**
@@ -108,7 +109,11 @@ export async function getAvailableSlots(
     const res = await fetchCalcom(url, {
       headers: { Authorization: `Bearer ${env.CALCOM_API_KEY}`, "cal-api-version": SLOTS_VERSION },
     });
-    if (!res.ok) return { ok: false, reason: `http_${res.status}` };
+    if (!res.ok) {
+      // Logueamos el status para soporte, NO el body (puede traer datos del cliente).
+      console.warn(`[calcom] slots http_${res.status}`);
+      return { ok: false, reason: `http_${res.status}` };
+    }
     const body = (await res.json()) as { data?: Record<string, Slot[]> };
     const byDate = body.data ?? {};
     const slots = Object.values(byDate)
@@ -157,7 +162,11 @@ export async function createBooking(
         ...(args.notes ? { bookingFieldsResponses: { notes: args.notes } } : {}),
       }),
     });
-    if (!res.ok) return { ok: false, reason: `http_${res.status}` };
+    if (!res.ok) {
+      // Solo el status (el body del error puede traer nombre/email del cliente).
+      console.warn(`[calcom] booking http_${res.status}`);
+      return { ok: false, reason: `http_${res.status}` };
+    }
     const body = (await res.json()) as { data?: { id: number | string; uid?: string; status?: string; start?: string } };
     const d = body.data;
     // Un booking sin uid no sirve: rescheduleBooking/cancelBooking necesitan el

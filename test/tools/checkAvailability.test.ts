@@ -1,7 +1,17 @@
-import { describe, it, expect, vi, afterEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { checkAvailabilityTool } from "../../src/tools/checkAvailability";
 
-afterEach(() => vi.restoreAllMocks());
+// Reloj fijo: la fecha ahora se resuelve contra "hoy" en el servidor, así que
+// sin anclarlo estas pruebas (fechas de julio-2026) caducarían solas.
+beforeEach(() => {
+  vi.useFakeTimers({ shouldAdvanceTime: true });
+  vi.setSystemTime(new Date("2026-07-01T18:00:00Z"));
+});
+
+afterEach(() => {
+  vi.useRealTimers();
+  vi.restoreAllMocks();
+});
 
 const env = (over: any = {}) => ({ CALCOM_API_KEY: "cal_x", CALCOM_EVENT_TYPE_ID: "10", ...over }) as any;
 
@@ -37,5 +47,24 @@ describe("checkAvailabilityTool", () => {
     const tool = checkAvailabilityTool(env({ CALCOM_EVENT_TYPES: '{"corte":10,"barba":20}' }));
     await tool.execute!({ fecha: "2026-07-20", servicio: "quiero barba" }, {} as any);
     expect(String((fetchMock.mock.calls as any)[0][0])).toContain("eventTypeId=20");
+  });
+  // --- Fecha resuelta en el servidor (adoptado del upstream) ---
+
+  it("acepta la fecha en palabras del cliente y consulta el día correcto", async () => {
+    const fetchMock = vi.fn(async () => new Response(JSON.stringify({ data: {} }), { status: 200 }));
+    vi.stubGlobal("fetch", fetchMock);
+    const tool = checkAvailabilityTool(env());
+    const res = (await tool.execute!({ fecha: "mañana" }, {} as any)) as any;
+    expect(res.fecha).toBe("2026-07-02");
+    expect(String((fetchMock.mock.calls as any)[0][0])).toContain("2026-07-02");
+  });
+
+  it("rechaza un día ya pasado sin llamar a Cal.com", async () => {
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+    const tool = checkAvailabilityTool(env());
+    const res = (await tool.execute!({ fecha: "2026-06-01" }, {} as any)) as any;
+    expect(res.error).toBe("date_in_past");
+    expect(fetchMock).not.toHaveBeenCalled();
   });
 });

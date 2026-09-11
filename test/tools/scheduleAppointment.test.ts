@@ -12,9 +12,17 @@ beforeEach(async () => {
   const d1 = await mf.getD1Database("DB");
   appts = new AppointmentsRepo(new Db(d1 as any));
   env = { DB: d1, CALCOM_API_KEY: "cal_x", CALCOM_EVENT_TYPE_ID: "10", BOT_TIER: "pro" };
+  // Reloj fijo DESPUÉS de levantar Miniflare: la resolución de fecha del
+  // servidor compara contra "hoy", así que sin anclar el reloj estas pruebas
+  // caducarían solas. shouldAdvanceTime deja respirar al I/O async.
+  vi.useFakeTimers({ shouldAdvanceTime: true });
+  vi.setSystemTime(new Date("2026-07-01T18:00:00Z"));
 });
 
-afterEach(() => vi.restoreAllMocks());
+afterEach(() => {
+  vi.useRealTimers();
+  vi.restoreAllMocks();
+});
 
 const args = {
   startTime: "2026-07-20T15:00:00Z",
@@ -112,5 +120,36 @@ describe("scheduleAppointmentTool", () => {
     const res = (await tool.execute!(args, {} as any)) as any;
     expect(res.error).toBe("calcom_not_configured");
     expect(fetchMock).not.toHaveBeenCalled();
+  });
+  // --- Fecha resuelta en el servidor (adoptado del upstream) ---
+
+  it("la fecha en palabras del cliente gana sobre el YYYY-MM-DD del modelo", async () => {
+    const fetchMock = vi.fn(async () =>
+      new Response(JSON.stringify({ data: { id: 556, uid: "uid-2" } }), { status: 201 }),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    const tool = scheduleAppointmentTool(env, () => "telegram:1");
+    // El modelo mandó el 20 de julio; el cliente dijo "mañana" (= 2026-07-02).
+    const res = (await tool.execute!({ ...args, date: "mañana" }, {} as any)) as any;
+
+    expect(res.ok).toBe(true);
+    expect(res.date).toBe("2026-07-02");
+    const body = JSON.parse(String((fetchMock.mock.calls[0] as any[])[1].body));
+    expect(body.start).toBe("2026-07-02T15:00:00Z"); // hora y offset intactos
+    expect((await appts.findActive("telegram:1"))?.start).toBe("2026-07-02T15:00:00Z");
+  });
+
+  it("rechaza una fecha en el pasado sin llamar a Cal.com", async () => {
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+
+    const tool = scheduleAppointmentTool(env, () => "telegram:1");
+    const res = (await tool.execute!({ ...args, date: "2026-06-01" }, {} as any)) as any;
+
+    expect(res.error).toBe("date_in_past");
+    expect(res.today).toBe("2026-07-01");
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(await appts.findActive("telegram:1")).toBeNull();
   });
 });

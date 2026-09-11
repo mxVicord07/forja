@@ -1,5 +1,7 @@
 import type { ChannelAdapter, IncomingMessage, OutgoingReply } from "./shared";
 import type { Env } from "../env";
+import { egressFetch } from "../http/egress";
+import { toWhatsAppMarkdown } from "./shared";
 
 export const twilioAdapter: ChannelAdapter = {
   async parseIncoming(request: Request, _env: Env): Promise<IncomingMessage> {
@@ -45,9 +47,11 @@ export const twilioAdapter: ChannelAdapter = {
       const body = new URLSearchParams({
         From: `whatsapp:${from}`,
         To: `whatsapp:${reply.channelUserId}`,
-        Body: reply.chunks[i],
+        // Twilio entrega a WhatsApp: mismo dialecto que el adapter de Meta y
+        // el de YCloud (*un* asterisco para negrita), no texto aplanado.
+        Body: toWhatsAppMarkdown(reply.chunks[i]),
       });
-      await fetch(url, {
+      await egressFetch(url, {
         method: "POST",
         headers: {
           Authorization: `Basic ${auth}`,

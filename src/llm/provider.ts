@@ -3,6 +3,7 @@ import { createOpenAI } from "@ai-sdk/openai";
 import { createXai } from "@ai-sdk/xai";
 import type { Env } from "../env";
 import type { Tier } from "../upgrade/modelSelector";
+import { egressFetch, sanitizeHeaderValue } from "../http/egress";
 
 /**
  * LLM provider abstraction.
@@ -101,6 +102,38 @@ function envKeyFor(env: Env, provider: LlmProvider): string | undefined {
   return env.ANTHROPIC_API_KEY;
 }
 
+function cleanKey(raw: string | undefined): string {
+  return sanitizeHeaderValue(raw ?? "");
+}
+
+function baseURLFor(env: Env, provider: LlmProvider): string | undefined {
+  const raw =
+    provider === "openai"
+      ? env.OPENAI_BASE_URL
+      : provider === "xai"
+        ? env.XAI_BASE_URL
+        : env.ANTHROPIC_BASE_URL;
+  const v = (raw ?? "").trim().replace(/\/+$/, "");
+  return v || undefined;
+}
+
+function gatewayHeaders(env: Env): Record<string, string> | undefined {
+  const token = cleanKey(env.CF_AIG_TOKEN);
+  if (!token) return undefined;
+  return { "cf-aig-authorization": `Bearer ${token}` };
+}
+
+function providerInit(env: Env, provider: LlmProvider, apiKey: string) {
+  const baseURL = baseURLFor(env, provider);
+  const headers = gatewayHeaders(env);
+  return {
+    apiKey,
+    fetch: egressFetch as typeof fetch,
+    ...(baseURL ? { baseURL } : {}),
+    ...(headers ? { headers } : {}),
+  };
+}
+
 /**
  * Build the AI SDK model for the given tier. Dashboard overrides (BYO key /
  * provider / concrete model) win over env. Si el dueño eligió un proveedor
@@ -125,29 +158,41 @@ export function createModel(env: Env, tier: Tier, ov?: LlmOverrides): ResolvedMo
   }
   if (!provider) provider = resolveProvider(env);
 
-  const ovKey = (ov?.apiKey ?? "").trim();
-  let apiKey = ovKey || envKeyFor(env, provider);
+  const ovKey = cleanKey(ov?.apiKey);
+  let apiKey = ovKey || cleanKey(envKeyFor(env, provider));
   let useOvModel = ovModel;
   if (!apiKey) {
     console.warn(`[llm] no API key for provider "${provider}" — falling back to env default`);
     provider = resolveProvider(env);
-    apiKey = envKeyFor(env, provider);
+    apiKey = cleanKey(envKeyFor(env, provider));
     useOvModel = ""; // el modelo elegido era del proveedor sin llave — no aplica
   }
 
   const modelId = useOvModel || modelIdFor(env, provider, tier);
 
   if (provider === "openai") {
-    const openai = createOpenAI({ apiKey });
-    return { provider, modelId, model: openai(modelId), supportsPromptCache: false };
+    const openai = createOpenAI(providerInit(env, "openai", apiKey));
+    // Chat Completions (`openai.chat`), NO la Responses API que es el default
+    // de `openai(modelId)` desde AI SDK 5. Responses trata las function tools
+    // como JSON Schema strict si `strict` se omite; nuestras tools (y las de
+    // giros Forja+ como coach: agendarCita/cancelarCita) usan muchos
+    // `.optional()` / `.default()` y OpenAI responde 400 Bad Request → el bot
+    // contesta "Algo falló de mi lado...". El mismo payload por Chat Completions
+    // (lo que se prueba con curl) acepta parámetros opcionales.
+    // `.chat` existe en @ai-sdk/openai v3 y v4; el fallback cubre mocks viejos.
+    const model =
+      typeof (openai as any).chat === "function"
+        ? (openai as any).chat(modelId)
+        : openai(modelId);
+    return { provider, modelId, model, supportsPromptCache: false };
   }
 
   if (provider === "xai") {
-    const xai = createXai({ apiKey });
+    const xai = createXai(providerInit(env, "xai", apiKey));
     return { provider, modelId, model: xai(modelId), supportsPromptCache: false };
   }
 
-  const anthropic = createAnthropic({ apiKey });
+  const anthropic = createAnthropic(providerInit(env, "anthropic", apiKey));
   return { provider, modelId, model: anthropic(modelId), supportsPromptCache: true };
 }
 

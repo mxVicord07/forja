@@ -27,9 +27,13 @@ describe("buildTools", () => {
     ]);
   });
 
-  it("free tier captura leads pero excluye las Pro-only avanzadas", () => {
+  // La agenda vive en Pro (ver nota en src/tools/index.ts): las 4 tools de cita
+  // son interdependientes (appointments en D1 + tickets de aprobación), así que
+  // no se adoptó el movimiento de upstream de scheduleAppointment al tier free.
+  it("free tier captura leads y comparte documentos, pero excluye las Pro-only (agenda, catálogo)", () => {
     const tools = buildTools(makeCtx("free"));
     expect(tools.captureLead).toBeDefined();
+    expect(tools.shareDocument).toBeDefined();
     expect(tools.scheduleAppointment).toBeUndefined();
     expect(tools.catalogQuery).toBeUndefined();
   });

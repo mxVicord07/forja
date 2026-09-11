@@ -1,15 +1,30 @@
 import { describe, it, expect, vi } from "vitest";
 
+const mocks = vi.hoisted(() => ({
+  lastAnthropic: undefined as Record<string, unknown> | undefined,
+  lastOpenAI: undefined as Record<string, unknown> | undefined,
+}));
+
 // Mock both providers so createModel returns predictable model objects without
 // importing the real SDK client internals.
 vi.mock("@ai-sdk/anthropic", () => ({
-  createAnthropic: () => (modelId: string) => ({ p: "anthropic", modelId }),
+  createAnthropic: (opts: Record<string, unknown>) => {
+    mocks.lastAnthropic = opts;
+    return (modelId: string) => ({ p: "anthropic", modelId });
+  },
 }));
 vi.mock("@ai-sdk/openai", () => ({
-  createOpenAI: () => (modelId: string) => ({ p: "openai", modelId }),
+  createOpenAI: (opts: Record<string, unknown>) => {
+    mocks.lastOpenAI = opts;
+    const chat = (modelId: string) => ({ p: "openai", modelId, api: "chat" });
+    const fn = (modelId: string) => ({ p: "openai", modelId, api: "responses" });
+    (fn as any).chat = chat;
+    return fn;
+  },
 }));
 
 import { resolveProvider, modelIdFor, createModel } from "../../src/llm/provider";
+import { egressFetch } from "../../src/http/egress";
 import type { Env } from "../../src/env";
 
 function env(over: Partial<Env> = {}): Env {
@@ -58,5 +73,31 @@ describe("createModel", () => {
     expect(r.provider).toBe("openai");
     expect(r.supportsPromptCache).toBe(false);
     expect(r.modelId).toBe("gpt-4o");
+  });
+  it("usa Chat Completions (openai.chat), no la Responses API default", () => {
+    const r = createModel(env({ LLM_PROVIDER: "openai", OPENAI_API_KEY: "sk-oa" }), "smart");
+    expect(r.model).toEqual({ p: "openai", modelId: "gpt-4o", api: "chat" });
+  });
+
+  it("limpia CR/LF de la API key (secret pegado en Git Bash de Windows)", () => {
+    createModel(env({ ANTHROPIC_API_KEY: "sk-ant-real\r\n" }), "fast");
+    expect(mocks.lastAnthropic?.apiKey).toBe("sk-ant-real");
+  });
+
+  it("pasa fetch de egress + ANTHROPIC_BASE_URL + token de AI Gateway", () => {
+    createModel(
+      env({
+        ANTHROPIC_BASE_URL: "https://gateway.ai.cloudflare.com/v1/acc/gw/anthropic/",
+        CF_AIG_TOKEN: "tok-aig\r",
+      }),
+      "fast",
+    );
+    expect(mocks.lastAnthropic?.fetch).toBe(egressFetch);
+    expect(mocks.lastAnthropic?.baseURL).toBe(
+      "https://gateway.ai.cloudflare.com/v1/acc/gw/anthropic",
+    );
+    expect(mocks.lastAnthropic?.headers).toEqual({
+      "cf-aig-authorization": "Bearer tok-aig",
+    });
   });
 });

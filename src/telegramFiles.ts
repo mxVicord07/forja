@@ -14,7 +14,7 @@
  * up for.
  *
  * Rule: the token is MASKED on the way in and put back only at the moment the
- * file is actually fetched. Reportado por conconfianza (Escuela Con Confianza).
+ * file is actually fetched.
  */
 
 /** Placeholder that replaces the token in anything we persist. */

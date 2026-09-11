@@ -10,6 +10,8 @@
 //  • Validar la firma X-Hub-Signature-256 de cada POST — verifyMetaSignature().
 import type { ChannelAdapter, IncomingMessage, OutgoingReply, OutgoingDocument, ChannelId, TypingContext } from "./shared";
 import type { Env } from "../env";
+import { egressFetch } from "../http/egress";
+import { stripMarkdown } from "../replies/chunker";
 
 const GRAPH_VERSION = "v21.0";
 
@@ -108,7 +110,7 @@ let igSenderIdCache: { token: string; id: string } | null = null;
 async function instagramSenderId(token: string): Promise<string> {
   if (igSenderIdCache?.token === token) return igSenderIdCache.id;
   try {
-    const r = await fetch(
+    const r = await egressFetch(
       `https://graph.instagram.com/${GRAPH_VERSION}/me?fields=user_id&access_token=${encodeURIComponent(token)}`,
     );
     const j = (await r.json()) as { user_id?: string | number };
@@ -167,10 +169,12 @@ export const metaAdapter: ChannelAdapter = {
       if (delay > 0) await new Promise((r) => setTimeout(r, delay));
       const payload: Record<string, unknown> = {
         recipient: { id: reply.channelUserId },
-        message: { text: reply.chunks[i] },
+        // Messenger/Instagram no renderizan marcado: se aplana (si no, el
+        // cliente ve los asteriscos crudos).
+        message: { text: stripMarkdown(reply.chunks[i]) },
       };
       if (!useIG) payload.messaging_type = "RESPONSE"; // requerido en Messenger, no en IG Login
-      const res = await fetch(url, {
+      const res = await egressFetch(url, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",

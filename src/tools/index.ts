@@ -27,9 +27,10 @@ export interface ToolContext {
 }
 
 export function buildTools(ctx: ToolContext) {
-  // Free tier base set. captureLead va aquí a propósito: el bot Starter (free)
-  // captura prospectos — es el valor central de un bot de ventas. Lo Pro son las
-  // tools más avanzadas por nicho (agendar citas, consultar catálogo/inventario).
+  // Free tier base set. captureLead y scheduleAppointment van aquí a propósito: el bot
+  // Starter (free) captura prospectos Y agenda citas — Cal.com lo pone el dueño con su
+  // propia cuenta/llave, sin costo para Forja, así que es valor central sin gate. Lo Pro
+  // es consultar catálogo/inventario y las tools avanzadas por nicho.
   const tools: Record<string, any> = {
     searchKb: searchKbTool(ctx.env, ctx.onSearchKb),
     handoffHuman: handoffHumanTool(ctx.env, ctx.getConversationId),
@@ -44,6 +45,13 @@ export function buildTools(ctx: ToolContext) {
 
   // Pro tier additions
   if (isPro(ctx.env)) {
+    // NOTA (merge upstream 2026-09-10): upstream movió scheduleAppointment al tier
+    // free con una tool combinada (consulta + reserva, sin persistencia). Acá se
+    // conserva la suite de 4 tools: agendar escribe en `appointments` (D1) y
+    // reagendar/cancelar dependen de esa fila + los tickets de aprobación. Un bot
+    // free con reserva pero sin consulta de horarios no tendría sentido, así que
+    // las 4 siguen juntas en Pro. Lo que SÍ se adoptó del cambio de upstream es
+    // la resolución de fechas relativas en el servidor (src/time/resolveDate).
     tools.checkAvailability = checkAvailabilityTool(ctx.env);
     tools.scheduleAppointment = scheduleAppointmentTool(ctx.env, ctx.getConversationId);
     tools.rescheduleAppointment = rescheduleAppointmentTool(ctx.env, ctx.getConversationId);

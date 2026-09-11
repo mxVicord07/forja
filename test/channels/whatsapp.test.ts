@@ -106,7 +106,9 @@ describe("whatsappAdapter.sendReply", () => {
     const [url, init] = fetchMock.mock.calls[0] as any[];
     expect(url).toBe("https://graph.facebook.com/v21.0/PHONE_ID/messages");
     expect(init.method).toBe("POST");
-    expect(init.headers.Authorization).toBe("Bearer TOKEN");
+    const hdrs = new Headers(init.headers);
+    expect(hdrs.get("Authorization")).toBe("Bearer TOKEN");
+    expect(hdrs.get("User-Agent")).toMatch(/^ForjaBot\//);
     const payload = JSON.parse(init.body);
     expect(payload.messaging_product).toBe("whatsapp");
     expect(payload.to).toBe("5215512345678");

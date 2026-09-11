@@ -49,9 +49,11 @@ function stubSettings(overrides: Record<string, string> = {}) {
 // import("./media/transcribe") inside ingest() resolves to the real module.
 
 const streamTextMock = vi.fn();
+const generateTextMock = vi.fn();
 
 vi.mock("ai", () => ({
   streamText: (...args: any[]) => streamTextMock(...args),
+  generateText: (...args: any[]) => generateTextMock(...args),
   tool: (def: any) => def,
 }));
 
@@ -219,6 +221,7 @@ describe("SupportAgent.alarm — multimodal last message (Task 6.3)", () => {
     // Fresh stream result per call (the async generator is one-shot).
     streamTextMock.mockReset();
     streamTextMock.mockImplementation(() => makeStreamResult("ok"));
+    generateTextMock.mockReset();
 
     vi.spyOn(MessagesRepo.prototype, "append").mockResolvedValue(
       undefined as any,
@@ -326,6 +329,44 @@ describe("SupportAgent.alarm — multimodal last message (Task 6.3)", () => {
     const arg = streamTextMock.mock.calls[0][0];
     expect(arg.model).toEqual({ modelId: "claude-sonnet-4-5-20250929" });
   });
+
+  it("si streamText tira 400, manda la respuesta de generateText (no el error genérico)", async () => {
+    const { agent } = makeAgent({ tier: "free" });
+    const sendReply = vi.fn(async () => {});
+
+    streamTextMock.mockReset();
+    streamTextMock.mockImplementation(() => {
+      throw Object.assign(new Error("No output generated. Check the stream for errors."), {
+        name: "AI_NoOutputGeneratedError",
+        cause: Object.assign(new Error("Bad Request"), {
+          name: "AI_APICallError",
+          statusCode: 400,
+        }),
+      });
+    });
+    generateTextMock.mockReset();
+    generateTextMock.mockResolvedValue({
+      text: "Hola, ¿en qué te ayudo?",
+      usage: { inputTokens: 12, outputTokens: 6, cachedInputTokens: 0 },
+      steps: [],
+    });
+
+    vi.spyOn(MessagesRepo.prototype, "append").mockResolvedValue(undefined as any);
+    vi.spyOn(MessagesRepo.prototype, "lastN").mockResolvedValue([
+      { role: "user", content: "hola" },
+    ] as any);
+    vi.spyOn(ConversationsRepo.prototype, "touchLastMessage").mockResolvedValue(undefined as any);
+    vi.spyOn(senderMod, "pickAdapter").mockReturnValue({ sendReply } as any);
+
+    agent.state.pendingMessages = [{ text: "hola", receivedAt: Date.now() }];
+    await agent.processBuffer();
+
+    expect(generateTextMock).toHaveBeenCalledTimes(1);
+    expect(sendReply).toHaveBeenCalled();
+    const sent = sendReply.mock.calls.at(0)?.at(0) as { chunks: string[] } | undefined;
+    expect(sent?.chunks.join("")).toContain("Hola, ¿en qué te ayudo?");
+    expect(sent?.chunks.join("")).not.toMatch(/Algo falló de mi lado/);
+  });
 });
 
 describe("SupportAgent.ingest — bot_paused (settings)", () => {
@@ -371,5 +412,42 @@ describe("SupportAgent.ingest — bot_paused (settings)", () => {
     });
 
     expect(storage.setAlarm).toHaveBeenCalledTimes(1);
+  });
+
+  it("re-arms the alarm when it did not get registered", async () => {
+    stubSettings();
+    const { agent, storage } = makeAgent({ tier: "free" });
+    stubConversations();
+    // The platform silently dropped the alarm: nothing is armed afterwards.
+    storage.getAlarm.mockResolvedValue(null);
+
+    await agent.ingest({
+      channel: "telegram",
+      channelUserId: "u1",
+      text: "hola",
+    });
+
+    expect(storage.setAlarm).toHaveBeenCalledTimes(2);
+  });
+
+  it("processes almost immediately when a buffered message is stranded", async () => {
+    stubSettings();
+    const { agent, storage } = makeAgent({ tier: "free" });
+    stubConversations();
+    // A previous message never got processed because its alarm was lost.
+    agent.setState({
+      ...agent.state,
+      pendingMessages: [{ text: "hola", receivedAt: Date.now() - 600_000 }],
+    });
+
+    const before = Date.now();
+    await agent.ingest({
+      channel: "telegram",
+      channelUserId: "u1",
+      text: "hola?",
+    });
+
+    const alarmAt = storage.setAlarm.mock.calls[0][0];
+    expect(alarmAt - before).toBeLessThan(2_000);
   });
 });

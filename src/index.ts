@@ -13,14 +13,16 @@ import { adminApp } from "./admin/routes";
 import { purgeOldMessages } from "./crons/purgeOldMessages";
 import { purgeOldSettingsHistory } from "./crons/purgeOldSettingsHistory";
 import { reconcileExportedLeads } from "./crons/reconcileExportedLeads";
+import { DAILY_CRON, isNightlyTick } from "./crons/schedule";
 import { reindexKb } from "./kb/reindex";
 import { analyzeConversations } from "./insights/analyzer";
 import { Db } from "./db/client";
 import { SettingsRepo, SETTING_KEYS } from "./db/settings";
 import { detectKind } from "./learn/fieldPath";
 import { saveCapture, isLearnMode, isLearnModeEnabled } from "./learn/mapping";
-import { tokensMatch } from "./http-auth";
+import { tokensMatch, manychatWebhookAllowed } from "./http-auth";
 import { apiApp } from "./api";
+import { getAgentStub } from "./agentStub";
 
 export { SupportAgent } from "./agent";
 
@@ -35,8 +37,7 @@ async function routeToAgent(c: { req: { raw: Request }; env: Env; text: (t: stri
   try {
     const env = c.env;
     const msg = await adapter.parseIncoming(c.req.raw, env);
-    const doId = env.AGENT.idFromName(`${msg.channel}:${msg.channelUserId}`);
-    const stub = env.AGENT.get(doId);
+    const stub = getAgentStub(env, `${msg.channel}:${msg.channelUserId}`);
     // Call the agent directly via RPC. Do NOT use stub.fetch(): the `agents` SDK
     // intercepts the Durable Object fetch and expects partyserver namespace/room
     // headers, so an ad-hoc fetch to /ingest fails to connect. RPC invokes the
@@ -60,7 +61,15 @@ async function routeToAgent(c: { req: { raw: Request }; env: Env; text: (t: stri
 }
 
 app.post("/webhooks/telegram", (c) => routeToAgent(c, telegramAdapter));
-app.post("/webhooks/manychat", (c) => routeToAgent(c, manychatAdapter));
+// ManyChat — guarded by the X-Api-Key header the setup guide already asks for.
+// No-op until MANYCHAT_WEBHOOK_SECRET is set, so existing bots keep working.
+app.post("/webhooks/manychat", (c) => {
+  if (!manychatWebhookAllowed(c.req.raw, c.env)) {
+    console.warn("manychat webhook rejected: missing or invalid X-Api-Key");
+    return c.text("unauthorized", 401);
+  }
+  return routeToAgent(c, manychatAdapter);
+});
 // WhatsApp (Twilio): rutea el mensaje entrante al bot de clientes (Claude). El
 // body se lee UNA vez; ack con TwiML vacío para que Twilio no reenvíe el cuerpo
 // como mensaje.
@@ -72,8 +81,9 @@ app.post("/webhooks/twilio", async (c) => {
     console.error("twilio parse error:", e);
     return new Response("<Response></Response>", { status: 200, headers: { "Content-Type": "text/xml" } });
   }
-  const doId = c.env.AGENT.idFromName(`${msg.channel}:${msg.channelUserId}`);
-  await c.env.AGENT.get(doId).ingest(msg).catch((e) => console.error("ingest:", e));
+  await getAgentStub(c.env, `${msg.channel}:${msg.channelUserId}`)
+    .ingest(msg)
+    .catch((e) => console.error("ingest:", e));
   return new Response("<Response></Response>", { status: 200, headers: { "Content-Type": "text/xml" } });
 });
 
@@ -126,8 +136,7 @@ app.post("/webhooks/meta", async (c) => {
     // (si no, cada DM se procesa DOBLE: 2x LLM, 2x respuestas al lead y
     // colisiones de rate limit en ráfagas de historias).
     if (msg.channel === "instagram" && c.env.IG_DM_SOURCE === "manychat") continue;
-    const doId = c.env.AGENT.idFromName(`${msg.channel}:${msg.channelUserId}`);
-    await c.env.AGENT.get(doId).ingest(msg);
+    await getAgentStub(c.env, `${msg.channel}:${msg.channelUserId}`).ingest(msg);
   }
   return c.text("EVENT_RECEIVED", 200);
 });
@@ -183,8 +192,7 @@ app.post("/webhooks/whatsapp", async (c) => {
       // tipo no soportado: 200 igual, o YCloud reintenta.
       const msg = await parseYCloudEvent(body, c.env, origin);
       if (msg) {
-        const doId = c.env.AGENT.idFromName(`${msg.channel}:${msg.channelUserId}`);
-        await c.env.AGENT.get(doId).ingest(msg);
+        await getAgentStub(c.env, `${msg.channel}:${msg.channelUserId}`).ingest(msg);
       }
       return c.text("EVENT_RECEIVED", 200);
     }
@@ -201,8 +209,7 @@ app.post("/webhooks/whatsapp", async (c) => {
       return c.text("bad json", 400);
     }
     for (const msg of await parseWhatsAppEvents(body as any, c.env, origin)) {
-      const doId = c.env.AGENT.idFromName(`${msg.channel}:${msg.channelUserId}`);
-      await c.env.AGENT.get(doId).ingest(msg);
+      await getAgentStub(c.env, `${msg.channel}:${msg.channelUserId}`).ingest(msg);
     }
     return c.text("EVENT_RECEIVED", 200);
   } catch (e: any) {
@@ -273,12 +280,33 @@ app.route("/admin", adminApp);
 app.route("/api", apiApp);
 
 // KB reindex — embeds scripts/kb-fixtures.json into Vectorize. Guarded by the
-// KB_REINDEX_TOKEN secret via the X-Reindex-Token header. Trigger after deploy:
-//   curl -X POST https://<worker>/kb/reindex -H "X-Reindex-Token: <token>"
+// KB_REINDEX_TOKEN secret via the X-Reindex-Token header.
+//
+// El orden importa, y no es el intuitivo:
+//   1. pnpm kb:reindex        (regenera el manifiesto)
+//   2. pnpm deploy
+//   3. wrangler secret put KB_REINDEX_TOKEN     <- DESPUÉS del deploy
+//   4. curl -X POST https://<worker>/kb/reindex -H "X-Reindex-Token: <token>"
+//
+// El secret va después del deploy porque un deploy posterior lo puede dejar sin
+// efecto. Y aun haciéndolo en este orden, el paso 4 puede devolver
+// `unauthorized` en el primer intento: el secret tarda unos segundos en
+// propagarse por el edge. Esperar y reintentar resuelve — el token no está mal.
 app.post("/kb/reindex", async (c) => {
   const provided = c.req.header("X-Reindex-Token") ?? "";
   const expected = c.env.KB_REINDEX_TOKEN ?? "";
-  if (!expected || !tokensMatch(provided, expected)) {
+  if (!expected) {
+    // Distinto de "token equivocado", pero la respuesta es la misma a propósito:
+    // decirle a quien llama que el Worker no tiene secret es regalarle
+    // información. El aviso va al log, donde lo ve el dueño con `wrangler tail`
+    // y nadie más. Sin esto, un secret que no propagó y un token mal copiado se
+    // ven idénticos desde afuera.
+    console.warn(
+      "kb/reindex: KB_REINDEX_TOKEN no está configurado en este Worker (o todavía no propagó); toda llamada va a devolver unauthorized",
+    );
+    return c.json({ ok: false, error: "unauthorized" }, 401);
+  }
+  if (!tokensMatch(provided, expected)) {
     return c.json({ ok: false, error: "unauthorized" }, 401);
   }
   const r = await reindexKb(c.env);
@@ -326,7 +354,13 @@ export default {
 
     // Los trabajos nocturnos SOLO corren en el tick diario (3am UTC) — un tick
     // más frecuente (si el miembro lo configura) no debe purgar/analizar de más.
-    if (event.cron && event.cron !== "0 3 * * *") return;
+    // Ojo: si NINGÚN cron configurado es DAILY_CRON, estos trabajos no corren
+    // nunca. Por eso se loguea el motivo, y por eso el test compara la constante
+    // contra wrangler.toml.
+    if (!isNightlyTick(event.cron)) {
+      console.log(`cron ${event.cron}: se omiten los trabajos nocturnos (solo corren en "${DAILY_CRON}")`);
+      return;
+    }
 
     // Daily cron (wrangler.toml: "0 3 * * *") — purge messages older than 90 days.
     await purgeOldMessages(env);

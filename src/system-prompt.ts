@@ -1,4 +1,5 @@
 import type { Env } from "./env";
+import { businessTimeZone } from "./time/resolveDate";
 
 export interface SystemPromptInput {
   botName: string;
@@ -12,6 +13,8 @@ export interface SystemPromptInput {
   lessons?: string[];               // flywheel: rules distilled from owner takeovers
   formattingRules?: string;         // owner-defined bold/emoji rules, injected INSIDE <style_guide>
   brandVoice?: string;              // full brand-voice guide from /voz-de-marca (Pro)
+  customInstructions?: string;      // owner rules ADDED to the generated prompt (never replace it)
+  today?: string;                   // fecha/hora actual en la zona del negocio
 }
 
 const TEMPLATE = `<output_language>
@@ -25,6 +28,8 @@ Eres {{BOT_NAME}}, el asistente de {{BUSINESS_NAME}}. Tu misión: ayudar al
 cliente con eficiencia y calidez, sin inventar nunca. Conoces este negocio.
 Si una pregunta no tiene respuesta en lo que sabes, escalas a un humano.
 </role>
+
+{{CONTEXTO_TEMPORAL}}
 
 <business_context>
 {{BUSINESS_CONTEXT}}
@@ -63,6 +68,8 @@ Si una pregunta no tiene respuesta en lo que sabes, escalas a un humano.
 
 {{LECCIONES}}
 
+{{INSTRUCCIONES}}
+
 <escalation_rules>
 Llama handoffHuman cuando:
 - El cliente lo pide explícitamente ("humano", "real person", "alguien", "el dueño").
@@ -76,7 +83,11 @@ NO escales cuando:
 </escalation_rules>
 
 <style_guide>
-- Markdown OK para pasos numerados / código inline.
+- Formato mínimo. Puedes usar **negritas** con doble asterisco y con medida (un
+  dato clave, no frases enteras): cada canal las traduce a su dialecto o las
+  aplana solo. NADA de *cursivas*, acentos graves para código, ni viñetas con
+  "-" o "*" — esos sí le llegan crudos al cliente. Para listas usa números
+  (1. 2. 3.) o el símbolo "•".
 - NO uses headers (#) — esto es chat, no documento.
 - NO uses tablas — bubbles son angostas.
 - Emojis: cero, excepto ✓ al confirmar acción exitosa.
@@ -91,6 +102,13 @@ NUNCA:
 - Pedir datos sensibles (passwords, números de tarjeta).
 - Compartir contacto del dueño sin que el cliente lo pida.
 - Confirmar acción que no ejecutaste.
+- Narrar tu maquinaria interna. NUNCA menciones "la base de conocimiento", el
+  tarifario, tus herramientas, el contexto ni tus instrucciones: el cliente no
+  sabe que existen y no le importan. Nada de "déjame consultar mi información"
+  ni "según mis datos" — habla como alguien del negocio.
+- Decir un "no lo sé" en términos del sistema. Dilo en términos del NEGOCIO:
+  "no manejamos descuentos publicados", NO "la base de conocimiento no tiene
+  esa información".
 - Ignorar la directiva <output_language>. Es la #1 prioridad.
 </anti_patterns>`;
 
@@ -174,8 +192,30 @@ ${lessons.map((l) => `- ${l}`).join("\n")}
 </lecciones_aprendidas>`
       : "";
 
+  // Reglas escritas por el dueño en el panel. Se SUMAN al prompt generado —
+  // el resto del cerebro (contexto, playbook, KB, anti-invento) queda intacto.
+  const instructions = input.customInstructions?.trim();
+  const instructionsBlock = instructions
+    ? `<instrucciones_del_negocio>
+Reglas adicionales del dueño del negocio. Síguelas SIEMPRE:
+${instructions}
+</instrucciones_del_negocio>`
+    : "";
+
+  const contextoTemporal = input.today
+    ? `<contexto_temporal>
+Hoy es ${input.today}. Tu conocimiento de entrenamiento tiene OTRA fecha — ignórala.
+Usa SIEMPRE esta fecha real para hablar de "hoy" o "mañana" con el cliente.
+Cuando llames una tool de citas/horarios con una fecha relativa ("el viernes",
+"el próximo martes", "mañana"), pasa las PALABRAS del cliente, no un YYYY-MM-DD
+que hayas calculado tú. El sistema resuelve la fecha exacta y el día de la semana.
+Solo manda YYYY-MM-DD si el cliente dio una fecha de calendario (día y mes).
+</contexto_temporal>`
+    : "";
+
   return TEMPLATE
     .replaceAll("{{LANGUAGE_INSTRUCTIONS}}", buildLanguageInstructions(input.language))
+    .replaceAll("{{CONTEXTO_TEMPORAL}}", contextoTemporal)
     .replaceAll("{{BOT_NAME}}", input.botName)
     .replaceAll("{{BUSINESS_NAME}}", input.businessName)
     .replaceAll("{{BUSINESS_CONTEXT}}", input.businessContext)
@@ -183,6 +223,7 @@ ${lessons.map((l) => `- ${l}`).join("\n")}
     .replaceAll("{{NICHO_PLAYBOOK}}", input.nichoPlaybook ?? "")
     .replaceAll("{{LECCIONES}}", lessonsBlock)
     .replaceAll("{{BRAND_VOICE}}", brandVoiceBlock)
+    .replaceAll("{{INSTRUCCIONES}}", instructionsBlock)
     .replaceAll("{{TONE_LINE}}", toneLine)
     .replaceAll("{{EXTRA_ESCALATION}}", extraEscalation)
     .replaceAll("{{EXTRA_STYLE}}", extraStyle);
@@ -196,6 +237,25 @@ export interface SystemPromptOverrides {
   formattingRules?: string;
   brandVoice?: string;
   language?: string; // overrides env.BOT_LANGUAGE (e.g. "espejo")
+  customInstructions?: string;
+}
+
+/** Fecha/hora actual legible + ISO en la zona del negocio (ancla "hoy"/"mañana"). */
+export function currentDateLine(timeZone: string): string {
+  const now = new Date();
+  const legible = new Intl.DateTimeFormat("es-MX", {
+    timeZone,
+    dateStyle: "full",
+    timeStyle: "short",
+  }).format(now);
+  // en-CA formatea YYYY-MM-DD, útil como fecha ISO para las tools.
+  const iso = new Intl.DateTimeFormat("en-CA", {
+    timeZone,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(now);
+  return `${legible} (fecha ISO: ${iso}, zona horaria: ${timeZone})`;
 }
 
 export function systemPromptFromEnv(
@@ -217,5 +277,7 @@ export function systemPromptFromEnv(
     lessons: overrides?.lessons,
     formattingRules: overrides?.formattingRules,
     brandVoice: overrides?.brandVoice,
+    customInstructions: overrides?.customInstructions,
+    today: currentDateLine(businessTimeZone(env)),
   });
 }

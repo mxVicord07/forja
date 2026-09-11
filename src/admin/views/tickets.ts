@@ -3,6 +3,7 @@ import { Db } from "../../db/client";
 import { TicketsRepo } from "../../db/tickets";
 import { AppointmentChangeRequestsRepo, type AppointmentChangeRequest } from "../../db/appointmentChangeRequests";
 import { layout } from "./layout";
+import { fmtDateTime } from "../format";
 
 const STATUS_PILL: Record<string, string> = {
   open: "var(--bad)",
@@ -27,7 +28,7 @@ export async function renderTickets(env: Env, failedTicketId?: string): Promise<
 
   const list = open
     .map((t) => {
-      const date = new Date(t.created_at).toLocaleString("es-MX");
+      const date = fmtDateTime(t.created_at);
       const pillColor = STATUS_PILL[t.status] ?? "var(--muted)";
       const cr = t.appointment_change_request_id != null
         ? changeById.get(t.appointment_change_request_id)

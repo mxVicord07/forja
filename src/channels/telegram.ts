@@ -1,5 +1,6 @@
 import type { ChannelAdapter, IncomingMessage, OutgoingReply, OutgoingDocument, TypingContext } from "./shared";
 import type { Env } from "../env";
+import { egressFetch } from "../http/egress";
 
 const TG_API = "https://api.telegram.org/bot";
 
@@ -44,7 +45,7 @@ export async function resolveTelegramFileUrl(
   // Telegram files are NOT directly addressable by file_id. You must call
   // getFile to obtain a file_path, then download from
   // https://api.telegram.org/file/bot<token>/<file_path> (per Bot API docs).
-  const res = await fetch(`${TG_API}${token}/getFile?file_id=${fileId}`);
+  const res = await egressFetch(`${TG_API}${token}/getFile?file_id=${fileId}`);
   if (!res.ok) return null;
   const json: any = await res.json();
   if (!json?.ok) return null;
@@ -92,7 +93,7 @@ export const telegramAdapter: ChannelAdapter = {
     if (!token) throw new Error("TELEGRAM_BOT_TOKEN not set");
     for (let i = 0; i < reply.chunks.length; i++) {
       // typing indicator (best effort)
-      await fetch(`${TG_API}${token}/sendChatAction`, {
+      await egressFetch(`${TG_API}${token}/sendChatAction`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ chat_id: reply.channelUserId, action: "typing" }),
@@ -108,7 +109,7 @@ export const telegramAdapter: ChannelAdapter = {
       // between the two dialects first. If a chunk still has an unmatched
       // entity, Telegram rejects the whole call — fall back to plain text so
       // a formatting glitch never drops a message outright.
-      const res = await fetch(`${TG_API}${token}/sendMessage`, {
+      const res = await egressFetch(`${TG_API}${token}/sendMessage`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -121,7 +122,7 @@ export const telegramAdapter: ChannelAdapter = {
         console.warn(
           `[telegram] parse_mode=Markdown rejected (${res.status}), falling back to plain text: ${await res.text()}`,
         );
-        await fetch(`${TG_API}${token}/sendMessage`, {
+        await egressFetch(`${TG_API}${token}/sendMessage`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ chat_id: reply.channelUserId, text: reply.chunks[i] }),
@@ -138,7 +139,7 @@ export const telegramAdapter: ChannelAdapter = {
   async showTyping(channelUserId: string, env: Env, _ctx: TypingContext): Promise<void> {
     const token = env.TELEGRAM_BOT_TOKEN;
     if (!token) return;
-    const res = await fetch(`${TG_API}${token}/sendChatAction`, {
+    const res = await egressFetch(`${TG_API}${token}/sendChatAction`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ chat_id: channelUserId, action: "typing" }),
@@ -160,7 +161,7 @@ export const telegramAdapter: ChannelAdapter = {
   async sendDocument(doc: OutgoingDocument, env: Env): Promise<void> {
     const token = env.TELEGRAM_BOT_TOKEN;
     if (!token) return;
-    const res = await fetch(`${TG_API}${token}/sendDocument`, {
+    const res = await egressFetch(`${TG_API}${token}/sendDocument`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({

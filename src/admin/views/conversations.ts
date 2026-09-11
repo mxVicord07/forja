@@ -18,6 +18,7 @@ import { SENTIMENT_BADGE } from "./insights";
 import { costOfUsage, type ModelId } from "../../pricing";
 import { channelLabel } from "../../channels/labels";
 import { layout } from "./layout";
+import { fmtDateTime } from "../format";
 
 /** Tiempo relativo corto en español (ej. "hace 5 min", "hace 2 h", "hace 3 d"). */
 function ago(ms: number | null | undefined): string {
@@ -209,6 +210,45 @@ export async function renderInboxList(env: Env, p: InboxParams): Promise<string>
 
 // --- Right pane: live thread (header + messages, polled) ----------------------
 
+
+/**
+ * EL TELÉFONO DEL CLIENTE, SIEMPRE VISIBLE Y COPIABLE.
+ *
+ * En cuanto alguien le pone nombre a un contacto, el número desaparecía del
+ * panel — y es lo ÚNICO con lo que el equipo puede contactar a esa persona
+ * desde otro celular, o pasárselo a alguien que no tiene acceso al panel.
+ *
+ * Telegram no finge ser un teléfono: ahí se muestra el id tal cual, porque
+ * escribir "+42" sería mentir.
+ */
+function esTelefono(canal: string | null | undefined): boolean {
+  const c = (canal ?? "").toLowerCase();
+  return c === "whatsapp" || c === "twilio" || c === "meta";
+}
+
+/** "51999888777" -> "+51 999 888 777": se lee, y se copia entero de un clic. */
+function telefonoLegible(id: string): string {
+  const d = (id ?? "").replace(/\D/g, "");
+  if (d.length < 8) return id;
+  return "+" + d.replace(/^(\d{1,3})(\d{3})(\d{3})(\d{3,})$/, "$1 $2 $3 $4");
+}
+
+function bloqueContacto(canal: string | null | undefined, idCanal: string): string {
+  const tel = esTelefono(canal);
+  const visible = tel ? telefonoLegible(idCanal) : idCanal;
+  const crudo = tel ? "+" + (idCanal ?? "").replace(/\D/g, "") : idCanal;
+  const enlace = tel
+    ? `<a href="https://api.whatsapp.com/send?phone=${encodeURIComponent((idCanal ?? "").replace(/\D/g, ""))}" target="_blank" rel="noopener"
+         title="Abrir este chat en tu WhatsApp" style="color:inherit;text-decoration:none;border-bottom:1px dotted currentColor">${escapeHtml(visible)}</a>`
+    : escapeHtml(visible);
+  return `<span style="display:inline-flex;align-items:center;gap:5px;font-size:11px;color:var(--dim)">
+    ${enlace}
+    <button type="button" title="Copiar" aria-label="Copiar el contacto"
+            onclick="navigator.clipboard.writeText('${crudo.replace(/'/g, "")}');this.textContent='✓';setTimeout(()=>this.textContent='⧉',1200)"
+            style="background:none;border:none;color:inherit;cursor:pointer;font-size:11px;padding:0 2px;line-height:1">⧉</button>
+  </span>`;
+}
+
 export async function renderThreadLive(env: Env, convId: string): Promise<string> {
   const db = new Db(env.DB);
   const conv = await db.first<any>("SELECT * FROM conversations WHERE id = ?", [convId]);
@@ -234,21 +274,35 @@ export async function renderThreadLive(env: Env, convId: string): Promise<string
     paused ? "⏸ bot pausado · tú tienes el control" : "🟢 bot activo"
   }</span>`;
 
+  // "NEUTRAL" NO SE MUESTRA. El analizador clasifica cómo quedó el cliente en
+  // cuatro casillas, y "neutral" es la de "no detecté nada": es la enorme
+  // mayoría de las conversaciones. Una etiqueta que sale casi siempre y no dice
+  // nada solo roba sitio en la barra y le quita fuerza a las que sí importan.
+  //
+  // Sin etiqueta = todo normal. Cuando aparezca una, significa algo.
+  // Las alertas del dueño no cambian: nunca dependieron de "neutral", y la
+  // lista de conversaciones ya filtraba así (solo frustrated/angry).
   const sentBadge =
-    insight?.sentiment && SENTIMENT_BADGE[insight.sentiment]
+    insight?.sentiment &&
+    insight.sentiment !== "neutral" &&
+    SENTIMENT_BADGE[insight.sentiment]
       ? `<span style="${statusBadge(SENTIMENT_COLOR[insight.sentiment])}">${SENTIMENT_BADGE[insight.sentiment].txt}</span>`
       : "";
 
   const controls = paused
     ? `
     <details style="position:relative;margin-left:auto">
-      <summary class="chip" style="cursor:pointer;list-style:none;font-size:11px;color:var(--accent-2);background:var(--panel2);border:1px solid var(--linelit);padding:6px 11px;display:inline-flex;align-items:center;gap:6px">▸ Devolver al bot</summary>
+      <summary class="chip"
+               hx-post="/admin/conversations/${encodeURIComponent(convId)}/resume"
+               hx-swap="none"
+               title="Devolver el bot: vuelve a responder en este chat"
+               style="cursor:pointer;list-style:none;font-size:11px;color:var(--accent-2);background:var(--panel2);border:1px solid var(--linelit);padding:6px 11px;display:inline-flex;align-items:center;gap:6px">▸ Devolver bot</summary>
       <form method="POST" action="/admin/conversations/${encodeURIComponent(convId)}/resume"
             style="position:absolute;right:0;z-index:10;margin-top:8px;width:280px;background:var(--panel);border:1px solid var(--linelit);box-shadow:var(--shadow-pop);padding:12px">
         <p style="font-size:11px;color:var(--muted);margin:0 0 8px">Cuéntale al bot qué resolviste para que siga con contexto.</p>
         <textarea name="summary" rows="3" required placeholder="Ej. Ya le confirmé su pago y le di acceso."
                   style="width:100%;background:var(--bg);border:1px solid var(--line);color:var(--cream);padding:8px 10px;font-size:12px;outline:none;resize:vertical;margin-bottom:8px"></textarea>
-        <button class="bigbtn" style="width:100%;background:var(--accent);border:1px solid var(--accent);color:#ffffff;box-shadow:var(--shadow-card);padding:9px;font-size:12px;font-weight:700;font-family:'Space Grotesk';cursor:pointer">Devolver al bot</button>
+        <button class="bigbtn" style="width:100%;background:var(--accent);border:1px solid var(--accent);color:#ffffff;box-shadow:var(--shadow-card);padding:9px;font-size:12px;font-weight:700;font-family:'Space Grotesk';cursor:pointer">Enviar al bot</button>
       </form>
     </details>`
     : `
@@ -259,7 +313,8 @@ export async function renderThreadLive(env: Env, convId: string): Promise<string
 
   const header = `
   <div style="display:flex;flex-wrap:wrap;align-items:center;gap:8px;padding:12px 16px;border-bottom:1px solid var(--line);background:var(--panel)">
-    <span style="font-family:'Space Grotesk';font-weight:600;font-size:14px;color:var(--cream)">${escapeHtml(conv.display_name ?? conv.channel_user_id)}</span>
+    <span style="font-family:'Space Grotesk';font-weight:600;font-size:14px;color:var(--cream)">${escapeHtml(conv.display_name || "Sin nombre")}</span>
+    ${bloqueContacto(conv.channel, conv.channel_user_id)}
     <span style="${smallPill("var(--info)")}">${escapeHtml(channelLabel(conv.channel))}</span>
     ${statusPill}
     ${sentBadge}
@@ -270,7 +325,7 @@ export async function renderThreadLive(env: Env, convId: string): Promise<string
   // Messages, DESC in the DOM + column-reverse = pinned to bottom.
   const bubbles = msgs
     .map((m) => {
-      const time = new Date(m.created_at).toLocaleString("es-MX", {
+      const time = fmtDateTime(m.created_at, {
         day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit",
       });
 
@@ -316,7 +371,7 @@ export async function renderThreadLive(env: Env, convId: string): Promise<string
 
   return `
   ${header}
-  <div style="flex:1;min-height:0;overflow-y:auto;display:flex;flex-direction:column-reverse;gap:12px;padding:16px;background:var(--bg)">
+  <div id="msgscroll" style="flex:1;min-height:0;overflow-y:auto;display:flex;flex-direction:column-reverse;gap:12px;padding:16px;background:var(--bg)">
     ${bubbles || `<div style="text-align:center;font-size:12.5px;color:var(--dim);padding:32px 0">Sin mensajes.</div>`}
   </div>`;
 }
@@ -403,7 +458,7 @@ export async function renderInbox(env: Env, p: InboxParams): Promise<string> {
     rightPane = `
       <div id="thread-live" class="flex flex-col flex-1 min-h-0"
            hx-get="/admin/conversations/thread/${encodeURIComponent(p.selectedId)}"
-           hx-trigger="every 5s" hx-swap="innerHTML">
+           hx-trigger="every 5s[window.puedeRefrescar('msgscroll')]" hx-swap="innerHTML">
         ${thread}
       </div>
       ${renderComposer(p.selectedId)}`;
@@ -433,7 +488,7 @@ export async function renderInbox(env: Env, p: InboxParams): Promise<string> {
     <div class="grid grid-cols-1 md:grid-cols-[320px_1fr] overflow-hidden" style="border:1px solid var(--line);background:var(--panel);height:calc(100vh - 200px);min-height:480px">
       <div class="border-r border-line flex flex-col" style="min-height:0">
         <div id="conv-list" class="overflow-y-auto flex-1"
-             hx-get="${listPollUrl}" hx-trigger="every 30s" hx-swap="innerHTML">
+             hx-get="${listPollUrl}" hx-trigger="every 30s[window.puedeRefrescar('conv-list')]" hx-swap="innerHTML">
           ${list}
         </div>
       </div>

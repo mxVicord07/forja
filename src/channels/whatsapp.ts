@@ -14,6 +14,7 @@
 import type { ChannelAdapter, IncomingMessage, OutgoingReply, OutgoingDocument, TypingContext } from "./shared";
 import { hmacHex, timingSafeEqual, normalizePhone, toWhatsAppMarkdown } from "./shared";
 import type { Env } from "../env";
+import { egressFetch } from "../http/egress";
 
 const GRAPH_VERSION = "v21.0";
 const MEDIA_TTL_MS = 10 * 60 * 1000; // la URL firmada del proxy vive 10 min
@@ -147,7 +148,7 @@ export async function serveWhatsAppMedia(
   if (!timingSafeEqual(expected, sig)) return new Response("bad signature", { status: 403 });
 
   // 1) media_id → URL temporal de descarga
-  const metaRes = await fetch(`https://graph.facebook.com/${GRAPH_VERSION}/${encodeURIComponent(mediaId)}`, {
+  const metaRes = await egressFetch(`https://graph.facebook.com/${GRAPH_VERSION}/${encodeURIComponent(mediaId)}`, {
     headers: { Authorization: `Bearer ${token}` },
   });
   if (!metaRes.ok) return new Response("media lookup failed", { status: 502 });
@@ -155,7 +156,7 @@ export async function serveWhatsAppMedia(
   if (!meta.url) return new Response("media url missing", { status: 502 });
 
   // 2) descarga real (también requiere el Bearer)
-  const fileRes = await fetch(meta.url, { headers: { Authorization: `Bearer ${token}` } });
+  const fileRes = await egressFetch(meta.url, { headers: { Authorization: `Bearer ${token}` } });
   if (!fileRes.ok) return new Response("media download failed", { status: 502 });
   const contentType = meta.mime_type || fileRes.headers.get("content-type") || "application/octet-stream";
   return new Response(fileRes.body, { status: 200, headers: { "Content-Type": contentType } });
@@ -182,7 +183,7 @@ export const whatsappAdapter: ChannelAdapter = {
     for (let i = 0; i < reply.chunks.length; i++) {
       const delay = i === 0 ? 0 : reply.interChunkDelayMs ?? 1000;
       if (delay > 0) await new Promise((r) => setTimeout(r, delay));
-      const res = await fetch(url, {
+      const res = await egressFetch(url, {
         method: "POST",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
         body: JSON.stringify({
