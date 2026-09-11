@@ -1,5 +1,6 @@
 import type { ChannelAdapter, IncomingMessage, OutgoingReply } from "./shared";
 import type { Env } from "../env";
+import { egressFetch } from "../http/egress";
 
 const TG_API = "https://api.telegram.org/bot";
 
@@ -24,7 +25,7 @@ export async function resolveTelegramFileUrl(
   // Telegram files are NOT directly addressable by file_id. You must call
   // getFile to obtain a file_path, then download from
   // https://api.telegram.org/file/bot<token>/<file_path> (per Bot API docs).
-  const res = await fetch(`${TG_API}${token}/getFile?file_id=${fileId}`);
+  const res = await egressFetch(`${TG_API}${token}/getFile?file_id=${fileId}`);
   if (!res.ok) return null;
   const json: any = await res.json();
   if (!json?.ok) return null;
@@ -72,14 +73,14 @@ export const telegramAdapter: ChannelAdapter = {
     if (!token) throw new Error("TELEGRAM_BOT_TOKEN not set");
     for (let i = 0; i < reply.chunks.length; i++) {
       // typing indicator (best effort)
-      await fetch(`${TG_API}${token}/sendChatAction`, {
+      await egressFetch(`${TG_API}${token}/sendChatAction`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ chat_id: reply.channelUserId, action: "typing" }),
       }).catch(() => {});
       const delay = i === 0 ? 0 : reply.interChunkDelayMs ?? 1000;
       if (delay > 0) await new Promise((r) => setTimeout(r, delay));
-      await fetch(`${TG_API}${token}/sendMessage`, {
+      await egressFetch(`${TG_API}${token}/sendMessage`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ chat_id: reply.channelUserId, text: reply.chunks[i] }),
@@ -90,7 +91,7 @@ export const telegramAdapter: ChannelAdapter = {
   async showTyping(channelUserId: string, env: Env): Promise<void> {
     const token = env.TELEGRAM_BOT_TOKEN;
     if (!token) return;
-    await fetch(`${TG_API}${token}/sendChatAction`, {
+    await egressFetch(`${TG_API}${token}/sendChatAction`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ chat_id: channelUserId, action: "typing" }),

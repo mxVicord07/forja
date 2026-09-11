@@ -30,6 +30,17 @@ export interface Env {
   ANTHROPIC_MODEL_SMART?: string;
   OPENAI_MODEL_FAST?: string;
   OPENAI_MODEL_SMART?: string;
+  // Optional LLM base URLs (Cloudflare AI Gateway, etc.). Ignored if empty.
+  // Anthropic SDK appends `/v1/messages` — use the provider root, e.g.
+  // https://gateway.ai.cloudflare.com/v1/<account>/<gateway>/anthropic
+  ANTHROPIC_BASE_URL?: string;
+  OPENAI_BASE_URL?: string;
+  XAI_BASE_URL?: string;
+  // Optional AI Gateway token → sent as `cf-aig-authorization: Bearer …`.
+  CF_AIG_TOKEN?: string;
+  // Pin new Durable Objects (LLM egress lives there). wnam|enam|weur|…
+  // Only applies the first time that Object is created.
+  AGENT_LOCATION_HINT?: string;
   BUFFER_SECONDS: string;
   DASHBOARD_BASE_URL: string;
 

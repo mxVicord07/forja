@@ -1,5 +1,6 @@
 import type { ChannelAdapter, IncomingMessage, OutgoingReply } from "./shared";
 import type { Env } from "../env";
+import { egressFetch } from "../http/egress";
 import { Db } from "../db/client";
 import { SettingsRepo } from "../db/settings";
 import { getByPath } from "../learn/fieldPath";
@@ -184,7 +185,7 @@ export function makeLearnedAdapter(channel: string): ChannelAdapter {
       for (let i = 0; i < reply.chunks.length; i++) {
         const delay = i === 0 ? 0 : reply.interChunkDelayMs ?? 1000;
         if (delay > 0) await new Promise((r) => setTimeout(r, delay));
-        await fetch(`${MANYCHAT_API}/sending/sendContent`, {
+        await egressFetch(`${MANYCHAT_API}/sending/sendContent`, {
           method: "POST",
           headers: {
             Authorization: `Bearer ${apiKey}`,

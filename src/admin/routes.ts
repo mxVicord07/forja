@@ -15,7 +15,9 @@ import { parsePeerBots } from "./projects";
 import { Hono } from "hono";
 import { generateText } from "ai";
 import { createModel } from "../llm/provider";
+import { formatLlmError } from "../llm/errorDetail";
 import { loadLlmOverrides } from "../settings-loader";
+import { probeMessagesEndpoint } from "../http/egress";
 import type { Env } from "../env";
 import { adminAuth } from "./auth";
 import { layout, renderUpgrade } from "./views/layout";
@@ -445,8 +447,16 @@ adminApp.get("/config/llm-test", async (c) => {
       `/admin/config?llmtest=${encodeURIComponent(`ok:${provider}/${modelId} → "${okText}"`)}`,
     );
   } catch (err) {
-    const msg = err instanceof Error ? err.message : String(err);
-    return c.redirect(`/admin/config?llmtest=${encodeURIComponent(`err:${msg.slice(0, 180)}`)}`);
+    let msg = formatLlmError(err);
+    try {
+      const base =
+        (c.env.ANTHROPIC_BASE_URL ?? "").trim() || "https://api.anthropic.com";
+      const probe = await probeMessagesEndpoint(base);
+      msg += ` | egress GET ${probe.status} len=${probe.contentLength ?? "?"} body=${probe.bodyChars} origin=${probe.reachedOriginLikely ? "yes" : "edge?"}`;
+    } catch (probeErr) {
+      msg += ` | egress probe failed: ${probeErr instanceof Error ? probeErr.message : probeErr}`;
+    }
+    return c.redirect(`/admin/config?llmtest=${encodeURIComponent(`err:${msg.slice(0, 280)}`)}`);
   }
 });
 
