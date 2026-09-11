@@ -1,5 +1,6 @@
 import type { ChannelAdapter, IncomingMessage, OutgoingReply } from "./shared";
 import type { Env } from "../env";
+import { egressFetch } from "../http/egress";
 
 const MANYCHAT_API = "https://api.manychat.com/fb";
 
@@ -42,9 +43,9 @@ async function classifyMediaUrl(url: string): Promise<"image" | "audio" | null> 
   if (AUDIO_EXT.test(url)) return "audio";
   if (!MEDIA_HOSTS.test(url)) return null;
   try {
-    let res = await fetch(url, { method: "HEAD", redirect: "follow" });
+    let res = await egressFetch(url, { method: "HEAD", redirect: "follow" });
     if (!res.ok || !res.headers.get("content-type")) {
-      res = await fetch(url, { headers: { Range: "bytes=0-0" }, redirect: "follow" });
+      res = await egressFetch(url, { headers: { Range: "bytes=0-0" }, redirect: "follow" });
     }
     const ct = (res.headers.get("content-type") ?? "").toLowerCase();
     if (ct.startsWith("image/")) return "image";
@@ -139,7 +140,7 @@ export const manychatAdapter: ChannelAdapter = {
     for (let i = 0; i < reply.chunks.length; i++) {
       const delay = i === 0 ? 0 : reply.interChunkDelayMs ?? 1000;
       if (delay > 0) await new Promise((r) => setTimeout(r, delay));
-      await fetch(`${MANYCHAT_API}/sending/sendContent`, {
+      await egressFetch(`${MANYCHAT_API}/sending/sendContent`, {
         method: "POST",
         headers: {
           Authorization: `Bearer ${apiKey}`,

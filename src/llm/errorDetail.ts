@@ -21,11 +21,36 @@ export function formatLlmError(e: unknown): string {
   if (body != null) {
     const s = typeof body === "string" ? body : safeJson(body);
     if (s) parts.push(`body=${s.slice(0, 800)}`);
+    else parts.push("body=<empty>");
+  } else if (status === 400) {
+    parts.push("body=<empty>");
+  }
+  const hdrs = err.responseHeaders ?? cause?.responseHeaders;
+  if (hdrs && typeof hdrs === "object") {
+    const interesting = ["server", "cf-ray", "cf-mitigated", "content-length", "content-type", "connection"];
+    const bits: string[] = [];
+    for (const k of interesting) {
+      const v = headerGet(hdrs, k);
+      if (v) bits.push(`${k}=${v}`);
+    }
+    if (bits.length) parts.push(`headers=${bits.join(" ")}`);
   }
   if (cause?.message && cause.message !== msg) {
     parts.push(`cause=${cause.message}`);
   }
   return parts.join(" | ");
+}
+
+function headerGet(headers: unknown, name: string): string | undefined {
+  if (!headers || typeof headers !== "object") return undefined;
+  const rec = headers as Record<string, unknown>;
+  const direct = rec[name] ?? rec[name.toLowerCase()];
+  if (typeof direct === "string") return direct;
+  if (Array.isArray(direct) && typeof direct[0] === "string") return direct[0];
+  if (typeof (headers as Headers).get === "function") {
+    return (headers as Headers).get(name) ?? undefined;
+  }
+  return undefined;
 }
 
 function safeJson(v: unknown): string {

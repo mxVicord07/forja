@@ -17,6 +17,7 @@ import { detectKind } from "./learn/fieldPath";
 import { saveCapture, isLearnMode } from "./learn/mapping";
 import { tokensMatch, manychatWebhookAllowed } from "./http-auth";
 import { apiApp } from "./api";
+import { getAgentStub } from "./agentStub";
 
 export { SupportAgent } from "./agent";
 
@@ -31,8 +32,7 @@ async function routeToAgent(c: { req: { raw: Request }; env: Env; text: (t: stri
   try {
     const env = c.env;
     const msg = await adapter.parseIncoming(c.req.raw, env);
-    const doId = env.AGENT.idFromName(`${msg.channel}:${msg.channelUserId}`);
-    const stub = env.AGENT.get(doId);
+    const stub = getAgentStub(env, `${msg.channel}:${msg.channelUserId}`);
     // Call the agent directly via RPC. Do NOT use stub.fetch(): the `agents` SDK
     // intercepts the Durable Object fetch and expects partyserver namespace/room
     // headers, so an ad-hoc fetch to /ingest fails to connect. RPC invokes the
@@ -76,8 +76,9 @@ app.post("/webhooks/twilio", async (c) => {
     console.error("twilio parse error:", e);
     return new Response("<Response></Response>", { status: 200, headers: { "Content-Type": "text/xml" } });
   }
-  const doId = c.env.AGENT.idFromName(`${msg.channel}:${msg.channelUserId}`);
-  await c.env.AGENT.get(doId).ingest(msg).catch((e) => console.error("ingest:", e));
+  await getAgentStub(c.env, `${msg.channel}:${msg.channelUserId}`)
+    .ingest(msg)
+    .catch((e) => console.error("ingest:", e));
   return new Response("<Response></Response>", { status: 200, headers: { "Content-Type": "text/xml" } });
 });
 
@@ -130,8 +131,7 @@ app.post("/webhooks/meta", async (c) => {
     // (si no, cada DM se procesa DOBLE: 2x LLM, 2x respuestas al lead y
     // colisiones de rate limit en ráfagas de historias).
     if (msg.channel === "instagram" && c.env.IG_DM_SOURCE === "manychat") continue;
-    const doId = c.env.AGENT.idFromName(`${msg.channel}:${msg.channelUserId}`);
-    await c.env.AGENT.get(doId).ingest(msg);
+    await getAgentStub(c.env, `${msg.channel}:${msg.channelUserId}`).ingest(msg);
   }
   return c.text("EVENT_RECEIVED", 200);
 });
@@ -166,8 +166,7 @@ app.post("/webhooks/whatsapp", async (c) => {
   }
   const origin = c.env.DASHBOARD_BASE_URL || new URL(c.req.url).origin;
   for (const msg of await parseWhatsAppEvents(body as any, c.env, origin)) {
-    const doId = c.env.AGENT.idFromName(`${msg.channel}:${msg.channelUserId}`);
-    await c.env.AGENT.get(doId).ingest(msg);
+    await getAgentStub(c.env, `${msg.channel}:${msg.channelUserId}`).ingest(msg);
   }
   return c.text("EVENT_RECEIVED", 200);
 });

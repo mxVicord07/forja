@@ -16,6 +16,20 @@ describe("formatLlmError", () => {
     expect(s).toContain("Invalid schema for function");
   });
 
+  it("deja explícito body vacío + headers del edge (ticket 400 empty)", () => {
+    const e = Object.assign(new Error("Bad Request"), {
+      name: "AI_APICallError",
+      statusCode: 400,
+      url: "https://api.anthropic.com/v1/messages",
+      responseBody: "",
+      responseHeaders: { "cf-ray": "xyz-DFW", "content-length": "0", server: "cloudflare" },
+    });
+    const s = formatLlmError(e);
+    expect(s).toContain("body=<empty>");
+    expect(s).toContain("cf-ray=xyz-DFW");
+    expect(s).toContain("content-length=0");
+  });
+
   it("baja al cause cuando el stream envuelve el 400", () => {
     const cause = Object.assign(new Error("Bad Request"), {
       name: "AI_APICallError",

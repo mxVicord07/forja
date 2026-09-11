@@ -1,5 +1,6 @@
 import type { ChannelAdapter, IncomingMessage, OutgoingReply } from "./shared";
 import type { Env } from "../env";
+import { egressFetch } from "../http/egress";
 
 export const twilioAdapter: ChannelAdapter = {
   async parseIncoming(request: Request, _env: Env): Promise<IncomingMessage> {
@@ -47,7 +48,7 @@ export const twilioAdapter: ChannelAdapter = {
         To: `whatsapp:${reply.channelUserId}`,
         Body: reply.chunks[i],
       });
-      await fetch(url, {
+      await egressFetch(url, {
         method: "POST",
         headers: {
           Authorization: `Basic ${auth}`,
