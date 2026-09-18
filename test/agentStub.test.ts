@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from "vitest";
-import { getAgentStub, parseLocationHint } from "../src/agentStub";
+import { getAgentStub, agentStub, parseLocationHint } from "../src/agentStub";
 import type { Env } from "../src/env";
 
 describe("parseLocationHint", () => {
@@ -37,6 +37,36 @@ describe("getAgentStub", () => {
       { AGENT, AGENT_LOCATION_HINT: "wnam" } as unknown as Env,
       "instagram:99",
     );
-    expect(AGENT.get).toHaveBeenCalledWith("id:instagram:99", { locationHint: "wnam" });
+    expect(AGENT.get).toHaveBeenCalledWith("id:wnam:instagram:99", { locationHint: "wnam" });
+  });
+
+  it("el nombre se sala con la región — un DO viejo sin hint no queda pegado al colo original para siempre", () => {
+    const AGENT = ns();
+    // Sin hint: nombre tal cual (esto es lo que ya tienen todas las
+    // conversaciones existentes, porque AGENT_LOCATION_HINT nunca estuvo
+    // configurado en producción hasta ahora).
+    getAgentStub({ AGENT } as unknown as Env, "whatsapp:5215500000");
+    expect(AGENT.get).toHaveBeenCalledWith("id:whatsapp:5215500000");
+
+    // Al fijar el hint, la MISMA conversación nace en un DO nuevo (nombre
+    // salado) — no un no-op silencioso que la deja atrapada en el colo viejo.
+    getAgentStub(
+      { AGENT, AGENT_LOCATION_HINT: "enam" } as unknown as Env,
+      "whatsapp:5215500000",
+    );
+    expect(AGENT.get).toHaveBeenCalledWith("id:enam:whatsapp:5215500000", { locationHint: "enam" });
+  });
+});
+
+describe("agentStub — channel/channelUserId separados (firma que espera api-inbox.ts)", () => {
+  function ns() {
+    const get = vi.fn((id: unknown, opts?: unknown) => ({ id, opts }));
+    return { get, idFromName: (name: string) => `id:${name}` };
+  }
+
+  it("resuelve al MISMO Durable Object que getAgentStub con el nombre ya combinado", () => {
+    const AGENT = ns();
+    agentStub({ AGENT } as unknown as Env, "telegram", "12345");
+    expect(AGENT.get).toHaveBeenCalledWith("id:telegram:12345");
   });
 });

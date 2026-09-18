@@ -1,6 +1,10 @@
 import { Db } from "./client";
 
-export type MessageRole = "user" | "assistant" | "tool" | "owner";
+// "note" = nota interna del dueño/equipo (Forja Inbox móvil): NUNCA se manda
+// por ningún adapter, pero SÍ entra al historial del LLM (ver history.ts,
+// mapMessageToAiTurn) y a GET /api/conversations/:id/messages, marcada como
+// contexto interno.
+export type MessageRole = "user" | "assistant" | "tool" | "owner" | "note";
 
 export interface Message {
   id: string;

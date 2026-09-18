@@ -27,6 +27,7 @@ import type { SearchKbResult } from "./tools/searchKb";
 import { SettingsRepo, SETTING_KEYS } from "./db/settings";
 import { renderBusinessContext } from "./businessContext";
 import { maskTelegramToken, unmaskTelegramToken } from "./telegramFiles";
+import { mapMessageToAiTurn } from "./history";
 
 export interface SupportAgentState {
   conversationId: string | null;
@@ -276,14 +277,15 @@ export class SupportAgent extends Agent<Env, SupportAgentState> {
 
     // Load history (last 20)
     const history = await msgs.lastN(convId, 20);
-    const aiMessages: any[] = history.slice(0, -1).map((m) => ({
-      role: (m.role === "tool"
-        ? "user"
-        : m.role === "owner"
-          ? "assistant"
-          : m.role) as "user" | "assistant",
-      content: m.content,
-    }));
+    // mapMessageToAiTurn (history.ts, porteado del paquete Forja+ v1.0.76):
+    // mapeo EXPLÍCITO de los 5 roles reales de D1 (user/assistant/tool/owner/
+    // note — el AI SDK solo conoce user/assistant) más un fix real que traía
+    // de fábrica: limpia [IMAGE_URL:]/[MEDIA:]/[FILE:]/[TPL:] de los turnos
+    // VIEJOS del historial (antes se mandaban crudos — una URL de imagen ya
+    // vencida gastando tokens sin que el modelo pudiera usarla). El turno
+    // ÚLTIMO sigue armándose aparte abajo (necesita la URL cruda para el
+    // mensaje multimodal).
+    const aiMessages: any[] = history.slice(0, -1).map(mapMessageToAiTurn);
     // Build the LAST user message multimodal-aware: if it carries an
     // [IMAGE_URL: ...] marker AND we're on the Pro tier, attach the image.
     const lastUserMsg = history[history.length - 1];
@@ -380,16 +382,25 @@ export class SupportAgent extends Agent<Env, SupportAgentState> {
               });
 
       // Budget guard: at/over the monthly AI budget the bot keeps answering but
-      // only on the cheap tier (never goes silent over money).
+      // only on the cheap tier (never goes silent over money). Fail-open, like
+      // the customer-facts lookup above: since monthlyBudgetUsd now defaults
+      // to $25 for every bot that never set one (settings-loader.ts, ported
+      // alongside Forja Inbox), this branch runs on EVERY turn instead of only
+      // for owners who opted into a budget — a transient D1 hiccup reading
+      // ia_usage must never take the whole reply down with it.
       if (cfg.monthlyBudgetUsd !== undefined && tier !== "fast") {
-        const spent = await monthIaCostUsd(db);
-        const guard = applyBudgetGuard(tier, spent, cfg.monthlyBudgetUsd);
-        if (guard.downgraded) {
-          console.warn(
-            `[SupportAgent] monthly budget reached ($${spent.toFixed(2)}/$${cfg.monthlyBudgetUsd}) — downgrading to fast tier`,
-          );
+        try {
+          const spent = await monthIaCostUsd(db);
+          const guard = applyBudgetGuard(tier, spent, cfg.monthlyBudgetUsd);
+          if (guard.downgraded) {
+            console.warn(
+              `[SupportAgent] monthly budget reached ($${spent.toFixed(2)}/$${cfg.monthlyBudgetUsd}) — downgrading to fast tier`,
+            );
+          }
+          tier = guard.tier;
+        } catch (e) {
+          console.warn("[SupportAgent] budget guard lookup failed:", e);
         }
-        tier = guard.tier;
       }
 
       const { model, modelId, supportsPromptCache } = createModel(this.env, tier, cfg.llm);

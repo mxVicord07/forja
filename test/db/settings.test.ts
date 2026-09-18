@@ -89,3 +89,32 @@ describe("SettingsRepo", () => {
     expect(row?.actor).toBe("owner");
   });
 });
+
+describe("resolveTakeoverMs — reemplaza el TAKEOVER_MS fijo de admin/routes.ts", () => {
+  it("sin setting, default de 60 minutos", async () => {
+    const { resolveTakeoverMs } = await import("../../src/db/settings");
+    const env = { DB: (db as any).d1 } as any;
+    expect(await resolveTakeoverMs(env)).toBe(60 * 60 * 1000);
+  });
+
+  it("con setting, respeta los minutos elegidos", async () => {
+    const { resolveTakeoverMs } = await import("../../src/db/settings");
+    await repo.set(SETTING_KEYS.takeoverMinutes, "15");
+    const env = { DB: (db as any).d1 } as any;
+    expect(await resolveTakeoverMs(env)).toBe(15 * 60 * 1000);
+  });
+
+  it('"0" significa "hasta que el dueño reactive" (~1 año, no 0ms)', async () => {
+    const { resolveTakeoverMs, MANUAL_RESUME_MS } = await import("../../src/db/settings");
+    await repo.set(SETTING_KEYS.takeoverMinutes, "0");
+    const env = { DB: (db as any).d1 } as any;
+    expect(await resolveTakeoverMs(env)).toBe(MANUAL_RESUME_MS);
+  });
+
+  it("valor basura cae al default en vez de tronar", async () => {
+    const { resolveTakeoverMs } = await import("../../src/db/settings");
+    await repo.set(SETTING_KEYS.takeoverMinutes, "quince");
+    const env = { DB: (db as any).d1 } as any;
+    expect(await resolveTakeoverMs(env)).toBe(60 * 60 * 1000);
+  });
+});

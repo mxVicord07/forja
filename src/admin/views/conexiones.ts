@@ -22,7 +22,7 @@ interface ChannelStatus {
   howTo: string;
 }
 
-function channelStatuses(env: Env): ChannelStatus[] {
+export function channelStatuses(env: Env): ChannelStatus[] {
   const has = (v?: string) => Boolean(v && v.trim() !== "");
 
   const telegramMissing = [!has(env.TELEGRAM_BOT_TOKEN) && "TELEGRAM_BOT_TOKEN"].filter(

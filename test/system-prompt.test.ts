@@ -83,8 +83,27 @@ describe("renderSystemPrompt", () => {
 
   it("keeps the fixed single-language instructions by default", () => {
     const prompt = renderSystemPrompt(input);
-    expect(prompt).toContain("THE COACH'S CUSTOMER PREFERS LANGUAGE: es");
+    expect(prompt).toContain("THE COACH'S CUSTOMER PREFERS LANGUAGE");
     expect(prompt).not.toContain("MIRRORS THE CUSTOMER'S LANGUAGE");
+  });
+
+  it("translates the raw language code to a natural, dialect-aware description (idioma.ts)", () => {
+    // "es" solo ya no debe llegar crudo al prompt — descripcionIdioma() lo
+    // traduce a una instrucción accionable, no un código que el modelo tenga
+    // que adivinar.
+    const prompt = renderSystemPrompt({ ...input, language: "es" });
+    expect(prompt).not.toContain("PREFERS LANGUAGE: es\n");
+    expect(prompt).toContain("español latinoamericano");
+
+    // El caso real que motivó el porteo: distinguir los dos españoles.
+    const es = renderSystemPrompt({ ...input, language: "es-ES" });
+    expect(es).toContain("vosotros");
+    expect(es).toContain("NO uses mexicanismos");
+
+    // Un código que no reconoce pasa TAL CUAL (no inventa nada) — mismo
+    // comportamiento que antes de este porteo para lo desconocido.
+    const catalan = renderSystemPrompt({ ...input, language: "catalán" });
+    expect(catalan).toContain("PREFERS LANGUAGE: catalán");
   });
 
   it('switches to mirror-language instructions when language is "espejo"', () => {

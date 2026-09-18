@@ -8,6 +8,11 @@ export interface Env {
   DB: D1Database;
   KB: VectorizeIndex;
   CATALOG: R2Bucket;
+  // Bóveda (Forja Inbox / Forja+): archiva media entrante para servirlo desde
+  // el panel y la app. Ausente en este bot — no se provisionó el bucket, así
+  // que la función queda apagada sola (ver src/media/boveda.ts). Aditivo: no
+  // reemplaza CATALOG (que es del superpoder shareDocument, ya en uso).
+  MEDIA?: R2Bucket;
   AI: Ai;
 
   // Vars (member-set)
@@ -140,4 +145,9 @@ export interface Env {
   // /api/* queda cerrado (fail-closed).
   CONTROL_PLANE_TOKEN?: string;  // secret; Bearer que el control plane presenta para llamar /api/*
   CONTROL_PLANE_URL?: string;    // base URL del control plane (para reportes / license check futuros)
+  // Composio (conectar apps externas al bot — Gmail, Calendar, Slack…): ausente
+  // = la tool/el contexto quedan apagados solos (composioEnabled() lo checa).
+  // Ver src/integrations/composio.ts. Sin cuenta de Composio hoy — dormido.
+  COMPOSIO_API_KEY?: string;
+  COMPOSIO_ENTITY_ID?: string; // opcional; default del propio módulo si falta
 }

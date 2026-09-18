@@ -1,5 +1,10 @@
 import { Db } from "./client";
 
+/** Los 4 valores reales de `Lead.status` — dominio único para validar un
+ *  `status` que llega de afuera (GET /api/leads, Forja Inbox). */
+export const LEAD_STATUSES = ["new", "contacted", "sold", "lost"] as const;
+export type LeadStatus = (typeof LEAD_STATUSES)[number];
+
 export interface Lead {
   id: string;
   conversation_id: string | null;

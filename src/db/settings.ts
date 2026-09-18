@@ -1,4 +1,5 @@
 import { Db } from "./client";
+import type { Env } from "../env";
 
 // Canonical setting keys. Every value is stored as TEXT; the loader parses.
 // Empty/absent => default (see settings-loader.ts).
@@ -17,6 +18,11 @@ export const SETTING_KEYS = {
   escalationKeywords: "escalation_keywords",
   modelOverride: "model_override", // auto | haiku | sonnet
   botPaused: "bot_paused", // 0 | 1
+  // Pausa TEMPORAL con vencimiento (epoch ms) — la escribe POST /api/pause desde
+  // Forja Inbox ("pausar 1 hora", "hasta mañana 9:00"). Distinta del switch
+  // manual de arriba: se combina con él por OR en settings-loader (ver
+  // lib/pause-state.ts), y expira sola sin que nadie la apague a mano.
+  botPausedUntil: "bot_paused_until",
   disabledTools: "disabled_tools", // comma-separated tool names turned off from the dashboard
   temperature: "temperature", // LLM sampling temperature 0-1; empty = provider default
   monthlyBudget: "monthly_budget", // USD cap for monthly AI spend; empty = no cap
@@ -74,6 +80,50 @@ export const SETTING_KEYS = {
   // encendido. Default ON: es señal de vida, no un mensaje saliente no pedido
   // (a diferencia de daily_report/encuesta, que sí son opt-in explícito).
   typingIndicator: "typing_indicator",
+
+  // ── Forja Inbox (app de iPhone) — porteadas del paquete Forja+ v1.0.76 ────
+  // Símbolo de moneda con el que el bot habla de precios ($ | € | R$…). NO
+  // afecta la tab Costos: esa va en USD porque los proveedores de IA facturan
+  // en dólares y convertirla sería inventar un tipo de cambio.
+  botCurrency: "bot_currency",
+  // Auto-cura del origin: base URL real del worker aprendida de las requests
+  // entrantes cuando DASHBOARD_BASE_URL viene vacío. Ver src/lib/self-origin.ts.
+  selfOrigin: "self_origin",
+  // Plantilla HSM aprobada para reenganchar FUERA de la ventana de 24h vía
+  // Cloud API oficial (Meta): nombre + idioma de la plantilla. Vacío = fuera
+  // de ventana no reengancha por WhatsApp Cloud API (YCloud usa su propio
+  // TWILIO_HANDOFF_CONTENT_SID-equivalente, sin tocar).
+  reengageTemplateName: "reengage_template_name",
+  reengageTemplateLang: "reengage_template_lang", // idioma de la plantilla (es, es_MX, en_US…); default es
+  // Respuestas rápidas que el dueño arma desde la app — botones de un toque
+  // al responder un chat desde Forja Inbox. JSON array de strings.
+  quickReplies: "quick_replies",
+  // Campos ESTRUCTURADOS de negocio, editables desde la app (GET/PUT en
+  // api-inbox.ts) — complementan, no reemplazan, el `business_context` de
+  // texto libre que ya usa el prompt (businessContext.ts). Vacíos por default:
+  // un bot que nunca abre estas pantallas de la app se comporta igual que hoy.
+  businessHours: "business_hours",
+  faqs: "faqs",
+  promo: "promo", // oferta vigente con on/off + vencimiento
+  location: "location", // ubicación y cobertura
+  paymentMethods: "payment_methods", // formas de pago
+  catalog: "catalog", // servicios y precios (lista corta)
+  // Caché del catálogo de tools/contexto de Composio (integrations/composio.ts)
+  // — auto-descubierto por el propio bot, JAMÁS escribible desde afuera (ver
+  // NEVER_WRITABLE en settings-mutations.ts). Vacío mientras no haya
+  // COMPOSIO_API_KEY configurado.
+  composioContext: "composio_context",
+  // Tier EFECTIVO empujado por el control plane (ver src/tier.ts). Vacío =
+  // manda el BOT_TIER de wrangler.toml — que es el único caso real hoy: no se
+  // portó ningún POST /api/tier que lo escriba, así que este siempre gana el
+  // fallback estático. Se deja portado para cuando (si) se conecte ese push.
+  tierOverride: "tier_override",
+  // Cuánto se queda callado el bot tras una intervención del dueño (vacío =
+  // 60 min default, "0" = hasta que el dueño reactive). Editable desde el
+  // skill /human-in-the-loop y desde Forja Inbox (Centro de Mantenimiento).
+  // Ver resolveTakeoverMs abajo — reemplaza el TAKEOVER_MS fijo que tenía
+  // admin/routes.ts.
+  takeoverMinutes: "takeover_minutes",
 } as const;
 
 export type SettingKey = (typeof SETTING_KEYS)[keyof typeof SETTING_KEYS];
@@ -130,4 +180,21 @@ export class SettingsRepo {
     }
     return out;
   }
+}
+
+const DEFAULT_TAKEOVER_MIN = 60;
+/** "hasta reactivar" (pausa ≈ 1 año) — lo que ya usaba admin/routes.ts para "0". */
+export const MANUAL_RESUME_MS = 365 * 24 * 60 * 60 * 1000;
+
+/**
+ * Cuánto se queda callado el bot tras una intervención del dueño (setting
+ * `takeoverMinutes`: vacío = 60 min, 0 = hasta que el dueño reactive).
+ * REEMPLAZA el `TAKEOVER_MS` fijo de 60 min que tenía admin/routes.ts —
+ * ahora configurable desde /human-in-the-loop y desde Forja Inbox.
+ */
+export async function resolveTakeoverMs(env: Env): Promise<number> {
+  const raw = ((await new SettingsRepo(new Db(env.DB)).get(SETTING_KEYS.takeoverMinutes)) ?? "").trim();
+  const min = raw === "" ? DEFAULT_TAKEOVER_MIN : parseInt(raw, 10);
+  if (!Number.isFinite(min)) return DEFAULT_TAKEOVER_MIN * 60_000;
+  return min <= 0 ? MANUAL_RESUME_MS : min * 60_000;
 }

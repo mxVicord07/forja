@@ -96,7 +96,7 @@ export interface ResolvedModel {
 }
 
 /** env API key for a provider. */
-function envKeyFor(env: Env, provider: LlmProvider): string | undefined {
+export function envKeyFor(env: Env, provider: LlmProvider): string | undefined {
   if (provider === "openai") return env.OPENAI_API_KEY;
   if (provider === "xai") return env.XAI_API_KEY;
   return env.ANTHROPIC_API_KEY;

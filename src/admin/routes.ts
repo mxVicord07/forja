@@ -58,7 +58,7 @@ import { AppointmentChangeRequestsRepo, type AppointmentChangeRequest } from "..
 import { rescheduleBooking, cancelBooking, formatForCustomer, calcomTimeZone } from "../integrations/calcom";
 import { ConversationsRepo } from "../db/conversations";
 import { MessagesRepo } from "../db/messages";
-import { SettingsRepo, SETTING_KEYS, type SettingKey } from "../db/settings";
+import { SettingsRepo, SETTING_KEYS, resolveTakeoverMs, type SettingKey } from "../db/settings";
 import { CONTROLS, levelToValue } from "./control-levels";
 import { systemPromptFromEnv } from "../system-prompt";
 import { renderBusinessContext } from "../businessContext";
@@ -773,9 +773,6 @@ async function loadChangeContext(
 
 // --- Inbox actions (F1) -------------------------------------------------------
 
-/** Owner takes over for this long after replying/pausing from the dashboard. */
-const TAKEOVER_MS = 60 * 60 * 1000;
-
 // Reply AS A HUMAN from the dashboard: sends through the conversation's channel
 // adapter (Twilio/Telegram/Meta/ManyChat), persists the message as role=owner,
 // and pauses the bot (owner takeover — same behavior as isOwnerMessage in the
@@ -794,8 +791,10 @@ adminApp.post("/conversations/:id/reply", async (c) => {
   }
 
   // El takeover (pausa del bot) es específico de la bandeja, no del helper: la
-  // confirmación automática de una cita no debe callar al bot.
-  await new ConversationsRepo(new Db(c.env.DB)).setPausedUntil(id, Date.now() + TAKEOVER_MS);
+  // confirmación automática de una cita no debe callar al bot. Duración
+  // configurable (skill /human-in-the-loop, Forja Inbox) — ya no un fijo de
+  // 60 min, ver resolveTakeoverMs en db/settings.ts.
+  await new ConversationsRepo(new Db(c.env.DB)).setPausedUntil(id, Date.now() + (await resolveTakeoverMs(c.env)));
 
   c.header("X-Sent", "1");
   return c.html(
@@ -809,7 +808,7 @@ adminApp.post("/conversations/:id/reply", async (c) => {
 adminApp.post("/conversations/:id/pause", async (c) => {
   const id = c.req.param("id");
   const convs = new ConversationsRepo(new Db(c.env.DB));
-  await convs.setPausedUntil(id, Date.now() + TAKEOVER_MS);
+  await convs.setPausedUntil(id, Date.now() + (await resolveTakeoverMs(c.env)));
   return c.html(await renderThreadLive(c.env, id));
 });
 

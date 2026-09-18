@@ -1,5 +1,6 @@
 import type { Env } from "./env";
 import { businessTimeZone } from "./time/resolveDate";
+import { descripcionIdioma } from "./idioma";
 
 export interface SystemPromptInput {
   botName: string;
@@ -133,13 +134,19 @@ to Spanish.
 Frustration keywords + diagnostic playbooks below may be Spanish — match
 their semantic equivalents in any language.`;
   }
-  return `THE COACH'S CUSTOMER PREFERS LANGUAGE: ${language}
+  // Descripción NATURAL del idioma, no el código crudo — la diferencia real
+  // entre "PREFERS LANGUAGE: es-ES" (el modelo adivina qué significa) y
+  // "español de España, usa vosotros, evita mexicanismos" (instrucción
+  // accionable). Ported de idioma.ts (paquete Forja+ v1.0.76); códigos no
+  // reconocidos pasan tal cual, mismo comportamiento que antes de esto.
+  const desc = descripcionIdioma(language);
+  return `THE COACH'S CUSTOMER PREFERS LANGUAGE: ${desc}
 
-EVERY token you emit MUST be in ${language}, including pre-tool-call
+EVERY token you emit MUST be in ${desc}, including pre-tool-call
 narration and confirmations. If the customer writes in another language,
-reply in ${language} anyway. Acknowledge the switch once at the start
+reply in ${desc} anyway. Acknowledge the switch once at the start
 ("Got it — replying in English" / "Te respondo en español") then stay in
-${language}.
+${desc}.
 
 Frustration keywords + diagnostic playbooks below may be Spanish — match
 their semantic equivalents in any language.`;

@@ -2,6 +2,11 @@ import { Db } from "./client";
 
 const TOKEN_TTL_MS = 15 * 60 * 1000;
 
+/** Marker en `email` para tokens de SSO al panel (POST /api/admin-link, desde
+ *  Forja Inbox). No es un correo real: distingue esos tokens de cualquier
+ *  otro uso de magic links con email de verdad. */
+export const SSO_MASTER_EMAIL = "sso@panel";
+
 export interface MagicLink {
   token: string;
   email: string;

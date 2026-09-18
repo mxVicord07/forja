@@ -15,7 +15,7 @@ import { notifyOwner } from "./tools/handoffHuman";
 const WINDOW_MS = 30 * 60 * 1000;
 export const ALERT_THRESHOLD = 3;
 const THROTTLE_MS = 6 * 60 * 60 * 1000;
-const LAST_ALERT_KEY = "last_health_alert_at";
+export const LAST_ALERT_KEY = "last_health_alert_at";
 
 export interface WatchdogResult {
   failures: number;

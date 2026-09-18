@@ -189,7 +189,7 @@ export function renderTemplateBody(
 }
 
 /** Envío de UNA plantilla HSM vía Messages API (ContentSid + ContentVariables). */
-async function sendTwilioTemplate(
+export async function sendTwilioTemplate(
   env: Env,
   toNumber: string,
   contentSid: string,

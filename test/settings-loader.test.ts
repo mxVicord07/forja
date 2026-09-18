@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach } from "vitest";
 import { createTestMiniflare } from "./helpers/miniflareSetup";
 import { Db } from "../src/db/client";
 import { SettingsRepo, SETTING_KEYS } from "../src/db/settings";
-import { resolveAgentConfig } from "../src/settings-loader";
+import { resolveAgentConfig, DEFAULT_MONTHLY_BUDGET_USD } from "../src/settings-loader";
 
 const TOOLS = ["searchKb", "handoffHuman"];
 
@@ -58,6 +58,53 @@ describe("resolveAgentConfig", () => {
     expect(cfg.systemPrompt).toContain("MI CONTEXTO DE NEGOCIO");
   });
 
+  // --- Campos de Forja Inbox: SE SUMAN al business_context, no lo reemplazan ---
+
+  it("faqs editadas desde la app llegan al prompt, sumadas al override", async () => {
+    await repo.set(SETTING_KEYS.businessContext, "MI CONTEXTO DE NEGOCIO");
+    await repo.set(
+      SETTING_KEYS.faqs,
+      JSON.stringify([{ id: "1", question: "¿Hacen envíos?", answer: "Sí, a todo el país" }]),
+    );
+    const cfg = await resolveAgentConfig(env, TOOLS);
+    expect(cfg.systemPrompt).toContain("MI CONTEXTO DE NEGOCIO");
+    expect(cfg.systemPrompt).toContain("¿Hacen envíos?");
+    expect(cfg.systemPrompt).toContain("Sí, a todo el país");
+  });
+
+  it("promo vencida NO se inyecta al prompt", async () => {
+    await repo.set(
+      SETTING_KEYS.promo,
+      JSON.stringify({ active: true, text: "2x1 en todo", endsAt: "2020-01-01" }),
+    );
+    const cfg = await resolveAgentConfig(env, TOOLS);
+    expect(cfg.systemPrompt).not.toContain("2x1 en todo");
+  });
+
+  it("promo vigente SÍ se inyecta", async () => {
+    await repo.set(SETTING_KEYS.promo, JSON.stringify({ active: true, text: "2x1 en todo" }));
+    const cfg = await resolveAgentConfig(env, TOOLS);
+    expect(cfg.systemPrompt).toContain("2x1 en todo");
+  });
+
+  it("horario estructurado corrupto no tumba la resolución del prompt", async () => {
+    await repo.set(SETTING_KEYS.businessHours, "{esto no es JSON válido");
+    const cfg = await resolveAgentConfig(env, TOOLS);
+    expect(cfg.systemPrompt).toBeTruthy();
+  });
+
+  it("un bot sin ningún campo de Forja Inbox tocado queda con el business_context de siempre, sin bloques vacíos colgando", async () => {
+    const sinExtras = await resolveAgentConfig(env, TOOLS);
+    await repo.set(SETTING_KEYS.faqs, JSON.stringify([{ question: "¿?", answer: "!" }]));
+    const conExtra = await resolveAgentConfig(env, TOOLS);
+    const extraer = (p: string) => /<business_context>([\s\S]*?)<\/business_context>/.exec(p)?.[1] ?? "";
+    // Ningún campo tocado → el bloque queda EXACTO al de siempre (join con un
+    // solo elemento no agrega separador de más).
+    expect(extraer(sinExtras.systemPrompt)).not.toMatch(/\n\n\n/);
+    // Con un solo campo extra tocado, exactamente UN separador entre bloques.
+    expect(extraer(conExtra.systemPrompt)).not.toMatch(/\n\n\n/);
+  });
+
   it("buffer_seconds overrides env and enforces a 1000ms floor", async () => {
     await repo.set(SETTING_KEYS.bufferSeconds, "5");
     let cfg = await resolveAgentConfig(env, TOOLS);
@@ -97,6 +144,18 @@ describe("resolveAgentConfig", () => {
     await repo.set(SETTING_KEYS.botPaused, "1");
     expect((await resolveAgentConfig(env, TOOLS)).botPaused).toBe(true);
     await repo.set(SETTING_KEYS.botPaused, "0");
+    expect((await resolveAgentConfig(env, TOOLS)).botPaused).toBe(false);
+  });
+
+  it("bot_paused_until (Forja Inbox, POST /api/pause) pausa aunque bot_paused esté en 0", async () => {
+    await repo.set(SETTING_KEYS.botPaused, "0");
+    await repo.set(SETTING_KEYS.botPausedUntil, String(Date.now() + 60_000));
+    expect((await resolveAgentConfig(env, TOOLS)).botPaused).toBe(true);
+  });
+
+  it("una pausa temporal ya vencida ya no pausa el bot", async () => {
+    await repo.set(SETTING_KEYS.botPaused, "0");
+    await repo.set(SETTING_KEYS.botPausedUntil, String(Date.now() - 1000));
     expect((await resolveAgentConfig(env, TOOLS)).botPaused).toBe(false);
   });
 
@@ -212,5 +271,24 @@ describe("resolveAgentConfig — learned lessons (flywheel)", () => {
     const cfg = await resolveAgentConfig({ ...env, BOT_TIER: "free" }, TOOLS);
     expect(cfg.systemPrompt).not.toContain("<brand_voice>");
     expect(cfg.systemPrompt).not.toContain("aquí ando pa lo que ocupes");
+  });
+});
+
+describe("resolveAgentConfig — monthly_budget default (Forja Inbox, adoptado del paquete v1.0.76)", () => {
+  it("sin setting, cae al tope sugerido de verdad (antes quedaba sin tope)", async () => {
+    const cfg = await resolveAgentConfig(env, TOOLS);
+    expect(cfg.monthlyBudgetUsd).toBe(DEFAULT_MONTHLY_BUDGET_USD);
+  });
+
+  it('"0" explícito sigue significando SIN tope — el default solo aplica a la ausencia', async () => {
+    await repo.set(SETTING_KEYS.monthlyBudget, "0");
+    const cfg = await resolveAgentConfig(env, TOOLS);
+    expect(cfg.monthlyBudgetUsd).toBeUndefined();
+  });
+
+  it("un tope explícito del dueño gana sobre el default", async () => {
+    await repo.set(SETTING_KEYS.monthlyBudget, "10");
+    const cfg = await resolveAgentConfig(env, TOOLS);
+    expect(cfg.monthlyBudgetUsd).toBe(10);
   });
 });
