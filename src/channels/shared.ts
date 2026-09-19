@@ -81,11 +81,38 @@ export interface ReplyMedia {
   filename?: string;
 }
 
+// Botón tocable (opt-in, ver skill/botones.md). El tap regresa como mensaje de
+// texto normal (el título, o en Messenger/Instagram el título vía quick_reply)
+// — el cerebro no cambia, solo el formato de salida. `payload` es lo que la
+// plataforma devuelve en el tap donde lo soporta (Meta); en Telegram/WhatsApp
+// el tap regresa el TÍTULO como si el cliente lo hubiera escrito, no un id.
+export interface ReplyButton {
+  title: string; // lo que ve el cliente (≤20 chars — límite de WhatsApp)
+  payload: string; // id que regresa en el tap donde la plataforma lo soporta
+}
+
+// Canales que renderizan botones NATIVOS (WhatsApp botones de respuesta,
+// Telegram teclado de una sola vez, Messenger/Instagram quick replies). El
+// resto (twilio, manychat) recibe el fallback numerado en texto que arma
+// replies/sender.ts — nada se rompe, nadie ve el marcador crudo. Adaptado del
+// paquete Forja+ v1.0.76: ahí la lista también incluye "zernio", que no es un
+// ChannelId válido en este fork (sin adapter) — se excluye.
+export const BUTTON_CHANNELS: ReadonlySet<ChannelId> = new Set([
+  "telegram",
+  "whatsapp",
+  "messenger",
+  "instagram",
+]);
+
 export interface OutgoingReply {
   channel: ChannelId;
   channelUserId: string;
   chunks: string[];
   interChunkDelayMs?: number;
+  // Botones para el ÚLTIMO chunk (máx 3). Solo lo puebla agent.ts cuando el
+  // modelo emite el marcador [[botones: …]] (ver replies/sender.ts#extraeBotones)
+  // y el canal está en BUTTON_CHANNELS.
+  buttons?: ReplyButton[];
   /** Ver ReplyMedia arriba — dormido, ningún adapter lo consume todavía. */
   media?: ReplyMedia[];
 }

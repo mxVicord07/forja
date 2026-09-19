@@ -124,6 +124,12 @@ export const SETTING_KEYS = {
   // Ver resolveTakeoverMs abajo — reemplaza el TAKEOVER_MS fijo que tenía
   // admin/routes.ts.
   takeoverMinutes: "takeover_minutes",
+  // Botones tocables (opt-in, default OFF): "1" enseña al modelo el marcador
+  // [[botones: …]] en el prompt generado (system-prompt.ts) — el runtime
+  // (agent.ts + replies/sender.ts) lo traduce a botones nativos donde el canal
+  // los soporta (channels/shared.ts#BUTTON_CHANNELS), o a lista numerada en
+  // texto donde no. Skill /botones lo prende y ayuda a configurar cuándo usarlo.
+  buttonsEnabled: "buttons_enabled",
 } as const;
 
 export type SettingKey = (typeof SETTING_KEYS)[keyof typeof SETTING_KEYS];

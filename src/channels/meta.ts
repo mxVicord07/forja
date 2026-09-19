@@ -53,7 +53,12 @@ export function parseMetaEvents(body: MetaWebhookBody): IncomingMessage[] {
         kind: m?.text ? "text" : m?.attachments?.[0]?.type ?? "other",
       }));
       if (!m || m.is_echo) continue; // ignora echoes
-      if (m.quick_reply) continue; // tap de botón (quick reply), no es texto para el LLM
+      // Tap de un botón (quick reply, skill /botones): el título elegido YA
+      // viene en m.text — sigue de largo como mensaje normal para el cerebro.
+      // (Antes esta línea descartaba TODO quick_reply sin condición — sin una
+      // feature de botones real que lo justificara, era simplemente un tap
+      // que nunca llegaba al bot. Ahora que Botones existe, ese silencio sería
+      // un bug: el cliente toca un botón y el bot jamás contesta.)
       const sender = ev.sender?.id;
       if (!sender) continue;
       const audio = m.attachments?.find((a) => a.type === "audio");
@@ -167,11 +172,24 @@ export const metaAdapter: ChannelAdapter = {
     for (let i = 0; i < reply.chunks.length; i++) {
       const delay = i === 0 ? 0 : reply.interChunkDelayMs ?? 1000;
       if (delay > 0) await new Promise((r) => setTimeout(r, delay));
-      const payload: Record<string, unknown> = {
-        recipient: { id: reply.channelUserId },
+      const mensaje: Record<string, unknown> = {
         // Messenger/Instagram no renderizan marcado: se aplana (si no, el
         // cliente ve los asteriscos crudos).
-        message: { text: stripMarkdown(reply.chunks[i]) },
+        text: stripMarkdown(reply.chunks[i]),
+      };
+      // Botones (opt-in, skill /botones): quick replies en el ÚLTIMO chunk. El
+      // tap regresa con el título como texto normal (payload "btn:…" solo
+      // identifica el origen, el cerebro no lo lee).
+      if (reply.buttons?.length && i === reply.chunks.length - 1) {
+        mensaje.quick_replies = reply.buttons.map((b) => ({
+          content_type: "text",
+          title: b.title,
+          payload: b.payload,
+        }));
+      }
+      const payload: Record<string, unknown> = {
+        recipient: { id: reply.channelUserId },
+        message: mensaje,
       };
       if (!useIG) payload.messaging_type = "RESPONSE"; // requerido en Messenger, no en IG Login
       const res = await egressFetch(url, {

@@ -207,12 +207,16 @@ export async function resolveAgentConfig(env: Env, toolNames: string[]): Promise
   const disabledTools = parseCsvList(get(SETTING_KEYS.disabledTools));
   const enabledToolNames = toolNames.filter((n) => !disabledTools.includes(n));
 
+  // Botones tocables (opt-in, skill /botones): default OFF, "1" lo prende.
+  const buttonsEnabled = get(SETTING_KEYS.buttonsEnabled) === "1";
+
   const systemPrompt =
     systemPromptOverride ??
     systemPromptFromEnv(env, enabledToolNames, businessContext, niche.playbook || undefined, {
       tone,
       extraEscalationKeywords: escalationKeywords,
       botName,
+      buttonsEnabled,
       lessons,
       formattingRules,
       brandVoice,

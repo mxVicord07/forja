@@ -9,7 +9,7 @@ import { resolveAgentConfig } from "./settings-loader";
 import { buildTools } from "./tools";
 import { buildMultimodalUserMessage } from "./media/vision";
 import { chunkReply } from "./replies/chunker";
-import { pickAdapter } from "./replies/sender";
+import { pickAdapter, extraeBotones, resolveButtonsForChannel } from "./replies/sender";
 import { showTypingSafe, startTypingKeepalive } from "./replies/typing";
 import { selectModel } from "./upgrade/modelSelector";
 import type { Tier } from "./upgrade/modelSelector";
@@ -563,14 +563,20 @@ export class SupportAgent extends Agent<Env, SupportAgentState> {
         lastSearchKbScore: turnUsedKb ? lastKbTopScore : 1,
       });
 
-      // Chunk + send via the channel adapter
+      // Chunk + send via the channel adapter. El marcador [[botones: …]] se
+      // limpia SIEMPRE (aunque buttons_enabled esté apagado — un prompt
+      // override también puede usarlo, ver skill/botones.md): el cliente
+      // nunca debe ver el marcador crudo.
       const chunks = chunkReply(assistantText, cfg.maxChunks);
+      const ext = extraeBotones(chunks);
+      const { chunks: finalChunks, buttons } = resolveButtonsForChannel(channel, ext.chunks, ext.buttons);
       await adapter.sendReply(
         {
           channel,
           channelUserId: this.state.channelUserId,
-          chunks,
+          chunks: finalChunks,
           interChunkDelayMs: cfg.interChunkDelayMs,
+          buttons,
         },
         this.env,
       );

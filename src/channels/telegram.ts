@@ -100,6 +100,13 @@ export const telegramAdapter: ChannelAdapter = {
       }).catch(() => {});
       const delay = i === 0 ? 0 : reply.interChunkDelayMs ?? 1000;
       if (delay > 0) await new Promise((r) => setTimeout(r, delay));
+      // Botones (opt-in, skill /botones): teclado de una sola vez en el ÚLTIMO
+      // chunk. El tap regresa como mensaje de texto normal (el título) — sin
+      // callback_query que manejar, así que no hace falta tocar parseIncoming.
+      const replyMarkup =
+        reply.buttons?.length && i === reply.chunks.length - 1
+          ? { keyboard: reply.buttons.map((b) => [{ text: b.title }]), one_time_keyboard: true, resize_keyboard: true }
+          : undefined;
       // parse_mode "Markdown" so the model's **bold**/`code` renders instead of
       // showing literal asterisks/backticks. Legacy mode (not MarkdownV2) is
       // intentional: MarkdownV2 requires escaping ~12 special chars in plain
@@ -116,6 +123,7 @@ export const telegramAdapter: ChannelAdapter = {
           chat_id: reply.channelUserId,
           text: toTelegramMarkdown(reply.chunks[i]),
           parse_mode: "Markdown",
+          ...(replyMarkup ? { reply_markup: replyMarkup } : {}),
         }),
       });
       if (!res.ok) {
@@ -125,7 +133,11 @@ export const telegramAdapter: ChannelAdapter = {
         await egressFetch(`${TG_API}${token}/sendMessage`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ chat_id: reply.channelUserId, text: reply.chunks[i] }),
+          body: JSON.stringify({
+            chat_id: reply.channelUserId,
+            text: reply.chunks[i],
+            ...(replyMarkup ? { reply_markup: replyMarkup } : {}),
+          }),
         });
       }
     }

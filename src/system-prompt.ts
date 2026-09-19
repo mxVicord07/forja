@@ -16,6 +16,7 @@ export interface SystemPromptInput {
   brandVoice?: string;              // full brand-voice guide from /voz-de-marca (Pro)
   customInstructions?: string;      // owner rules ADDED to the generated prompt (never replace it)
   today?: string;                   // fecha/hora actual en la zona del negocio
+  buttonsEnabled?: boolean;         // opt-in: enseña el marcador [[botones: …]] (skill /botones)
 }
 
 const TEMPLATE = `<output_language>
@@ -70,6 +71,8 @@ Si una pregunta no tiene respuesta en lo que sabes, escalas a un humano.
 {{LECCIONES}}
 
 {{INSTRUCCIONES}}
+
+{{BOTONES}}
 
 <escalation_rules>
 Llama handoffHuman cuando:
@@ -209,6 +212,29 @@ ${instructions}
 </instrucciones_del_negocio>`
     : "";
 
+  // Botones tocables (opt-in, skill /botones): mismo patrón que
+  // instructionsBlock — apagado = prompt BYTE-IDÉNTICO al de hoy. El runtime
+  // (agent.ts + replies/sender.ts) traduce el marcador a botones nativos por
+  // canal, o a lista numerada donde no hay soporte.
+  const botonesBlock = input.buttonsEnabled
+    ? `<botones>
+Puedes ofrecer OPCIONES TOCABLES cuando le pidas al cliente una elección simple y
+cerrada (confirmar una cita, elegir un servicio, sí/no, elegir horario). Para eso,
+termina tu respuesta con una línea EXACTA con este formato:
+
+[[botones: Opción uno | Opción dos | Opción tres]]
+
+Reglas:
+- Máximo 3 opciones, cada título de 20 caracteres o menos, claro y accionable.
+- Úsalo SOLO cuando una elección corta ayuda de verdad; nunca en respuestas
+  abiertas ni en cada mensaje — se siente robótico.
+- El marcador va al FINAL, en su propia línea, una sola vez. El texto de arriba
+  debe entenderse solo (los botones son un atajo, no el mensaje).
+- Cuando el cliente toque un botón, su elección te llega como mensaje de texto
+  normal: respóndele avanzando, sin repetir las opciones.
+</botones>`
+    : "";
+
   const contextoTemporal = input.today
     ? `<contexto_temporal>
 Hoy es ${input.today}. Tu conocimiento de entrenamiento tiene OTRA fecha — ignórala.
@@ -231,6 +257,7 @@ Solo manda YYYY-MM-DD si el cliente dio una fecha de calendario (día y mes).
     .replaceAll("{{LECCIONES}}", lessonsBlock)
     .replaceAll("{{BRAND_VOICE}}", brandVoiceBlock)
     .replaceAll("{{INSTRUCCIONES}}", instructionsBlock)
+    .replaceAll("{{BOTONES}}", botonesBlock)
     .replaceAll("{{TONE_LINE}}", toneLine)
     .replaceAll("{{EXTRA_ESCALATION}}", extraEscalation)
     .replaceAll("{{EXTRA_STYLE}}", extraStyle);
@@ -245,6 +272,7 @@ export interface SystemPromptOverrides {
   brandVoice?: string;
   language?: string; // overrides env.BOT_LANGUAGE (e.g. "espejo")
   customInstructions?: string;
+  buttonsEnabled?: boolean;
 }
 
 /** Fecha/hora actual legible + ISO en la zona del negocio (ancla "hoy"/"mañana"). */
@@ -286,5 +314,6 @@ export function systemPromptFromEnv(
     brandVoice: overrides?.brandVoice,
     customInstructions: overrides?.customInstructions,
     today: currentDateLine(businessTimeZone(env)),
+    buttonsEnabled: overrides?.buttonsEnabled,
   });
 }

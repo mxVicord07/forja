@@ -27,6 +27,12 @@ interface WaMessage {
   text?: { body?: string };
   image?: { id?: string; caption?: string; mime_type?: string };
   audio?: { id?: string; voice?: boolean; mime_type?: string };
+  // Tap de botón/lista interactiva (type === "interactive").
+  interactive?: {
+    type?: string;
+    button_reply?: { id?: string; title?: string };
+    list_reply?: { id?: string; title?: string };
+  };
 }
 
 interface WaChange {
@@ -89,6 +95,10 @@ export async function parseWhatsAppEvents(
         let imageUrl: string | undefined;
         if (m.type === "text") {
           text = m.text?.body || undefined;
+        } else if (m.type === "interactive") {
+          // Tap de un botón (reply button) o de una lista: el título elegido
+          // ES el mensaje del cliente — el cerebro lo procesa como texto normal.
+          text = m.interactive?.button_reply?.title || m.interactive?.list_reply?.title || undefined;
         } else if (m.type === "image" && m.image?.id) {
           imageUrl = (await signedMediaUrl(m.image.id, env, origin)) ?? undefined;
           text = m.image.caption || undefined;
@@ -183,16 +193,45 @@ export const whatsappAdapter: ChannelAdapter = {
     for (let i = 0; i < reply.chunks.length; i++) {
       const delay = i === 0 ? 0 : reply.interChunkDelayMs ?? 1000;
       if (delay > 0) await new Promise((r) => setTimeout(r, delay));
+      // Botones (opt-in, skill /botones): el ÚLTIMO chunk sale como mensaje
+      // interactivo de reply buttons (máx 3, títulos ≤20 — sender.ts ya lo
+      // garantiza). El body interactivo de Meta topa a 1024 chars: si el chunk
+      // es más largo, cae a texto con lista numerada — jamás arriesgar el
+      // envío por unos botones.
+      const cabeBotones = !!reply.buttons?.length && reply.chunks[i].length <= 1024;
+      const esUltimoConBotones = cabeBotones && i === reply.chunks.length - 1;
+      const textoPlano =
+        !!reply.buttons?.length && !cabeBotones && i === reply.chunks.length - 1
+          ? `${reply.chunks[i]}\n\n${reply.buttons!.map((b, n) => `${n + 1}) ${b.title}`).join("\n")}`
+          : reply.chunks[i];
+      const payload = esUltimoConBotones
+        ? {
+            messaging_product: "whatsapp",
+            recipient_type: "individual",
+            to: reply.channelUserId,
+            type: "interactive",
+            interactive: {
+              type: "button",
+              body: { text: toWhatsAppMarkdown(reply.chunks[i]) },
+              action: {
+                buttons: reply.buttons!.map((b, n) => ({
+                  type: "reply",
+                  reply: { id: b.payload || `btn:${n}`, title: b.title },
+                })),
+              },
+            },
+          }
+        : {
+            messaging_product: "whatsapp",
+            recipient_type: "individual",
+            to: reply.channelUserId,
+            type: "text",
+            text: { preview_url: false, body: toWhatsAppMarkdown(textoPlano) },
+          };
       const res = await egressFetch(url, {
         method: "POST",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-        body: JSON.stringify({
-          messaging_product: "whatsapp",
-          recipient_type: "individual",
-          to: reply.channelUserId,
-          type: "text",
-          text: { preview_url: false, body: toWhatsAppMarkdown(reply.chunks[i]) },
-        }),
+        body: JSON.stringify(payload),
       });
       // Fuera de la ventana de 24h Meta rechaza texto libre (pide plantilla HSM):
       // no lo tragues, logéalo con el cuerpo para ver el motivo exacto.

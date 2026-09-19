@@ -1,4 +1,5 @@
-import type { ChannelAdapter, ChannelId } from "../channels/shared";
+import type { ChannelAdapter, ChannelId, ReplyButton } from "../channels/shared";
+import { BUTTON_CHANNELS } from "../channels/shared";
 import type { Env } from "../env";
 import { telegramAdapter } from "../channels/telegram";
 import { manychatAdapter } from "../channels/manychat";
@@ -18,6 +19,67 @@ export function chunkDelayMs(chunk: string): number {
   return Math.min(MAX_DELAY_MS, Math.max(MIN_DELAY_MS, proportional));
 }
 
+// ── Botones (opt-in, ver skill/botones.md) ───────────────────────────────────
+// El modelo puede terminar su respuesta con el marcador
+//   [[botones: Sí, agendar | Ver precios | Otra duda]]
+// (se le enseña en el prompt SOLO si buttons_enabled está prendido — ver
+// system-prompt.ts — pero el parser SIEMPRE lo honra, así un prompt override
+// también puede usarlo). Máx 3 opciones, títulos a 20 chars (límite de
+// WhatsApp). Porteado de Forja+ v1.0.76, sin cambios: es texto puro, no toca
+// nada específico de este fork.
+const MARCADOR_RE = /\[\[\s*(?:botones|buttons)\s*:\s*([^\]]+)\]\]/gi;
+
+export function extraeBotones(chunks: string[]): { chunks: string[]; buttons?: ReplyButton[] } {
+  let buttons: ReplyButton[] | undefined;
+  const limpios = chunks
+    .map((c) => {
+      let out = c;
+      for (const m of c.matchAll(MARCADOR_RE)) {
+        // Si el modelo mandara dos marcadores, el último gana.
+        const titulos = m[1]
+          .split("|")
+          .map((t) => t.trim())
+          .filter(Boolean)
+          .slice(0, 3);
+        if (titulos.length) {
+          buttons = titulos.map((t) => ({ title: t.slice(0, 20), payload: `btn:${t.slice(0, 40)}` }));
+        }
+        out = out.replace(m[0], "");
+      }
+      return out.replace(/[ \t]+$/gm, "").replace(/\n{3,}/g, "\n\n").trim();
+    })
+    .filter((c) => c.length > 0);
+  return { chunks: limpios, buttons };
+}
+
+/** Fallback en texto para canales sin botones nativos (twilio, manychat). */
+export function botonesATexto(buttons: ReplyButton[]): string {
+  return buttons.map((b, i) => `${i + 1}) ${b.title}`).join("\n");
+}
+
+/**
+ * Decide botones nativos vs. fallback numerado según soporte del canal.
+ * Único lugar que conoce BUTTON_CHANNELS — agent.ts y sendChunkedReply lo
+ * llaman después de extraeBotones() para no duplicar esta decisión.
+ */
+export function resolveButtonsForChannel(
+  channel: ChannelId,
+  chunks: string[],
+  buttons: ReplyButton[] | undefined,
+): { chunks: string[]; buttons?: ReplyButton[] } {
+  if (!buttons?.length) return { chunks };
+  if (!BUTTON_CHANNELS.has(channel)) {
+    const lista = botonesATexto(buttons);
+    const finales = chunks.length
+      ? [...chunks.slice(0, -1), `${chunks[chunks.length - 1]}\n\n${lista}`]
+      : [lista];
+    return { chunks: finales };
+  }
+  // El modelo mandó SOLO el marcador: los botones necesitan un cuerpo de texto.
+  const finales = chunks.length ? chunks : [buttons.map((b) => b.title).join(" · ")];
+  return { chunks: finales, buttons };
+}
+
 export async function sendChunkedReply(
   adapter: ChannelAdapter,
   channel: ChannelId,
@@ -26,12 +88,15 @@ export async function sendChunkedReply(
   env: Env,
   interChunkDelayMs?: number,
 ): Promise<void> {
+  const ext = extraeBotones(chunks);
+  const { chunks: finales, buttons } = resolveButtonsForChannel(channel, ext.chunks, ext.buttons);
+  if (!finales.length) return;
   // Default to a human-like, length-proportional pause between chunks.
   const delay =
     interChunkDelayMs ??
-    (chunks.length > 1 ? chunkDelayMs(chunks[0]) : undefined);
+    (finales.length > 1 ? chunkDelayMs(finales[0]) : undefined);
   await adapter.sendReply(
-    { channel, channelUserId, chunks, interChunkDelayMs: delay },
+    { channel, channelUserId, chunks: finales, interChunkDelayMs: delay, buttons },
     env,
   );
 }

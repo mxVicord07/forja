@@ -49,6 +49,17 @@ interface YCloudInboundMessage {
   text?: { body?: string };
   image?: { link?: string; caption?: string; id?: string };
   audio?: { link?: string; id?: string };
+  // Tap de botón/lista interactiva (type === "interactive"). YCloud dice
+  // reflejar el contrato de mensajes de WhatsApp Business API 1:1 (ver
+  // comentario de sendDocument más abajo), así que se asume la MISMA forma
+  // que Meta Cloud API (button_reply/list_reply) — SIN muestra real capturada
+  // todavía (docs/superpowers/specs/ycloud-payloads-capturados.json no tiene
+  // ninguna). Verificar contra tráfico real la primera vez que se pruebe.
+  interactive?: {
+    type?: string;
+    button_reply?: { id?: string; title?: string };
+    list_reply?: { id?: string; title?: string };
+  };
 }
 
 interface YCloudEvent {
@@ -92,6 +103,10 @@ export async function parseYCloudEvent(
 
   if (m.type === "text") {
     text = m.text?.body || undefined;
+  } else if (m.type === "interactive") {
+    // Tap de botón/lista — sin verificar contra tráfico real, ver el
+    // comentario de YCloudInboundMessage#interactive arriba.
+    text = m.interactive?.button_reply?.title || m.interactive?.list_reply?.title || undefined;
   } else if (m.type === "image" && m.image?.link) {
     // Forma verificada contra tráfico real de YCloud (foto con caption,
     // 2026-08-01): image: {link, caption, id, ...}. Coincide con la hipótesis
@@ -260,15 +275,37 @@ export const ycloudAdapter: ChannelAdapter = {
     for (let i = 0; i < reply.chunks.length; i++) {
       const delay = i === 0 ? 0 : reply.interChunkDelayMs ?? 1000;
       if (delay > 0) await new Promise((r) => setTimeout(r, delay));
+      // Botones (opt-in, skill /botones): mismo criterio que whatsapp.ts
+      // (Meta Cloud API) — YCloud refleja el mismo contrato de mensajes. Body
+      // interactivo topa a 1024 chars: si el chunk es más largo, cae a texto
+      // con lista numerada — jamás arriesgar el envío por unos botones.
+      const cabeBotones = !!reply.buttons?.length && reply.chunks[i].length <= 1024;
+      const esUltimoConBotones = cabeBotones && i === reply.chunks.length - 1;
+      const textoPlano =
+        !!reply.buttons?.length && !cabeBotones && i === reply.chunks.length - 1
+          ? `${reply.chunks[i]}\n\n${reply.buttons!.map((b, n) => `${n + 1}) ${b.title}`).join("\n")}`
+          : reply.chunks[i];
+      const payload = esUltimoConBotones
+        ? {
+            from,
+            to,
+            type: "interactive",
+            interactive: {
+              type: "button",
+              body: { text: toWhatsAppMarkdown(reply.chunks[i]) },
+              action: {
+                buttons: reply.buttons!.map((b, n) => ({
+                  type: "reply",
+                  reply: { id: b.payload || `btn:${n}`, title: b.title },
+                })),
+              },
+            },
+          }
+        : { from, to, type: "text", text: { body: toWhatsAppMarkdown(textoPlano), preview_url: false } };
       const res = await fetch(SEND_URL, {
         method: "POST",
         headers: { "Content-Type": "application/json", "X-API-Key": apiKey },
-        body: JSON.stringify({
-          from,
-          to,
-          type: "text",
-          text: { body: toWhatsAppMarkdown(reply.chunks[i]), preview_url: false },
-        }),
+        body: JSON.stringify(payload),
       });
       // Fuera de la ventana de 24h Meta rechaza texto libre (pide plantilla
       // HSM). No lo tragues en silencio, pero tampoco tumbes el turno. Sin
