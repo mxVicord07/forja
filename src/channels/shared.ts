@@ -23,6 +23,29 @@ export function isChannelId(value: string): value is ChannelId {
   return (CHANNEL_IDS as readonly string[]).includes(value);
 }
 
+// Canales que mandan media NATIVA (foto/audio como archivo) — el resto recibe
+// el link en texto (sender.ts), nada se rompe. Adaptado del paquete Forja+
+// v1.0.76 (Forja Inbox): ahí la lista incluye "kapso"/"zernio", que no son
+// ChannelId válidos en este fork (sin adapters) — se excluyen.
+export const MEDIA_CHANNELS: ReadonlySet<ChannelId> = new Set([
+  "telegram",
+  "whatsapp",
+  "twilio",
+  "messenger",
+  "instagram",
+  "manychat",
+]);
+
+// Canales que mandan un DOCUMENTO nativo (kind "file"). Instagram y ManyChat
+// NO: ahí el archivo va como link en texto — llega igual, sin burbuja bonita.
+// Mismo criterio que el paquete original, recortado a nuestros ChannelId.
+export const FILE_CHANNELS: ReadonlySet<ChannelId> = new Set([
+  "telegram",
+  "whatsapp",
+  "twilio",
+  "messenger",
+]);
+
 export interface IncomingMessage {
   channel: ChannelId;
   channelUserId: string;
@@ -43,11 +66,28 @@ export interface IncomingMessage {
   rawPayload: unknown;
 }
 
+// Adjunto de un reply — porteado del paquete Forja+ v1.0.76 (superpoder
+// Galería + "mandar media desde Forja Inbox"). Campo de tipo SOLAMENTE: hoy
+// NINGÚN adapter de este fork lee `media` (ni Galería ni el envío de media
+// saliente desde la app están portados — los dos necesitan R2/Bóveda, que
+// este bot no tiene provisionado). Se agrega el tipo para que
+// src/api-inbox.ts compile; en la práctica es inalcanzable: la única ruta
+// que llena `media` está guardada arriba por `if (!c.env.MEDIA)`.
+export interface ReplyMedia {
+  kind: "image" | "audio" | "video" | "file";
+  url: string;
+  voice?: boolean;
+  caption?: string;
+  filename?: string;
+}
+
 export interface OutgoingReply {
   channel: ChannelId;
   channelUserId: string;
   chunks: string[];
   interChunkDelayMs?: number;
+  /** Ver ReplyMedia arriba — dormido, ningún adapter lo consume todavía. */
+  media?: ReplyMedia[];
 }
 
 /**

@@ -22,6 +22,10 @@ export interface ContentTemplate {
   name: string;
   body: string;
   variables: string[]; // nombres de variables {{1}}, {{2}}…
+  /** Valor de ejemplo que la cuenta registró para cada variable en Twilio —
+   *  Forja Inbox lo usa como placeholder editable en el sheet de plantillas.
+   *  Twilio ya lo devuelve en `c.variables`; antes lo descartábamos. */
+  variableExamples: Record<string, string>;
 }
 
 /** Plantillas HSM de la cuenta (Twilio Content API). */
@@ -46,6 +50,9 @@ export async function listContentTemplates(env: Env): Promise<ContentTemplate[]>
       name: (c.friendly_name as string) ?? c.sid,
       body,
       variables: Object.keys(c.variables ?? {}),
+      variableExamples: Object.fromEntries(
+        Object.entries(c.variables ?? {}).map(([k, v]) => [k, String(v ?? "")]),
+      ),
     };
   });
 }

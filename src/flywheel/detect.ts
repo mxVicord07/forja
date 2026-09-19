@@ -12,16 +12,20 @@
  * The system only PROPOSES — applying is the owner's click (see apply.ts).
  * Runs nightly from scheduled() and on demand from the Mejoras tab.
  */
-import { generateText } from "ai";
 import type { Env } from "../env";
 import { Db } from "../db/client";
 import { InsightsRepo } from "../db/insights";
-import { MessagesRepo } from "../db/messages";
+import { MessagesRepo, type Message } from "../db/messages";
 import { SuggestionsRepo } from "../db/suggestions";
 import { SettingsRepo, SETTING_KEYS } from "../db/settings";
-import { createModel } from "../llm/provider";
-import { loadLlmOverrides } from "../settings-loader";
 import { renderBusinessContext } from "../businessContext";
+// Adoptado del paquete Forja+ v1.0.76 al portar Forja Inbox: los dos
+// detectores usaban createModel+generateText A SECAS — si la llave BYO del
+// dueño fallaba, el flywheel nocturno completo producía cero sugerencias sin
+// ningún aviso (la MISMA clase de bug que documenta work-model.ts: el agente
+// principal reintenta con failover, todo lo demás no). workModel da esa
+// misma resiliencia acá, gratis.
+import { workModel, type WorkModel } from "../llm/work-model";
 
 export interface FlywheelResult {
   created: number;
@@ -47,7 +51,7 @@ export async function detectKbGaps(env: Env, limit = 3): Promise<FlywheelResult>
   const thirtyDays = Date.now() - 30 * 86_400_000;
 
   const gaps = await insights.missedKb(thirtyDays, 10);
-  const { model } = createModel(env, "fast", await loadLlmOverrides(env));
+  const llm = await workModel(env, "fast", "flywheel");
   let created = 0;
   let errors = 0;
 
@@ -56,8 +60,7 @@ export async function detectKbGaps(env: Env, limit = 3): Promise<FlywheelResult>
     if (await suggestions.exists("kb_entry", gap.question)) continue;
 
     try {
-      const result = await generateText({
-        model,
+      const result = await llm.generate({
         prompt: `Eres el redactor de la base de conocimiento del negocio "${env.BUSINESS_NAME}".
 Contexto del negocio:
 ${renderBusinessContext()}
@@ -89,6 +92,60 @@ Responde SOLO con JSON: {"title": "...", "content": "..."} (content: 2-6 frases 
   return { created, errors };
 }
 
+// ── Destilador de lecciones (compartido con Forja Inbox) ────────────────────
+//
+// El cron nocturno lo usa para PROPONER una lección por conversación
+// (detectLessons), y "Que el bot aprenda esto" de Forja Inbox
+// (POST /conversations/:id/learn en api-inbox.ts) para destilar una AL
+// MOMENTO desde el hilo abierto. Misma cabeza: si el prompt mejora, mejora
+// en los dos lados — antes esta lógica vivía duplicada solo dentro de
+// detectLessons.
+
+/** Transcript legible para el destilador. `highlightId` marca el mensaje que
+ *  el dueño señaló desde la app (la respuesta que quiere que el bot aprenda). */
+export function lessonTranscript(
+  history: Pick<Message, "id" | "role" | "content">[],
+  highlightId?: string,
+): string {
+  return history
+    .map((m) => {
+      const who =
+        m.role === "user" ? "Cliente" : m.role === "owner" ? "Dueño" : m.role === "note" ? "Nota interna" : "Bot";
+      const marca = highlightId && m.id === highlightId ? "  ← ESTA es la respuesta a aprender" : "";
+      return `${who}: ${m.content.slice(0, 400)}${marca}`;
+    })
+    .join("\n");
+}
+
+/**
+ * Convierte una intervención del dueño en UNA regla operativa corta.
+ * Devuelve null si no hay lección clara y generalizable.
+ */
+export async function distillLesson(
+  env: Env,
+  transcript: string,
+  opts: { instruction?: string; llm?: WorkModel } = {},
+): Promise<string | null> {
+  // El caller puede prestar el suyo (detectLessons destila en bucle y no tiene
+  // por qué releer settings —ni re-fallar contra la misma llave— en cada vuelta).
+  const llm = opts.llm ?? (await workModel(env, "fast", "flywheel"));
+  const extra = opts.instruction
+    ? `\n\nEl dueño además te dice qué quiere que aprendas: "${opts.instruction}". Tómalo como la señal principal.`
+    : "";
+  const result = await llm.generate({
+    prompt: `En esta conversación el DUEÑO del negocio tuvo que intervenir a mano.
+Compara cómo respondía el bot vs. cómo respondió el dueño.
+
+${transcript}${extra}
+
+¿Qué regla operativa CORTA (máx 140 caracteres, en español, imperativa) debería seguir el bot la próxima vez para que el dueño no tenga que intervenir? Debe ser una regla general, no específica de este cliente.
+Si no hay una lección clara y generalizable, responde {"lesson": null}.
+Responde SOLO con JSON: {"lesson": "..." | null}`,
+  });
+  const parsed = extractJson<{ lesson?: string | null }>(result.text);
+  return parsed?.lesson?.trim() || null;
+}
+
 /** Owner takeovers → leccion suggestions (one per conversation). */
 export async function detectLessons(env: Env, limit = 3): Promise<FlywheelResult> {
   const db = new Db(env.DB);
@@ -100,11 +157,12 @@ export async function detectLessons(env: Env, limit = 3): Promise<FlywheelResult
     `SELECT DISTINCT m.conversation_id, c.display_name
      FROM messages m LEFT JOIN conversations c ON c.id = m.conversation_id
      WHERE m.role = 'owner' AND m.created_at > ?
+       AND m.conversation_id NOT LIKE 'test:%'
      ORDER BY m.created_at DESC LIMIT 10`,
     [sevenDays],
   );
 
-  const { model } = createModel(env, "fast", await loadLlmOverrides(env));
+  const llm = await workModel(env, "fast", "flywheel");
   let created = 0;
   let errors = 0;
 
@@ -115,23 +173,7 @@ export async function detectLessons(env: Env, limit = 3): Promise<FlywheelResult
 
     try {
       const history = await msgs.lastN(conv.conversation_id, 30);
-      const transcript = history
-        .map((m) => `${m.role === "user" ? "Cliente" : m.role === "owner" ? "Dueño" : "Bot"}: ${m.content.slice(0, 400)}`)
-        .join("\n");
-
-      const result = await generateText({
-        model,
-        prompt: `En esta conversación el DUEÑO del negocio tuvo que intervenir a mano.
-Compara cómo respondía el bot vs. cómo respondió el dueño.
-
-${transcript}
-
-¿Qué regla operativa CORTA (máx 140 caracteres, en español, imperativa) debería seguir el bot la próxima vez para que el dueño no tenga que intervenir? Debe ser una regla general, no específica de este cliente.
-Si no hay una lección clara y generalizable, responde {"lesson": null}.
-Responde SOLO con JSON: {"lesson": "..." | null}`,
-      });
-      const parsed = extractJson<{ lesson?: string | null }>(result.text);
-      const lesson = parsed?.lesson?.trim();
+      const lesson = await distillLesson(env, lessonTranscript(history), { llm });
       if (!lesson) continue;
 
       const id = await suggestions.createIfNew({
@@ -187,4 +229,18 @@ export async function saveLessons(
     JSON.stringify(lessons.slice(-MAX_LESSONS)),
     actor,
   );
+}
+
+/**
+ * Id determinístico de una lección, para Forja Inbox (GET/DELETE /api/lessons).
+ * `learned_lessons` guarda un JSON de strings sin id propio, así que se DERIVA
+ * del contenido — sin migración, y borrar por id es exacto aunque la lista se
+ * reordene.
+ */
+export async function lessonId(text: string): Promise<string> {
+  const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(text));
+  return [...new Uint8Array(digest)]
+    .map((b) => b.toString(16).padStart(2, "0"))
+    .join("")
+    .slice(0, 12);
 }

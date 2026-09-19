@@ -11,6 +11,11 @@ vi.mock("ai", () => ({
   generateText: (...args: unknown[]) => generateTextMock(...args),
 }));
 
+// Mock completo: detectKbGaps/detectLessons pasaron a usar workModel
+// (llm/work-model.ts) al portar Forja Inbox — trae failover real, así que
+// necesita envKeyFor/fallbackModel además de createModel (antes solo
+// llamaban a createModel directo). Sin candidato de respaldo (fallbackModel
+// → null): estas pruebas no ejercen el failover, solo el candidato primario.
 vi.mock("../../src/llm/provider", () => ({
   createModel: () => ({
     provider: "anthropic",
@@ -18,6 +23,8 @@ vi.mock("../../src/llm/provider", () => ({
     model: {},
     supportsPromptCache: true,
   }),
+  envKeyFor: () => undefined,
+  fallbackModel: () => null,
 }));
 
 vi.mock("../../src/businessContext", () => ({
@@ -32,7 +39,7 @@ import { MessagesRepo } from "../../src/db/messages";
 import { InsightsRepo } from "../../src/db/insights";
 import { SuggestionsRepo } from "../../src/db/suggestions";
 import { KbDocsRepo } from "../../src/kb/docs";
-import { detectKbGaps, detectLessons, getLessons } from "../../src/flywheel/detect";
+import { detectKbGaps, detectLessons, getLessons, lessonTranscript, lessonId } from "../../src/flywheel/detect";
 import { applySuggestion, dismissSuggestion } from "../../src/flywheel/apply";
 import type { Env } from "../../src/env";
 
@@ -245,5 +252,46 @@ describe("Mejoras routes", () => {
   it("requires auth", async () => {
     const res = await adminApp.request("/mejoras", {}, env);
     expect(res.status).toBe(401);
+  });
+});
+
+describe("lessonTranscript — porteado al integrar Forja Inbox (compartido con detectLessons)", () => {
+  it("etiqueta cada rol correctamente, incluido 'note'", () => {
+    const t = lessonTranscript([
+      { id: "1", role: "user", content: "¿Tienen envíos?" },
+      { id: "2", role: "assistant", content: "No manejamos envíos." },
+      { id: "3", role: "owner", content: "Sí hacemos envíos locales." },
+      { id: "4", role: "note", content: "Cliente frecuente." },
+    ]);
+    expect(t).toContain("Cliente: ¿Tienen envíos?");
+    expect(t).toContain("Bot: No manejamos envíos.");
+    expect(t).toContain("Dueño: Sí hacemos envíos locales.");
+    expect(t).toContain("Nota interna: Cliente frecuente.");
+  });
+
+  it("marca el mensaje señalado por el dueño desde la app", () => {
+    const t = lessonTranscript(
+      [
+        { id: "1", role: "user", content: "pregunta" },
+        { id: "2", role: "owner", content: "la respuesta correcta" },
+      ],
+      "2",
+    );
+    expect(t).toContain("la respuesta correcta  ← ESTA es la respuesta a aprender");
+  });
+});
+
+describe("lessonId — id determinístico para GET/DELETE /api/lessons (Forja Inbox)", () => {
+  it("el mismo texto siempre da el mismo id", async () => {
+    const a = await lessonId("Siempre confirma el horario antes de agendar.");
+    const b = await lessonId("Siempre confirma el horario antes de agendar.");
+    expect(a).toBe(b);
+    expect(a).toHaveLength(12);
+  });
+
+  it("textos distintos dan ids distintos", async () => {
+    const a = await lessonId("Regla A");
+    const b = await lessonId("Regla B");
+    expect(a).not.toBe(b);
   });
 });

@@ -543,7 +543,14 @@ inboxApi.post("/conversations/:id/messages", async (c) => {
   // y la nota de abajo lo hace visible — jamás un fallo tragado en silencio.
   const envio = (async () => {
     try {
-      const adapter = pickAdapter(conv.channel as ChannelId);
+      // Adaptado: nuestro pickAdapter necesita `env` (resuelve YCloud vs Meta
+      // para "whatsapp" — sin él, un mensaje que entró por YCloud podría
+      // intentar salir por Meta y el cliente nunca vería la respuesta). El
+      // paquete original pasa un 3er argumento `{strict:true}` a sendReply
+      // (throw en vez de tragar el error); nuestros adapters YA se comportan
+      // así siempre (no tienen modo silencioso), así que se omite — no hace
+      // falta pedirlo.
+      const adapter = pickAdapter(conv.channel as ChannelId, c.env);
       await adapter.sendReply(
         {
           channel: conv.channel as ChannelId,
@@ -552,7 +559,6 @@ inboxApi.post("/conversations/:id/messages", async (c) => {
           interChunkDelayMs: 0,
         },
         c.env,
-        { strict: true },
       );
     } catch (e) {
       const detail = e instanceof Error ? e.message : String(e);
@@ -1541,8 +1547,14 @@ inboxApi.post("/conversations/:id/media", async (c) => {
   // Canal sin media nativa (o sin documentos nativos, como Instagram/ManyChat):
   // el archivo va como link en texto — llega igual, sin burbuja.
   const nativo = MEDIA_CHANNELS.has(channel) && (replyKind !== "file" || FILE_CHANNELS.has(channel));
+  // Adaptado: sin `{strict:true}` (nuestros adapters ya throw siempre, ver
+  // nota más arriba) y con `env` en pickAdapter. `nativo` en la práctica
+  // nunca es true todavía: MEDIA_CHANNELS existe como tipo pero ningún
+  // adapter real sabe leer `media[]` (ver el comentario en channels/shared.ts
+  // — dormido junto con Bóveda). Se deja la rama igual, lista para cuando
+  // eso se porte, en vez de borrarla.
   try {
-    await pickAdapter(channel).sendReply(
+    await pickAdapter(channel, c.env).sendReply(
       nativo
         ? {
             channel,
@@ -1565,10 +1577,6 @@ inboxApi.post("/conversations/:id/media", async (c) => {
             chunks: [caption ? `${caption}\n${url}` : url],
           },
       c.env,
-      // strict: un rechazo del proveedor tiene que llegar como excepción para
-      // que el rollback borre el objeto de R2 y su fila — si no, el bucket se
-      // queda con un archivo que nadie recibió.
-      { strict: true },
     );
   } catch (e) {
     await rollback();
