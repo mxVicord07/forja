@@ -45,6 +45,7 @@ Cloudflare (~gratis, ~$5/mes con tráfico) y el cerebro es su propia llave de IA
 - `/reporte` — informe mensual de valor para el cliente.
 - `/exportar` — exporta leads y conversaciones (CSV/JSON).
 - `/actualizar-mi-bot` — trae la última versión conservando tu config.
+- `/botones` — enciende y configura botones tocables (opt-in) en las respuestas del bot.
 
 ## ¿Quieres más? (Forja+)
 

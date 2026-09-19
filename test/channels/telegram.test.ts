@@ -145,6 +145,92 @@ describe("toTelegramMarkdown", () => {
   });
 });
 
+describe("telegramAdapter.sendReply — botones (skill /botones)", () => {
+  afterEach(() => vi.restoreAllMocks());
+
+  // sendReply manda un POST a sendChatAction (typing) ANTES de cada
+  // sendMessage — filtrar por URL evita depender del índice crudo de la llamada.
+  function sendMessageCalls(fetchMock: ReturnType<typeof vi.spyOn>) {
+    return (fetchMock.mock.calls as any[]).filter(([url]) => String(url).includes("/sendMessage"));
+  }
+
+  it("manda reply_markup con teclado de una sola vez cuando hay buttons", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response("{}", { status: 200 }));
+    await telegramAdapter.sendReply(
+      {
+        channel: "telegram",
+        channelUserId: "42",
+        chunks: ["¿Confirmamos?"],
+        buttons: [{ title: "Sí", payload: "btn:Sí" }, { title: "No", payload: "btn:No" }],
+      },
+      { TELEGRAM_BOT_TOKEN: "tok" } as any,
+    );
+    const [, init] = sendMessageCalls(fetchMock)[0];
+    const body = JSON.parse(init.body);
+    expect(body.reply_markup).toEqual({
+      keyboard: [[{ text: "Sí" }], [{ text: "No" }]],
+      one_time_keyboard: true,
+      resize_keyboard: true,
+    });
+  });
+
+  it("solo el ÚLTIMO chunk lleva reply_markup", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response("{}", { status: 200 }));
+    await telegramAdapter.sendReply(
+      {
+        channel: "telegram",
+        channelUserId: "42",
+        chunks: ["primero", "segundo"],
+        buttons: [{ title: "Sí", payload: "btn:Sí" }],
+        interChunkDelayMs: 0,
+      },
+      { TELEGRAM_BOT_TOKEN: "tok" } as any,
+    );
+    const [firstCall, secondCall] = sendMessageCalls(fetchMock);
+    const first = JSON.parse(firstCall[1].body);
+    const second = JSON.parse(secondCall[1].body);
+    expect(first.reply_markup).toBeUndefined();
+    expect(second.reply_markup).toBeDefined();
+  });
+
+  it("sin buttons no manda reply_markup", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response("{}", { status: 200 }));
+    await telegramAdapter.sendReply(
+      { channel: "telegram", channelUserId: "42", chunks: ["hola"] },
+      { TELEGRAM_BOT_TOKEN: "tok" } as any,
+    );
+    const body = JSON.parse(sendMessageCalls(fetchMock)[0][1].body);
+    expect(body.reply_markup).toBeUndefined();
+  });
+
+  it("el fallback a texto plano (parse_mode rechazado) también conserva reply_markup", async () => {
+    vi.spyOn(console, "warn").mockImplementation(() => {});
+    let sendMessageCount = 0;
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockImplementation(async (url: any) => {
+      if (String(url).includes("/sendChatAction")) return new Response("{}", { status: 200 });
+      // Primer sendMessage (parse_mode Markdown) rechazado; el fallback en
+      // texto plano (segundo sendMessage) sí responde 200.
+      sendMessageCount++;
+      return sendMessageCount === 1
+        ? new Response("bad entity", { status: 400 })
+        : new Response("{}", { status: 200 });
+    });
+    await telegramAdapter.sendReply(
+      {
+        channel: "telegram",
+        channelUserId: "42",
+        chunks: ["texto"],
+        buttons: [{ title: "Sí", payload: "btn:Sí" }],
+      },
+      { TELEGRAM_BOT_TOKEN: "tok" } as any,
+    );
+    const msgCalls = sendMessageCalls(fetchMock);
+    expect(msgCalls).toHaveLength(2); // intento con parse_mode + fallback en texto plano
+    const fallbackBody = JSON.parse(msgCalls[1][1].body);
+    expect(fallbackBody.reply_markup).toBeDefined();
+  });
+});
+
 describe("telegramAdapter.sendDocument", () => {
   afterEach(() => vi.restoreAllMocks());
 

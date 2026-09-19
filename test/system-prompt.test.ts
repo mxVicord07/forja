@@ -70,6 +70,20 @@ describe("renderSystemPrompt", () => {
     expect(blank).not.toContain("<instrucciones_del_negocio>");
   });
 
+  it("renders the botones block only when buttonsEnabled, byte-identical prompt when off", () => {
+    const on = renderSystemPrompt({ ...input, buttonsEnabled: true });
+    expect(on).toContain("<botones>");
+    expect(on).toContain("[[botones: Opción uno | Opción dos | Opción tres]]");
+
+    const off = renderSystemPrompt(input);
+    expect(off).not.toContain("<botones>");
+    expect(off).not.toContain("{{BOTONES}}");
+
+    // apagado explícito (false) da el MISMO prompt que omitirlo del todo.
+    const explicitOff = renderSystemPrompt({ ...input, buttonsEnabled: false });
+    expect(explicitOff).toBe(off);
+  });
+
   it("inserts nichoPlaybook when provided and empty string when omitted", () => {
     const withPlaybook = renderSystemPrompt({
       ...input,
@@ -197,5 +211,13 @@ describe("systemPromptFromEnv", () => {
     expect(prompt).toContain("en");
     expect(prompt).toContain("- searchKb");
     expect(prompt).toContain("ctx here");
+  });
+
+  it("passes overrides.buttonsEnabled through to the botones block", () => {
+    const env = { BOT_NAME: "Bot", BUSINESS_NAME: "Acme", BOT_LANGUAGE: "es" } as any;
+    const on = systemPromptFromEnv(env, ["searchKb"], "ctx", undefined, { buttonsEnabled: true });
+    expect(on).toContain("<botones>");
+    const off = systemPromptFromEnv(env, ["searchKb"], "ctx");
+    expect(off).not.toContain("<botones>");
   });
 });

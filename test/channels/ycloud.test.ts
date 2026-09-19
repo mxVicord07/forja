@@ -145,6 +145,18 @@ describe("parseYCloudEvent", () => {
     expect(await parseYCloudEvent(evt({ type: "text", text: { body: "x" } }), env, ORIGIN)).toBeNull();
   });
 
+  it("parsea el tap de un botón (type interactive, button_reply) como texto normal", async () => {
+    const out = await parseYCloudEvent(
+      evt({
+        from: "+525512345678",
+        type: "interactive",
+        interactive: { type: "button_reply", button_reply: { id: "btn:Sí", title: "Sí" } },
+      }),
+      env, ORIGIN,
+    );
+    expect(out!.text).toBe("Sí");
+  });
+
   it("es defensiva si image/audio llegan sin link", async () => {
     expect(
       await parseYCloudEvent(evt({ from: "+525512345678", type: "image", image: { caption: "sin link" } }), env, ORIGIN),
@@ -263,6 +275,44 @@ describe("ycloudAdapter.sendReply", () => {
         {} as any,
       ),
     ).rejects.toThrow(/YCLOUD/);
+  });
+
+  it("con buttons manda type=interactive con hasta 3 reply buttons", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response("{}", { status: 200 }));
+    await ycloudAdapter.sendReply(
+      {
+        channel: "whatsapp",
+        channelUserId: "525512345678",
+        chunks: ["¿Confirmamos?"],
+        buttons: [{ title: "Sí", payload: "btn:Sí" }, { title: "No", payload: "btn:No" }],
+        interChunkDelayMs: 0,
+      },
+      sendEnv,
+    );
+    const payload = JSON.parse((fetchMock.mock.calls[0] as any)[1].body);
+    expect(payload.type).toBe("interactive");
+    expect(payload.interactive.action.buttons).toEqual([
+      { type: "reply", reply: { id: "btn:Sí", title: "Sí" } },
+      { type: "reply", reply: { id: "btn:No", title: "No" } },
+    ]);
+  });
+
+  it("con buttons pero chunk > 1024 chars: cae a texto con lista numerada", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response("{}", { status: 200 }));
+    const largo = "x".repeat(1025);
+    await ycloudAdapter.sendReply(
+      {
+        channel: "whatsapp",
+        channelUserId: "525512345678",
+        chunks: [largo],
+        buttons: [{ title: "Sí", payload: "btn:Sí" }],
+        interChunkDelayMs: 0,
+      },
+      sendEnv,
+    );
+    const payload = JSON.parse((fetchMock.mock.calls[0] as any)[1].body);
+    expect(payload.type).toBe("text");
+    expect(payload.text.body).toContain("1) Sí");
   });
 });
 

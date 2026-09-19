@@ -14,6 +14,30 @@ describe("parseMetaEvents — providerMessageId", () => {
   });
 });
 
+describe("parseMetaEvents — tap de botón (quick_reply, skill /botones)", () => {
+  it("el tap de un botón (quick_reply) SÍ llega al cerebro como texto normal", () => {
+    // Regresión: antes de portar Botones, esta línea descartaba TODO
+    // quick_reply incondicionalmente — dead code defensivo de antes de que
+    // existiera la feature. Con Botones activo eso sería un cliente tocando
+    // un botón y el bot nunca contestando.
+    const [msg] = parseMetaEvents({
+      object: "page",
+      entry: [
+        {
+          messaging: [
+            {
+              sender: { id: "psid-1" },
+              message: { mid: "mid.1", text: "Sí", quick_reply: { payload: "btn:Sí" } },
+            },
+          ],
+        },
+      ],
+    } as any);
+    expect(msg).toBeDefined();
+    expect(msg.text).toBe("Sí");
+  });
+});
+
 describe("metaAdapter.showTyping", () => {
   it("Messenger: manda mark_seen y typing_on como POSTs separados a la Página", async () => {
     const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response("{}", { status: 200 }));
@@ -53,6 +77,40 @@ describe("metaAdapter.showTyping", () => {
     await expect(
       metaAdapter.showTyping!("psid-1", { META_PAGE_ACCESS_TOKEN: "tok" } as any, { channel: "messenger" }),
     ).resolves.toBeUndefined();
+  });
+});
+
+describe("metaAdapter.sendReply — botones (skill /botones)", () => {
+  afterEach(() => vi.restoreAllMocks());
+
+  it("manda quick_replies en el ÚLTIMO chunk cuando hay buttons", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response("{}", { status: 200 }));
+    await metaAdapter.sendReply(
+      {
+        channel: "messenger",
+        channelUserId: "psid-1",
+        chunks: ["primero", "¿confirmamos?"],
+        buttons: [{ title: "Sí", payload: "btn:Sí" }, { title: "No", payload: "btn:No" }],
+      },
+      { META_PAGE_ACCESS_TOKEN: "tok" } as any,
+    );
+    const first = JSON.parse((fetchMock.mock.calls[0] as any)[1].body);
+    const second = JSON.parse((fetchMock.mock.calls[1] as any)[1].body);
+    expect(first.message.quick_replies).toBeUndefined();
+    expect(second.message.quick_replies).toEqual([
+      { content_type: "text", title: "Sí", payload: "btn:Sí" },
+      { content_type: "text", title: "No", payload: "btn:No" },
+    ]);
+  });
+
+  it("sin buttons no manda quick_replies", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response("{}", { status: 200 }));
+    await metaAdapter.sendReply(
+      { channel: "messenger", channelUserId: "psid-1", chunks: ["hola"] },
+      { META_PAGE_ACCESS_TOKEN: "tok" } as any,
+    );
+    const body = JSON.parse((fetchMock.mock.calls[0] as any)[1].body);
+    expect(body.message.quick_replies).toBeUndefined();
   });
 });
 

@@ -75,6 +75,38 @@ describe("parseWhatsAppEvents", () => {
     expect(out).toHaveLength(0);
   });
 
+  it("parsea el tap de un botón (type interactive, button_reply) como texto normal", async () => {
+    const out = await parseWhatsAppEvents(
+      body([
+        {
+          from: "5215512345678",
+          id: "wamid.5",
+          type: "interactive",
+          interactive: { type: "button_reply", button_reply: { id: "btn:Sí", title: "Sí" } },
+        },
+      ]) as any,
+      env,
+      ORIGIN,
+    );
+    expect(out[0].text).toBe("Sí");
+  });
+
+  it("parsea el tap de una lista (list_reply) como texto normal", async () => {
+    const out = await parseWhatsAppEvents(
+      body([
+        {
+          from: "5215512345678",
+          id: "wamid.6",
+          type: "interactive",
+          interactive: { type: "list_reply", list_reply: { id: "x", title: "Opción B" } },
+        },
+      ]) as any,
+      env,
+      ORIGIN,
+    );
+    expect(out[0].text).toBe("Opción B");
+  });
+
   it("sin App Secret no firma media pero no truena (texto sigue)", async () => {
     const out = await parseWhatsAppEvents(
       body([{ from: "5215512345678", id: "wamid.4", type: "image", image: { id: "X" } }]) as any,
@@ -120,6 +152,46 @@ describe("whatsappAdapter.sendReply", () => {
     await expect(
       whatsappAdapter.sendReply({ channel: "whatsapp", channelUserId: "x", chunks: ["hi"] }, {} as any),
     ).rejects.toThrow(/WHATSAPP_PHONE_NUMBER_ID/);
+  });
+
+  it("con buttons manda type=interactive con hasta 3 reply buttons", async () => {
+    const fetchMock = vi.fn(async () => new Response("{}", { status: 200 }));
+    vi.stubGlobal("fetch", fetchMock);
+    await whatsappAdapter.sendReply(
+      {
+        channel: "whatsapp",
+        channelUserId: "5215512345678",
+        chunks: ["¿Confirmamos?"],
+        buttons: [{ title: "Sí", payload: "btn:Sí" }, { title: "No", payload: "btn:No" }],
+      },
+      { WHATSAPP_PHONE_NUMBER_ID: "PHONE_ID", WHATSAPP_ACCESS_TOKEN: "TOKEN" } as any,
+    );
+    const payload = JSON.parse((fetchMock.mock.calls[0] as any[])[1].body);
+    expect(payload.type).toBe("interactive");
+    expect(payload.interactive.type).toBe("button");
+    expect(payload.interactive.body.text).toBe("¿Confirmamos?");
+    expect(payload.interactive.action.buttons).toEqual([
+      { type: "reply", reply: { id: "btn:Sí", title: "Sí" } },
+      { type: "reply", reply: { id: "btn:No", title: "No" } },
+    ]);
+  });
+
+  it("con buttons pero chunk > 1024 chars: cae a texto con lista numerada", async () => {
+    const fetchMock = vi.fn(async () => new Response("{}", { status: 200 }));
+    vi.stubGlobal("fetch", fetchMock);
+    const largo = "x".repeat(1025);
+    await whatsappAdapter.sendReply(
+      {
+        channel: "whatsapp",
+        channelUserId: "5215512345678",
+        chunks: [largo],
+        buttons: [{ title: "Sí", payload: "btn:Sí" }],
+      },
+      { WHATSAPP_PHONE_NUMBER_ID: "PHONE_ID", WHATSAPP_ACCESS_TOKEN: "TOKEN" } as any,
+    );
+    const payload = JSON.parse((fetchMock.mock.calls[0] as any[])[1].body);
+    expect(payload.type).toBe("text");
+    expect(payload.text.body).toContain("1) Sí");
   });
 });
 

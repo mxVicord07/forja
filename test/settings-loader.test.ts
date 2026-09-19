@@ -242,6 +242,26 @@ describe("resolveAgentConfig — custom_instructions", () => {
   });
 });
 
+describe("resolveAgentConfig — buttons_enabled (skill /botones)", () => {
+  it("apagado por default: el prompt no enseña el marcador", async () => {
+    const cfg = await resolveAgentConfig(env, TOOLS);
+    expect(cfg.systemPrompt).not.toContain("<botones>");
+  });
+
+  it('buttons_enabled="1" enseña el marcador [[botones: …]]', async () => {
+    await repo.set(SETTING_KEYS.buttonsEnabled, "1");
+    const cfg = await resolveAgentConfig(env, TOOLS);
+    expect(cfg.systemPrompt).toContain("<botones>");
+    expect(cfg.systemPrompt).toContain("[[botones:");
+  });
+
+  it('cualquier valor que no sea "1" cuenta como apagado', async () => {
+    await repo.set(SETTING_KEYS.buttonsEnabled, "0");
+    const cfg = await resolveAgentConfig(env, TOOLS);
+    expect(cfg.systemPrompt).not.toContain("<botones>");
+  });
+});
+
 describe("resolveAgentConfig — learned lessons (flywheel)", () => {
   it("injects lessons into the generated prompt", async () => {
     await repo.set(SETTING_KEYS.learnedLessons, JSON.stringify(["Confirma el pago antes de prometer acceso."]));
