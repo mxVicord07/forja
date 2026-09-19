@@ -333,3 +333,13 @@ CREATE TABLE IF NOT EXISTS documents (
   created_at  INTEGER NOT NULL,
   updated_at  INTEGER NOT NULL
 );
+
+-- Marca de "leído" por conversación para el inbox móvil (Forja Inbox):
+-- unread = mensajes del cliente posteriores a last_read_at. Ver
+-- src/db/conversationReads.ts — se asegura también LAZY (CREATE TABLE IF NOT
+-- EXISTS memoizado por isolate) porque `forjabot update` no re-ejecuta este
+-- archivo en bots ya desplegados; esta entrada solo cubre instalaciones nuevas.
+CREATE TABLE IF NOT EXISTS conversation_reads (
+  conversation_id TEXT PRIMARY KEY,
+  last_read_at INTEGER NOT NULL
+);

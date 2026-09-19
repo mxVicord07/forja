@@ -1,13 +1,16 @@
 /**
  * Contract tests for the control-plane API (src/api.ts). Verifies the
- * fail-closed Bearer guard and the response shapes of /api/health and
- * /api/metrics. Real D1 via miniflare; the sub-app is exercised directly
- * (apiApp.request), the same way the admin tests hit adminApp.
+ * fail-closed Bearer guard and the response shapes of /api/health,
+ * /api/metrics, and the routes agregadas al portar Forja Inbox
+ * (/config, /cost, /leads, /pause). Real D1 via miniflare; the sub-app is
+ * exercised directly (apiApp.request), the same way the admin tests hit
+ * adminApp.
  */
 import { describe, it, expect, beforeEach } from "vitest";
 import { createTestMiniflare } from "../helpers/miniflareSetup";
 import { apiApp, type MetricsResponse } from "../../src/api";
 import { Db } from "../../src/db/client";
+import { SettingsRepo, SETTING_KEYS } from "../../src/db/settings";
 import { BOT_VERSION } from "../../src/version";
 import type { Env } from "../../src/env";
 
@@ -72,7 +75,7 @@ async function seedActivity() {
 }
 
 describe("control-plane guard (fail-closed)", () => {
-  for (const path of ["/health", "/metrics"]) {
+  for (const path of ["/health", "/metrics", "/config", "/cost", "/leads"]) {
     it(`${path}: 401 when CONTROL_PLANE_TOKEN is unset (even with a Bearer)`, async () => {
       const res = await apiApp.request(path, { headers: bearer(TOKEN) }, noTokenEnv());
       expect(res.status).toBe(401);
@@ -137,5 +140,178 @@ describe("GET /api/metrics", () => {
     expect(body.range).toBe("all");
     expect(body.conversations).toBe(0);
     expect(body.health_score).toBe(100); // no conversations ≠ unhealthy
+  });
+});
+
+// Rutas agregadas al portar Forja Inbox (paquete Forja+ v1.0.76, adaptado a
+// las capacidades reales de este fork).
+describe("GET /api/config", () => {
+  it("200 + resumen de negocio/canales/superpoderes/pausa", async () => {
+    const res = await apiApp.request("/config", { headers: bearer(TOKEN) }, authedEnv());
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as {
+      ok: boolean;
+      business: string;
+      bot_name: string;
+      channels: { id: string; name: string; connected: boolean }[];
+      channels_total: number;
+      paused: boolean;
+      paused_mode: string;
+      superpowers: Record<string, boolean>;
+      open_tickets: number;
+      tier: string;
+      version: string;
+      composio: { enabled: boolean };
+    };
+    expect(body.ok).toBe(true);
+    expect(body.business).toBe("Test");
+    expect(Array.isArray(body.channels)).toBe(true);
+    expect(body.channels_total).toBe(body.channels.length);
+    expect(body.paused).toBe(false);
+    expect(body.paused_mode).toBe("off");
+    expect(typeof body.superpowers).toBe("object");
+    expect(body.open_tickets).toBe(0);
+    expect(body.tier).toBe("pro");
+    expect(body.version).toBe(BOT_VERSION);
+    expect(body.composio.enabled).toBe(false); // sin COMPOSIO_API_KEY en el env de prueba
+  });
+
+  it("refleja bot_paused=1 como pausa manual", async () => {
+    await new SettingsRepo(db).set(SETTING_KEYS.botPaused, "1");
+    const res = await apiApp.request("/config", { headers: bearer(TOKEN) }, authedEnv());
+    const body = (await res.json()) as { paused: boolean; paused_mode: string };
+    expect(body.paused).toBe(true);
+    expect(body.paused_mode).toBe("manual");
+  });
+});
+
+describe("GET /api/cost", () => {
+  it("200 + gasto en cero y presupuesto por default ($25) sin uso registrado", async () => {
+    const res = await apiApp.request("/cost", { headers: bearer(TOKEN) }, authedEnv());
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as {
+      ok: boolean;
+      month_usd: number;
+      budget_usd: number | null;
+      budget_is_default: boolean;
+      pct: number | null;
+      downgraded: boolean;
+      currency: string;
+      ledger_usd: number;
+      breakdown: unknown[];
+    };
+    expect(body.ok).toBe(true);
+    expect(body.month_usd).toBe(0);
+    expect(body.budget_usd).toBe(25);
+    expect(body.budget_is_default).toBe(true);
+    expect(body.pct).toBe(0);
+    expect(body.downgraded).toBe(false);
+    expect(body.currency).toBe("USD");
+    expect(body.ledger_usd).toBe(0);
+    expect(body.breakdown).toEqual([]);
+  });
+
+  it("un monthly_budget explícito en 0 se reporta como sin tope", async () => {
+    await new SettingsRepo(db).set(SETTING_KEYS.monthlyBudget, "0");
+    const res = await apiApp.request("/cost", { headers: bearer(TOKEN) }, authedEnv());
+    const body = (await res.json()) as { budget_usd: number | null; budget_is_default: boolean; pct: number | null };
+    expect(body.budget_usd).toBeNull();
+    expect(body.budget_is_default).toBe(false);
+    expect(body.pct).toBeNull();
+  });
+});
+
+describe("GET /api/leads", () => {
+  it("200 + leads recientes con contacto enmascarado, más recientes primero", async () => {
+    await seedActivity();
+    const res = await apiApp.request("/leads", { headers: bearer(TOKEN) }, authedEnv());
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as {
+      ok: boolean;
+      leads: { id: string; conversation_id: string | null; channel: string | null; status: string }[];
+      count: number;
+      next_cursor: string | null;
+    };
+    expect(body.ok).toBe(true);
+    expect(body.count).toBe(2);
+    expect(body.leads.map((l) => l.id).sort()).toEqual(["l1", "l2"]);
+    const l1 = body.leads.find((l) => l.id === "l1")!;
+    expect(l1.conversation_id).toBe("cA");
+    // El id de conversación real es `${channel}:${channelUserId}` (makeConvId);
+    // el seed de este archivo usa ids planos ("cA"), así que sin ":" el split
+    // devuelve el id entero tal cual.
+    expect(l1.channel).toBe("cA");
+    expect(l1.status).toBe("new");
+  });
+
+  it("filtra por status válido y rechaza uno inventado", async () => {
+    await seedActivity();
+    const okRes = await apiApp.request("/leads?status=new", { headers: bearer(TOKEN) }, authedEnv());
+    expect(okRes.status).toBe(200);
+    const okBody = (await okRes.json()) as { count: number };
+    expect(okBody.count).toBe(2);
+
+    const badRes = await apiApp.request("/leads?status=bogus", { headers: bearer(TOKEN) }, authedEnv());
+    expect(badRes.status).toBe(400);
+  });
+});
+
+describe("POST /api/pause", () => {
+  it("401 sin Bearer válido", async () => {
+    const res = await apiApp.request("/pause", { method: "POST", body: JSON.stringify({ until: "manual" }) }, authedEnv());
+    expect(res.status).toBe(401);
+  });
+
+  it('{until:"manual"} pausa hasta que el dueño lo prenda', async () => {
+    const res = await apiApp.request(
+      "/pause",
+      { method: "POST", headers: bearer(TOKEN), body: JSON.stringify({ until: "manual" }) },
+      authedEnv(),
+    );
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { ok: boolean; paused: boolean; paused_mode: string };
+    expect(body.ok).toBe(true);
+    expect(body.paused).toBe(true);
+    expect(body.paused_mode).toBe("manual");
+    expect(await new SettingsRepo(db).get(SETTING_KEYS.botPaused)).toBe("1");
+  });
+
+  it("{until:null} reanuda el bot", async () => {
+    await new SettingsRepo(db).set(SETTING_KEYS.botPaused, "1");
+    const res = await apiApp.request(
+      "/pause",
+      { method: "POST", headers: bearer(TOKEN), body: JSON.stringify({ until: null }) },
+      authedEnv(),
+    );
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { paused: boolean; paused_mode: string };
+    expect(body.paused).toBe(false);
+    expect(body.paused_mode).toBe("off");
+  });
+
+  it("un epoch en el pasado se rechaza (400 invalid_until)", async () => {
+    const res = await apiApp.request(
+      "/pause",
+      { method: "POST", headers: bearer(TOKEN), body: JSON.stringify({ until: Date.now() - 1000 }) },
+      authedEnv(),
+    );
+    expect(res.status).toBe(400);
+    const body = (await res.json()) as { ok: boolean; error: string };
+    expect(body.ok).toBe(false);
+    expect(body.error).toBe("invalid_until");
+  });
+
+  it("un epoch futuro pausa con hora de término", async () => {
+    const until = Date.now() + 60 * 60 * 1000;
+    const res = await apiApp.request(
+      "/pause",
+      { method: "POST", headers: bearer(TOKEN), body: JSON.stringify({ until }) },
+      authedEnv(),
+    );
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { paused: boolean; paused_mode: string; paused_until: number };
+    expect(body.paused).toBe(true);
+    expect(body.paused_mode).toBe("until");
+    expect(body.paused_until).toBe(until);
   });
 });

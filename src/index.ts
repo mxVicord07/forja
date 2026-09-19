@@ -275,8 +275,9 @@ app.post("/webhooks/learn/:channel", async (c) => {
 // Admin dashboard — Basic Auth guarded sub-app mounted at /admin/*.
 app.route("/admin", adminApp);
 
-// Control-plane API — Bearer-guarded (CONTROL_PLANE_TOKEN) read-only sub-app
-// mounted at /api/* for a future hosted control plane (health + metrics).
+// Control-plane API — Bearer-guarded (CONTROL_PLANE_TOKEN) sub-app mounted at
+// /api/*: health/metrics/config/cost/leads/pause para Forja Inbox, más
+// /conversations* (api-inbox) y /maintenance+/tickets* (api-maintenance).
 app.route("/api", apiApp);
 
 // KB reindex — embeds scripts/kb-fixtures.json into Vectorize. Guarded by the
