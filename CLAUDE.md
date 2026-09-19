@@ -47,6 +47,7 @@ Cloudflare (~gratis, ~$5/mes con tráfico) y el cerebro es su propia llave de IA
 - `/actualizar-mi-bot` — trae la última versión conservando tu config.
 - `/botones` — enciende y configura botones tocables (opt-in) en las respuestas del bot.
 - `/boveda` — superpoder Forja+ Pro: archiva en R2 lo que los clientes mandan (fotos, audios, documentos), visible en el panel.
+- `/cobros` — superpoder Forja+ Pro: el bot cobra por WhatsApp con links de pago de Stripe, avisa al dueño al confirmarse.
 
 ## ¿Quieres más? (Forja+)
 

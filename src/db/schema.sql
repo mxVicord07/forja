@@ -343,3 +343,25 @@ CREATE TABLE IF NOT EXISTS conversation_reads (
   conversation_id TEXT PRIMARY KEY,
   last_read_at INTEGER NOT NULL
 );
+
+-- Cobros por WhatsApp (skill /cobros, superpoder Forja+ Pro): un link de pago
+-- de Stripe generado por sendPaymentLinkTool. amount en CENTAVOS (misma
+-- convención que el resto del bot — ver pricing.ts). El webhook de Stripe
+-- (integrations/stripeWebhook.ts) es la ÚNICA ruta que pasa status a 'paid'.
+-- No aplica en instalaciones que nunca prendan Cobros — la tabla queda vacía.
+CREATE TABLE IF NOT EXISTS payment_intents (
+  id TEXT PRIMARY KEY,
+  conversation_id TEXT,
+  amount INTEGER NOT NULL,
+  currency TEXT NOT NULL,
+  description TEXT,
+  provider TEXT NOT NULL DEFAULT 'stripe',
+  provider_id TEXT,
+  url TEXT,
+  status TEXT NOT NULL DEFAULT 'pending',
+  created_at INTEGER NOT NULL,
+  paid_at INTEGER,
+  FOREIGN KEY (conversation_id) REFERENCES conversations(id) ON DELETE SET NULL
+);
+CREATE INDEX IF NOT EXISTS idx_payment_intents_status ON payment_intents(status);
+CREATE INDEX IF NOT EXISTS idx_payment_intents_provider ON payment_intents(provider_id);

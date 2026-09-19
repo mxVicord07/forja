@@ -43,6 +43,7 @@ import { renderDocumentosList } from "./views/documentos";
 import { DocumentsRepo } from "../db/documents";
 import { renderBovedaList } from "./views/boveda";
 import { getMediaRow } from "../media/boveda";
+import { renderCobros } from "./views/cobros";
 import { renderMejoras } from "./views/mejoras";
 import { runFlywheel, getLessons, saveLessons } from "../flywheel/detect";
 import { applySuggestion, dismissSuggestion } from "../flywheel/apply";
@@ -194,6 +195,10 @@ adminApp.post("/kb/reindex", async (c) => {
   const r = await reindexAll(c.env);
   return c.redirect(`/admin/kb?reindexed=${r.indexed}`);
 });
+
+// --- Cobros: pagos por WhatsApp vía Stripe (skill /cobros) -----------------
+
+adminApp.get("/cobros", async (c) => c.html(await renderCobros(c.env)));
 
 // --- Bóveda: imágenes/audios/documentos que los CLIENTES mandaron ----------
 

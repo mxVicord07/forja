@@ -150,4 +150,12 @@ export interface Env {
   // Ver src/integrations/composio.ts. Sin cuenta de Composio hoy — dormido.
   COMPOSIO_API_KEY?: string;
   COMPOSIO_ENTITY_ID?: string; // opcional; default del propio módulo si falta
+  // Cobros por WhatsApp (superpoder Pro, opt-in — ver src/tools/cobros.ts).
+  // Llave del PROPIO miembro (Payment Links a su cuenta de Stripe); ausente =
+  // la tool no se registra (stripeConfigured() lo checa). El bot nunca guarda
+  // la llave en D1, solo la lee del secret.
+  STRIPE_SECRET_KEY?: string;
+  // whsec_… del webhook (POST /webhooks/stripe) — firma cada evento entrante.
+  // Sin este secret el webhook responde 503 y no procesa nada (fail-closed).
+  STRIPE_WEBHOOK_SECRET?: string;
 }

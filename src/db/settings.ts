@@ -136,6 +136,11 @@ export const SETTING_KEYS = {
   // agent.ts#ingest) y el tab /admin/boveda. Sin binding MEDIA, prender esto
   // no hace nada (captureIncomingMedia se sale en silencio). Skill /boveda.
   bovedaEnabled: "boveda_enabled",
+  // Cobros por WhatsApp (superpoder Forja+ Pro, opt-in, default OFF): "1"
+  // registra la tool sendPaymentLink (ver src/tools/cobros.ts) — además
+  // requiere el secret STRIPE_SECRET_KEY configurado (stripeConfigured()).
+  // "0" pausa los cobros SIN quitar la llave. Skill /cobros.
+  paymentsEnabled: "payments_enabled",
 } as const;
 
 export type SettingKey = (typeof SETTING_KEYS)[keyof typeof SETTING_KEYS];

@@ -20,7 +20,7 @@ export const PRO_ONLY_TOOLS = [
 // ve un panel funcional (Resumen, Conversaciones, Leads, Tickets, Flujo, KB,
 // Conexiones, Config) pero sin el Analista IA, métricas, costos, mejoras ni
 // campañas — esos desbloquean con la comunidad.
-export const PRO_ONLY_TABS = ["insights", "stats", "costs", "mejoras", "campanas", "boveda"] as const;
+export const PRO_ONLY_TABS = ["insights", "stats", "costs", "mejoras", "campanas", "boveda", "cobros"] as const;
 
 export function isToolAvailable(env: Env, toolName: string): boolean {
   if (!PRO_ONLY_TOOLS.includes(toolName as (typeof PRO_ONLY_TOOLS)[number])) return true;

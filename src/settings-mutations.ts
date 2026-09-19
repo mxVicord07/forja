@@ -9,13 +9,13 @@
  * agregarlo aquí habría escrito settings que nadie lee):
  *   - brandStyle / admin/branding.ts — nuestro rebrand a BIRevX es fijo en el
  *     CSS del panel (src/admin/views/layout.ts), no un sistema configurable.
- *   - galeriaEnabled, paymentsEnabled — Galería (el bot MANDA fotos/audios del
- *     negocio) y Cobros no están portados: el primero necesita catálogo de
- *     media (self-hosted o R2) que nadie cargó todavía; el segundo ni trae
- *     skill propio en el paquete descargado. buttonsEnabled y bovedaEnabled
- *     SÍ están portados (ver skill/botones.md y skill/boveda.md) — ninguno
- *     es un superpoder del paquete (no viven en SUPERPOWERS de abajo), son
- *     toggles propios.
+ *   - galeriaEnabled — Galería (el bot MANDA fotos/audios del negocio) no
+ *     está portada: necesita catálogo de media (self-hosted o R2) que nadie
+ *     cargó todavía. buttonsEnabled, bovedaEnabled y paymentsEnabled SÍ están
+ *     portados (ver skill/botones.md, skill/boveda.md, skill/cobros.md) —
+ *     paymentsEnabled SÍ es un superpoder real del paquete (vive en
+ *     SUPERPOWERS de abajo, igual que salesHunter/blindaje/etc.); botones y
+ *     bóveda son toggles propios sin equivalente en SUPERPOWERS.
  *   - multiLanguage — el paquete lo modela como toggle independiente; este
  *     fork lo modela como el valor especial `bot_language = "espejo"` (ver
  *     memory.md, sesión 2-ago). Semántica distinta, no un simple rename.
@@ -101,6 +101,7 @@ export const SETTING_VALIDATORS: Record<string, (v: string) => boolean> = {
   [SETTING_KEYS.customInstructions]: customInstructionsOk,
   [SETTING_KEYS.buttonsEnabled]: bool01,
   [SETTING_KEYS.bovedaEnabled]: bool01,
+  [SETTING_KEYS.paymentsEnabled]: bool01,
 };
 
 /**
@@ -143,7 +144,8 @@ export type SuperpowerId =
   | "dailyReport"
   | "satisfactionSurvey"
   | "reengage"
-  | "reviews";
+  | "reviews"
+  | "payments";
 
 export interface SuperpowerDef {
   id: SuperpowerId;
@@ -153,8 +155,8 @@ export interface SuperpowerDef {
   encoding: "bool01" | "onoff";
   /** Estado cuando el setting está AUSENTE (Cazador y Blindaje vienen ON). */
   defaultOn: boolean;
-  /** Los 6 son Forja+ (Pro) — el gate real es el runtime (isPro en cada
-   *  followup/blindaje/dailyReport), esto es solo la ficha para la app. */
+  /** Los 7 son Forja+ (Pro) — el gate real es el runtime (isPro en cada
+   *  followup/blindaje/dailyReport/cobros), esto es solo la ficha para la app. */
   pro: boolean;
 }
 
@@ -165,6 +167,10 @@ export const SUPERPOWERS: readonly SuperpowerDef[] = [
   { id: "satisfactionSurvey", key: SETTING_KEYS.satisfactionSurvey, encoding: "bool01", defaultOn: false, pro: true },
   { id: "reengage", key: SETTING_KEYS.reengageColdLeads, encoding: "bool01", defaultOn: false, pro: true },
   { id: "reviews", key: SETTING_KEYS.reviewRequests, encoding: "bool01", defaultOn: false, pro: true },
+  // Opt-in real (default OFF, igual que el paquete): mandar un link de cobro
+  // es una acción de dinero, no algo que se prenda solo por tener la llave
+  // conectada — el dueño confirma explícitamente con el skill /cobros.
+  { id: "payments", key: SETTING_KEYS.paymentsEnabled, encoding: "bool01", defaultOn: false, pro: true },
 ] as const;
 
 export const SUPERPOWERS_PRO: readonly SuperpowerId[] = SUPERPOWERS.filter((s) => s.pro).map(

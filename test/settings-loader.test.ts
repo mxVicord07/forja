@@ -191,6 +191,25 @@ describe("resolveAgentConfig — disabled_tools", () => {
     const cfg = await resolveAgentConfig(env, TOOLS);
     expect(cfg.enabledToolNames).toEqual(["handoffHuman"]);
   });
+
+  // sendPaymentLink (skill /cobros): opt-in REAL vía payments_enabled, no vía
+  // disabled_tools — aunque buildTools() ya la haya registrado (isPro +
+  // stripeConfigured), no debe ofrecerse al modelo hasta que el dueño
+  // confirme. Distinto de todo lo demás: el resto empieza ENCENDIDO salvo que
+  // se apague; esta empieza APAGADA salvo que se prenda.
+  it("sendPaymentLink queda fuera de enabledToolNames aunque esté en la lista, hasta que payments_enabled='1'", async () => {
+    const toolsConCobros = [...TOOLS, "sendPaymentLink"];
+    let cfg = await resolveAgentConfig(env, toolsConCobros);
+    expect(cfg.enabledToolNames).toEqual(TOOLS); // sin sendPaymentLink
+
+    await repo.set(SETTING_KEYS.paymentsEnabled, "1");
+    cfg = await resolveAgentConfig(env, toolsConCobros);
+    expect(cfg.enabledToolNames).toEqual(toolsConCobros); // ahora sí aparece
+
+    await repo.set(SETTING_KEYS.paymentsEnabled, "0");
+    cfg = await resolveAgentConfig(env, toolsConCobros);
+    expect(cfg.enabledToolNames).toEqual(TOOLS); // "0" explícito también la apaga
+  });
 });
 
 describe("resolveAgentConfig — temperature", () => {

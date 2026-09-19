@@ -42,6 +42,7 @@ const NAV: Section[] = [
       { id: "leads", label: "Leads", href: "/admin/leads", icon: "user-plus" },
       { id: "tickets", label: "Tickets", href: "/admin/tickets", icon: "life-buoy" },
       { id: "boveda", label: "Bóveda", href: "/admin/boveda", icon: "vault" },
+      { id: "cobros", label: "Cobros", href: "/admin/cobros", icon: "wallet" },
       { id: "campanas", label: "Campañas", href: "/admin/campanas", icon: "megaphone" },
     ],
   },
@@ -375,6 +376,25 @@ export function layout(opts: { title: string; activeTab: string; body: string; e
   ${GLOBAL_SCRIPT}
 </body>
 </html>`;
+}
+
+// Bloque "copiar prompt para Claude Code" — reutilizable en cualquier tab que
+// necesite configuración (ej. Cobros, para pedir la llave de Stripe). El
+// dueño copia el prompt y se lo pega a su agente en la carpeta del bot para
+// que se lo configure. El botón lee su <div> hermano anterior y copia el
+// texto. Adaptado del paquete Forja+ v1.0.76, sin el traductor (`tr`) — este
+// fork no tiene admin/i18n.ts, todas las vistas hablan español directo.
+export function renderConfigPrompt(prompt: string, intro?: string): string {
+  const esc = (s: string): string =>
+    s.replace(/[&<>"']/g, (ch) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[ch]!));
+  return `
+    <div style="border:1px solid var(--line);background:var(--panel);padding:14px 16px">
+      <div class="text-cream" style="font-size:12.5px;font-weight:600">Pégale esto a tu agente (Claude Code)</div>
+      ${intro ? `<p class="text-dim" style="font-size:11.5px;line-height:1.5;margin:5px 0 9px">${esc(intro)}</p>` : `<div style="height:9px"></div>`}
+      <div style="border:1px solid var(--line);background:var(--bg);padding:10px 12px;font-size:11.5px;line-height:1.5;color:var(--cream);font-family:'JetBrains Mono',monospace;white-space:pre-wrap">${esc(prompt)}</div>
+      <button type="button" onclick="navigator.clipboard.writeText(this.previousElementSibling.innerText);this.innerHTML=this.dataset.ok" data-ok="✓ Copiado"
+        style="margin-top:9px;background:var(--accent-soft);border:1px solid var(--linelit);color:var(--accent-2);padding:7px 13px;font-size:11px;font-family:'JetBrains Mono',monospace;letter-spacing:.08em;text-transform:uppercase;cursor:pointer">Copiar</button>
+    </div>`;
 }
 
 // Página de upgrade: se muestra cuando un panel free intenta abrir un tab Pro

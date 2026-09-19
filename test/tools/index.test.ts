@@ -75,6 +75,25 @@ describe("buildTools", () => {
     }
   });
 
+  it("pro tier SIN STRIPE_SECRET_KEY: no registra sendPaymentLink", () => {
+    const tools = buildTools(makeCtx("pro"));
+    expect(tools.sendPaymentLink).toBeUndefined();
+  });
+
+  it("pro tier CON STRIPE_SECRET_KEY: sí registra sendPaymentLink", () => {
+    const ctx = makeCtx("pro");
+    ctx.env.STRIPE_SECRET_KEY = "sk_test_x";
+    const tools = buildTools(ctx);
+    expect(tools.sendPaymentLink).toBeDefined();
+  });
+
+  it("free tier nunca registra sendPaymentLink, aunque haya STRIPE_SECRET_KEY", () => {
+    const ctx = makeCtx("free");
+    ctx.env.STRIPE_SECRET_KEY = "sk_test_x";
+    const tools = buildTools(ctx);
+    expect(tools.sendPaymentLink).toBeUndefined();
+  });
+
   it("onSearchKb llega hasta searchKbTool: se dispara al ejecutar la tool", async () => {
     const ctx = makeCtx("free");
     ctx.env.AI = { run: async () => ({ data: [[0.1, 0.2]] }) } as any;

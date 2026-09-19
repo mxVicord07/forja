@@ -23,6 +23,7 @@ import { saveCapture, isLearnMode, isLearnModeEnabled } from "./learn/mapping";
 import { tokensMatch, manychatWebhookAllowed } from "./http-auth";
 import { apiApp } from "./api";
 import { getAgentStub } from "./agentStub";
+import { handleStripeWebhook } from "./integrations/stripeWebhook";
 
 export { SupportAgent } from "./agent";
 
@@ -271,6 +272,11 @@ app.post("/webhooks/learn/:channel", async (c) => {
   await saveCapture(repo, channel, kind, payload);
   return c.json({ ok: true, captured: kind, channel }, 200);
 });
+
+// Stripe (Cobros por WhatsApp, skill /cobros): fuera del guard del control
+// plane a propósito — Stripe autentica cada evento con su propia firma
+// (Stripe-Signature), no con el Bearer de CONTROL_PLANE_TOKEN.
+app.post("/webhooks/stripe", (c) => handleStripeWebhook(c.req.raw, c.env));
 
 // Admin dashboard — Basic Auth guarded sub-app mounted at /admin/*.
 app.route("/admin", adminApp);

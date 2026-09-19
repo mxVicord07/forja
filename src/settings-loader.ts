@@ -208,7 +208,14 @@ export async function resolveAgentConfig(env: Env, toolNames: string[]): Promise
   // Dashboard tool toggles: the prompt only advertises the enabled tools, so
   // the model never tries to call something that was turned off.
   const disabledTools = parseCsvList(get(SETTING_KEYS.disabledTools));
-  const enabledToolNames = toolNames.filter((n) => !disabledTools.includes(n));
+  // Cobros (skill /cobros): opt-in real, default OFF — a diferencia de
+  // disabled_tools (todo ENCENDIDO salvo lo que el dueño apague),
+  // sendPaymentLink empieza APAGADO aunque buildTools() ya la haya registrado
+  // (isPro + stripeConfigured), hasta que el dueño confirme con "1".
+  const paymentsEnabled = get(SETTING_KEYS.paymentsEnabled) === "1";
+  const enabledToolNames = toolNames.filter(
+    (n) => !disabledTools.includes(n) && (n !== "sendPaymentLink" || paymentsEnabled),
+  );
 
   // Botones tocables (opt-in, skill /botones): default OFF, "1" lo prende.
   const buttonsEnabled = get(SETTING_KEYS.buttonsEnabled) === "1";
