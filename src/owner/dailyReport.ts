@@ -1,12 +1,14 @@
 /**
- * Reporte diario (superpoder Pro) — resumen de texto al dueño por Telegram.
+ * Reporte diario (superpoder Pro) — aviso al dueño por Telegram.
  *
- * Versión ligera a propósito: sin insights redactados por IA, sin PDF/DOCX,
- * sin correo (Resend no está conectado en este bot) y sin página nueva en el
- * panel. Solo los números que ya vive el dueño preguntándose cada mañana:
- * mensajes de clientes, leads nuevos, leads calientes, tickets abiertos y
- * resueltos, clientes molestos — todo de tablas que YA existen (leads,
- * tickets, messages, conversation_insights).
+ * Reusa el motor de Reportes diseñados (owner/report/*, skill /reportes):
+ * los mismos datos ricos (tendencia, sentimiento, temas, calificación del
+ * bot) y los mismos insights que escribe la IA, en la versión de TEXTO
+ * (Telegram no renderiza HTML) — con un link a la página con gráficas
+ * (/admin/report). Antes esta función tenía su propia recolección de datos
+ * más simple (solo conteos, sin IA); collectDailyStats se conserva acá como
+ * re-export por compatibilidad con callers/tests que ya la importaban de
+ * este módulo.
  *
  * Corre en el cron diario (0 3 * * *, ver src/index.ts). Guardas: solo Pro +
  * toggle daily_report (default OFF — mandar un mensaje no pedido es opt-in);
@@ -17,79 +19,16 @@ import type { Env } from "../env";
 import { Db } from "../db/client";
 import { SettingsRepo, SETTING_KEYS } from "../db/settings";
 import { isPro } from "../config";
+import { buildReport, reportSnapshot, type ReportSnapshot } from "./report/build";
 
-const DAY_MS = 24 * 60 * 60 * 1000;
-/** No reenviar si ya se mandó hace menos de esto (protege del doble tick del cron). */
-const MIN_GAP_MS = 20 * 60 * 60 * 1000;
+export { collectDailyStats, type ReportStats } from "./report/collect";
 
-export interface ReportStats {
-  customerMessages: number;
-  newLeads: number;
-  hotLeads: number;
-  ticketsOpened: number;
-  ticketsResolved: number;
-  upsetCustomers: number;
-}
-
-async function count(db: Db, sql: string, since: number, until: number): Promise<number> {
-  return (await db.first<{ n: number }>(sql, [since, until]))?.n ?? 0;
-}
-
-/** Números de las últimas 24h (ventana [now - DAY_MS, now]). */
-export async function collectDailyStats(env: Env, now: number): Promise<ReportStats> {
-  const db = new Db(env.DB);
-  const since = now - DAY_MS;
-  const [customerMessages, newLeads, hotLeads, ticketsOpened, ticketsResolved, upsetCustomers] =
-    await Promise.all([
-      count(db, "SELECT COUNT(*) AS n FROM messages WHERE created_at > ? AND created_at <= ? AND role = 'user'", since, now),
-      count(db, "SELECT COUNT(*) AS n FROM leads WHERE created_at > ? AND created_at <= ?", since, now),
-      count(
-        db,
-        "SELECT COUNT(*) AS n FROM conversation_insights WHERE analyzed_at > ? AND analyzed_at <= ? AND sale_opportunity = 1",
-        since,
-        now,
-      ),
-      count(db, "SELECT COUNT(*) AS n FROM tickets WHERE created_at > ? AND created_at <= ?", since, now),
-      count(db, "SELECT COUNT(*) AS n FROM tickets WHERE resolved_at > ? AND resolved_at <= ?", since, now),
-      count(
-        db,
-        "SELECT COUNT(*) AS n FROM conversation_insights WHERE analyzed_at > ? AND analyzed_at <= ? AND sentiment IN ('angry','frustrated')",
-        since,
-        now,
-      ),
-    ]);
-  return { customerMessages, newLeads, hotLeads, ticketsOpened, ticketsResolved, upsetCustomers };
-}
-
-function dateLabel(now: number): string {
-  try {
-    return new Intl.DateTimeFormat("es-MX", { weekday: "long", day: "numeric", month: "long" }).format(new Date(now));
-  } catch {
-    return new Date(now).toISOString().slice(0, 10);
-  }
-}
-
-function formatReportText(businessName: string, now: number, s: ReportStats): string {
-  const lines = [
-    `📊 Resumen de ${businessName} — ${dateLabel(now)}`,
-    "",
-    `💬 ${s.customerMessages} mensajes de clientes`,
-    `🧲 ${s.newLeads} leads nuevos${s.hotLeads > 0 ? ` (${s.hotLeads} calientes 🔥)` : ""}`,
-    `🎫 ${s.ticketsOpened} tickets abiertos, ${s.ticketsResolved} resueltos`,
-  ];
-  if (s.upsetCustomers > 0) {
-    lines.push(`⚠️ ${s.upsetCustomers} cliente(s) molesto(s) — revisa tu bandeja`);
-  }
-  if (s.customerMessages === 0 && s.newLeads === 0) {
-    lines.push("", "Día tranquilo — sin mensajes de clientes.");
-  }
-  return lines.join("\n");
-}
+const MIN_GAP_MS = 20 * 60 * 60 * 1000; // no reenviar si ya se mandó hace menos de esto
 
 export interface DailyReportResult {
   sent: boolean;
   reason?: "not_pro" | "disabled" | "throttled" | "no_channel";
-  stats?: ReportStats;
+  snapshot?: ReportSnapshot;
 }
 
 /**
@@ -114,19 +53,22 @@ export async function sendDailyReport(env: Env, now: number = Date.now()): Promi
     return { sent: false, reason: "no_channel" };
   }
 
-  const stats = await collectDailyStats(env, now);
-  const text = formatReportText(env.BUSINESS_NAME, now, stats);
+  const report = await buildReport(env, now);
 
   try {
     await fetch(`https://api.telegram.org/bot${env.TELEGRAM_BOT_TOKEN}/sendMessage`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ chat_id: env.OWNER_TELEGRAM_CHAT_ID, text }),
+      body: JSON.stringify({ chat_id: env.OWNER_TELEGRAM_CHAT_ID, text: report.text }),
     });
   } catch (e) {
     console.error("[dailyReport] telegram failed:", e);
   }
 
+  const snapshot = reportSnapshot(report, now);
+  // Guardado para GET /api/report/latest (Forja Inbox) — así la app no paga
+  // otra llamada de IA solo por consultar el reporte de hoy.
+  await settings.set(SETTING_KEYS.reportLastJson, JSON.stringify(snapshot));
   await settings.set(SETTING_KEYS.dailyReportLastAt, String(now));
-  return { sent: true, stats };
+  return { sent: true, snapshot };
 }

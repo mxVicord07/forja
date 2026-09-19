@@ -63,6 +63,10 @@ const NAV: Section[] = [
       { id: "insights", label: "Insights", href: "/admin/insights", icon: "scan-eye" },
       { id: "stats", label: "Estadísticas", href: "/admin/stats", icon: "bar-chart-3" },
       { id: "costs", label: "Costos", href: "/admin/costs", icon: "receipt" },
+      // /admin/report se sirve SIN el shell de layout() (es una página
+      // autocontenida, pensada para imprimirse/exportarse) — el link del nav
+      // navega HACIA AFUERA del panel a propósito.
+      { id: "report", label: "Reportes", href: "/admin/report", icon: "file-chart-line" },
     ],
   },
 ];

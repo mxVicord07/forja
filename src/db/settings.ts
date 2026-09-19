@@ -141,6 +141,16 @@ export const SETTING_KEYS = {
   // requiere el secret STRIPE_SECRET_KEY configurado (stripeConfigured()).
   // "0" pausa los cobros SIN quitar la llave. Skill /cobros.
   paymentsEnabled: "payments_enabled",
+  // Reportes diseñados (skill /reportes): personalización del reporte diario
+  // (owner/report/*). Vacíos = plantilla/color/logo default (ver
+  // owner/report/template.ts#DEFAULT_ACCENT/DEFAULT_REPORT_TEMPLATE).
+  reportTemplate: "report_template", // HTML completo con placeholders {{X}} — lo diseña el skill con la marca del dueño
+  reportAccent: "report_accent", // color de marca (hex) para gráficas/acentos
+  reportLogo: "report_logo", // URL pública del logo; sin ella, monograma con iniciales
+  // Snapshot del último reporte generado por el cron (JSON de ReportSnapshot,
+  // ver owner/report/build.ts) — lo sirve GET /api/report/latest para Forja
+  // Inbox sin tener que regenerar (y sin gastar otra llamada de IA).
+  reportLastJson: "report_last_json",
 } as const;
 
 export type SettingKey = (typeof SETTING_KEYS)[keyof typeof SETTING_KEYS];

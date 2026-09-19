@@ -16,6 +16,13 @@ describe("dashboard tier gating (nav)", () => {
     expect(html).toContain("by BIRevX · Free");
   });
 
+  it("free: Bóveda, Cobros y Reportes también salen bloqueados", () => {
+    const html = page("free");
+    expect(html).not.toContain('href="/admin/boveda"');
+    expect(html).not.toContain('href="/admin/cobros"');
+    expect(html).not.toContain('href="/admin/report"');
+  });
+
   it("free: los tabs básicos siguen accesibles", () => {
     const html = page("free");
     for (const href of ["/admin/conversations", "/admin/leads", "/admin/kb", "/admin/conexiones"]) {
@@ -25,7 +32,16 @@ describe("dashboard tier gating (nav)", () => {
 
   it("pro: todos los tabs linkean a su vista real, sin badge PRO", () => {
     const html = page("pro");
-    for (const href of ["/admin/insights", "/admin/stats", "/admin/costs", "/admin/mejoras", "/admin/campanas"]) {
+    for (const href of [
+      "/admin/insights",
+      "/admin/stats",
+      "/admin/costs",
+      "/admin/mejoras",
+      "/admin/campanas",
+      "/admin/boveda",
+      "/admin/cobros",
+      "/admin/report",
+    ]) {
       expect(html).toContain(`href="${href}"`);
     }
     expect(html).toContain("by BIRevX · Pro");

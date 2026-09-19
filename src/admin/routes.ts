@@ -44,6 +44,7 @@ import { DocumentsRepo } from "../db/documents";
 import { renderBovedaList } from "./views/boveda";
 import { getMediaRow } from "../media/boveda";
 import { renderCobros } from "./views/cobros";
+import { buildReport } from "../owner/report/build";
 import { renderMejoras } from "./views/mejoras";
 import { runFlywheel, getLessons, saveLessons } from "../flywheel/detect";
 import { applySuggestion, dismissSuggestion } from "../flywheel/apply";
@@ -109,6 +110,14 @@ const PRO_GATE: Array<[string, string]> = [
   ["/admin/costs", "Costos"],
   ["/admin/mejoras", "Mejoras"],
   ["/admin/campanas", "Campañas"],
+  // Boveda y Cobros ya estaban en PRO_ONLY_TABS (config.ts, bloquea el nav)
+  // pero faltaban aquí — un bot free podía llegar a /admin/boveda o
+  // /admin/cobros por URL directa y ver la pestaña completa (vacía, pero
+  // contradice "los datos Pro nunca se exponen en free"). Corregido junto
+  // con el alta de /admin/report (Reportes diseñados, también Pro-only).
+  ["/admin/boveda", "Bóveda"],
+  ["/admin/cobros", "Cobros"],
+  ["/admin/report", "Reportes"],
 ];
 adminApp.use("*", async (c, next) => {
   if (isPro(c.env)) return next();
@@ -199,6 +208,17 @@ adminApp.post("/kb/reindex", async (c) => {
 // --- Cobros: pagos por WhatsApp vía Stripe (skill /cobros) -----------------
 
 adminApp.get("/cobros", async (c) => c.html(await renderCobros(c.env)));
+
+// --- Reportes diseñados: la página completa del reporte del día (skill
+// /reportes). Página HTML AUTOCONTENIDA (su propio <html>/<head>/estilos) —
+// se sirve tal cual, sin el shell de layout(). Siempre en vivo (regenera con
+// una llamada de IA cada vez que se abre), igual que Costos/Insights/
+// Estadísticas — el snapshot cacheado (report_last_json) es solo para el
+// cron nocturno y GET /api/report/latest, para no gastar dos llamadas.
+adminApp.get("/report", async (c) => {
+  const report = await buildReport(c.env, Date.now());
+  return c.html(report.html);
+});
 
 // --- Bóveda: imágenes/audios/documentos que los CLIENTES mandaron ----------
 

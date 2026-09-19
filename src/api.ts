@@ -22,6 +22,7 @@ import { monthIaBreakdown } from "./db/ia-usage";
 import { DEFAULT_MONTHLY_BUDGET_USD } from "./settings-loader";
 import { LEAD_STATUSES, leadMetadata } from "./db/leads";
 import { decodeCursor, encodeCursor } from "./lib/cursor";
+import { isPro } from "./config";
 
 /** Centavos: el dinero viaja redondeado, no con la cola binaria del float. */
 function round2(n: number): number {
@@ -304,6 +305,40 @@ apiApp.get("/cost", async (c) => {
     },
     200,
   );
+});
+
+// GET /api/report/latest → el reporte diseñado del día para Forja Inbox
+// (skill /reportes, owner/report/*). Sirve el último que generó el cron
+// diario (persistido como DATOS, sin HTML — la app lo pinta con sus propias
+// tarjetas); con ?fresh=1 arma uno al vuelo SIN persistirlo — gasta una
+// llamada de IA, igual que /admin/report. Import diferido: owner/report/build
+// no lo necesita ningún otro módulo de api.ts, y así se evita acoplar el
+// arranque de este archivo a workModel/llm si algún día ese import creciera.
+apiApp.get("/report/latest", async (c) => {
+  if (!isPro(c.env)) return c.json({ ok: false, error: "pro_required" }, 403);
+
+  const { buildReport, reportSnapshot, reportMarkdown } = await import("./owner/report/build");
+
+  if (c.req.query("fresh") === "1") {
+    const now = Date.now();
+    const snap = reportSnapshot(await buildReport(c.env, now), now);
+    return c.json({ ok: true, report: snap, body_markdown: reportMarkdown(snap, c.env.BUSINESS_NAME) }, 200);
+  }
+
+  const raw = await new SettingsRepo(new Db(c.env.DB)).get(SETTING_KEYS.reportLastJson);
+  if (!raw) return c.json({ ok: false, error: "no_report" }, 404);
+  let report: unknown;
+  try {
+    report = JSON.parse(raw);
+  } catch {
+    // Setting corrupto: para la app es lo mismo que no tener reporte todavía.
+    return c.json({ ok: false, error: "no_report" }, 404);
+  }
+
+  // El markdown NO se persiste (sería el mismo texto dos veces en D1): se
+  // arma desde el snapshot, que es todo lo que el renderer necesita.
+  const snap = report as import("./owner/report/build").ReportSnapshot;
+  return c.json({ ok: true, report: snap, body_markdown: reportMarkdown(snap, c.env.BUSINESS_NAME) }, 200);
 });
 
 export type MetricsRange = "7d" | "30d" | "all";

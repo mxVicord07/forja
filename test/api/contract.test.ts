@@ -6,13 +6,25 @@
  * exercised directly (apiApp.request), the same way the admin tests hit
  * adminApp.
  */
-import { describe, it, expect, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach } from "vitest";
 import { createTestMiniflare } from "../helpers/miniflareSetup";
 import { apiApp, type MetricsResponse } from "../../src/api";
 import { Db } from "../../src/db/client";
 import { SettingsRepo, SETTING_KEYS } from "../../src/db/settings";
 import { BOT_VERSION } from "../../src/version";
 import type { Env } from "../../src/env";
+
+// GET /api/report/latest importa owner/report/build dinámicamente, que a su
+// vez llama al LLM (skill /reportes) — mockeado para que este archivo no
+// dependa de credenciales reales de proveedor (mismo patrón que
+// test/flywheel/flywheel.test.ts).
+const generateTextMock = vi.fn();
+vi.mock("ai", () => ({ generateText: (...args: unknown[]) => generateTextMock(...args) }));
+vi.mock("../../src/llm/provider", () => ({
+  createModel: () => ({ provider: "anthropic", modelId: "claude-haiku-test", model: {}, supportsPromptCache: true }),
+  envKeyFor: () => undefined,
+  fallbackModel: () => null,
+}));
 
 const TOKEN = "cp-secret-token";
 const NOW = Date.now();
@@ -313,5 +325,73 @@ describe("POST /api/pause", () => {
     expect(body.paused).toBe(true);
     expect(body.paused_mode).toBe("until");
     expect(body.paused_until).toBe(until);
+  });
+});
+
+describe("GET /api/report/latest", () => {
+  it("401 sin Bearer válido", async () => {
+    const res = await apiApp.request("/report/latest", {}, authedEnv());
+    expect(res.status).toBe(401);
+  });
+
+  it("403 pro_required en tier free", async () => {
+    const res = await apiApp.request(
+      "/report/latest",
+      { headers: bearer(TOKEN) },
+      { ...authedEnv(), BOT_TIER: "free" },
+    );
+    expect(res.status).toBe(403);
+    const body = (await res.json()) as { ok: boolean; error: string };
+    expect(body.error).toBe("pro_required");
+  });
+
+  it("404 no_report sin cron previo y sin ?fresh=1", async () => {
+    const res = await apiApp.request("/report/latest", { headers: bearer(TOKEN) }, authedEnv());
+    expect(res.status).toBe(404);
+    const body = (await res.json()) as { ok: boolean; error: string };
+    expect(body.error).toBe("no_report");
+  });
+
+  it("?fresh=1 arma uno al vuelo SIN persistirlo (no escribe report_last_json)", async () => {
+    const res = await apiApp.request("/report/latest?fresh=1", { headers: bearer(TOKEN) }, authedEnv());
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { ok: boolean; report: { title: string }; body_markdown: string };
+    expect(body.ok).toBe(true);
+    expect(body.report.title).toContain("Test"); // BUSINESS_NAME de authedEnv()
+    expect(body.body_markdown).toContain("Test");
+
+    // Confirma que NO quedó guardado — una llamada normal después sigue en 404.
+    const again = await apiApp.request("/report/latest", { headers: bearer(TOKEN) }, authedEnv());
+    expect(again.status).toBe(404);
+  });
+
+  it("sirve el snapshot guardado por el cron sin volver a llamar al modelo", async () => {
+    const snap = {
+      generated_at: NOW,
+      period: { from: NOW - 1000, to: NOW },
+      title: "Tu resumen de hoy — Test",
+      empty: true,
+      summary: "Día tranquilo.",
+      insights: [],
+      actions: [],
+      stats: { messages: 0, conversations: 0, leads: 0, hot_leads: 0, tickets_opened: 0, tickets_resolved: 0, upset: 0 },
+      prev: { messages: 0, conversations: 0, leads: 0, hot_leads: 0, tickets_opened: 0, tickets_resolved: 0, upset: 0 },
+      topics: [],
+      missed_questions: [],
+    };
+    await new SettingsRepo(db).set(SETTING_KEYS.reportLastJson, JSON.stringify(snap));
+
+    const res = await apiApp.request("/report/latest", { headers: bearer(TOKEN) }, authedEnv());
+    expect(res.status).toBe(200);
+    expect(generateTextMock).not.toHaveBeenCalled();
+    const body = (await res.json()) as { ok: boolean; report: typeof snap; body_markdown: string };
+    expect(body.report).toEqual(snap);
+    expect(body.body_markdown).toContain("Día tranquilo.");
+  });
+
+  it("404 no_report si el snapshot guardado está corrupto", async () => {
+    await new SettingsRepo(db).set(SETTING_KEYS.reportLastJson, "{no es json");
+    const res = await apiApp.request("/report/latest", { headers: bearer(TOKEN) }, authedEnv());
+    expect(res.status).toBe(404);
   });
 });
