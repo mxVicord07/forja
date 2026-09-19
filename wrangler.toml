@@ -30,6 +30,10 @@ index_name = "horizontes_bot_kb"
 binding = "CATALOG"
 bucket_name = "horizontes-bot-catalog-birevx-support-bot"
 
+[[r2_buckets]]
+binding = "MEDIA"
+bucket_name = "horizontes-bot-media-birevx-support-bot"
+
 [vars]
 BOT_NAME = "BIRevX Support Bot"
 BUSINESS_NAME = "BIRevX — Agencia de Automatizacion IA"
