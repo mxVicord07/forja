@@ -27,6 +27,18 @@ vi.mock("agents", () => ({
   },
 }));
 
+// Bóveda (superpoder opt-in): mockeada acá porque estos tests fuerzan
+// env.DB = {} (sin D1 real) — el módulo real ya tiene su propia cobertura
+// con D1/R2 reales en test/media/boveda.test.ts. Acá solo se verifica el
+// WIRING: ¿ingest() llama a captureIncomingMedia cuando debe, y processBuffer
+// liga el resultado al mensaje persistido?
+const captureIncomingMediaMock = vi.fn();
+const attachMediaToMessageMock = vi.fn();
+vi.mock("../src/media/boveda", () => ({
+  captureIncomingMedia: (...args: any[]) => captureIncomingMediaMock(...args),
+  attachMediaToMessage: (...args: any[]) => attachMediaToMessageMock(...args),
+}));
+
 import { SupportAgent } from "../src/agent";
 import { ConversationsRepo } from "../src/db/conversations";
 import { MessagesRepo } from "../src/db/messages";
@@ -202,6 +214,165 @@ describe("SupportAgent.ingest — media (Task 6.3)", () => {
     expect(buffered).toContain("describe esta foto");
     expect(buffered).toContain("[IMAGE_URL: https://example.com/pic.png]");
     expect(agent.state.imageRetryCount).toBe(0);
+  });
+});
+
+describe("SupportAgent.ingest — Bóveda (captura de media entrante, skill /boveda)", () => {
+  beforeEach(() => {
+    vi.restoreAllMocks();
+    captureIncomingMediaMock.mockReset();
+    attachMediaToMessageMock.mockReset();
+    globalThis.fetch = vi.fn(async () => new Response(new Uint8Array([1, 2, 3]))) as any;
+  });
+
+  it("boveda_enabled apagado (default): no llama a captureIncomingMedia", async () => {
+    stubSettings(); // sin overrides → boveda_enabled ausente
+    const { agent } = makeAgent({ tier: "pro" });
+    stubConversations();
+
+    await agent.ingest({
+      channel: "telegram",
+      channelUserId: "u1",
+      imageUrl: "https://example.com/pic.png",
+    });
+
+    expect(captureIncomingMediaMock).not.toHaveBeenCalled();
+    expect(agent.state.pendingMessages[0].mediaIds).toBeUndefined();
+  });
+
+  it("tier free: aunque boveda_enabled='1', no captura (Bóveda es Pro)", async () => {
+    stubSettings({ boveda_enabled: "1" });
+    const { agent } = makeAgent({ tier: "free" });
+    stubConversations();
+
+    await agent.ingest({
+      channel: "telegram",
+      channelUserId: "u1",
+      imageUrl: "https://example.com/pic.png",
+    });
+
+    expect(captureIncomingMediaMock).not.toHaveBeenCalled();
+  });
+
+  it("prendido + Pro + imageUrl: captura y guarda el id en el mensaje pendiente", async () => {
+    stubSettings({ boveda_enabled: "1" });
+    captureIncomingMediaMock.mockResolvedValue("media-1");
+    const { agent } = makeAgent({ tier: "pro" });
+    stubConversations();
+
+    await agent.ingest({
+      channel: "telegram",
+      channelUserId: "u1",
+      text: "mira esto",
+      imageUrl: "https://example.com/pic.png",
+    });
+
+    expect(captureIncomingMediaMock).toHaveBeenCalledWith(
+      agent.env,
+      expect.anything(),
+      expect.objectContaining({ conversationId: "conv-1", url: "https://example.com/pic.png", kind: "image" }),
+    );
+    expect(agent.state.pendingMessages[0].mediaIds).toEqual(["media-1"]);
+  });
+
+  it("prendido + Pro + audioUrl: captura también el audio", async () => {
+    stubSettings({ boveda_enabled: "1" });
+    captureIncomingMediaMock.mockResolvedValue("media-audio-1");
+    const { agent } = makeAgent({ tier: "pro" });
+    stubConversations();
+
+    await agent.ingest({
+      channel: "telegram",
+      channelUserId: "u1",
+      audioUrl: "https://example.com/voice.ogg",
+    });
+
+    expect(captureIncomingMediaMock).toHaveBeenCalledWith(
+      agent.env,
+      expect.anything(),
+      expect.objectContaining({ url: "https://example.com/voice.ogg", kind: "audio" }),
+    );
+    expect(agent.state.pendingMessages[0].mediaIds).toEqual(["media-audio-1"]);
+  });
+
+  it("captureIncomingMedia devuelve null (fail-open real): no revienta, sin mediaIds", async () => {
+    stubSettings({ boveda_enabled: "1" });
+    captureIncomingMediaMock.mockResolvedValue(null);
+    const { agent } = makeAgent({ tier: "pro" });
+    stubConversations();
+
+    await agent.ingest({
+      channel: "telegram",
+      channelUserId: "u1",
+      imageUrl: "https://example.com/pic.png",
+    });
+
+    expect(agent.state.pendingMessages[0].mediaIds).toBeUndefined();
+  });
+
+  it("captureIncomingMedia lanza: el turno sigue igual (fail-open del wiring)", async () => {
+    vi.spyOn(console, "warn").mockImplementation(() => {});
+    stubSettings({ boveda_enabled: "1" });
+    captureIncomingMediaMock.mockRejectedValue(new Error("R2 caído"));
+    const { agent } = makeAgent({ tier: "pro" });
+    stubConversations();
+
+    await expect(
+      agent.ingest({
+        channel: "telegram",
+        channelUserId: "u1",
+        text: "hola",
+        imageUrl: "https://example.com/pic.png",
+      }),
+    ).resolves.toEqual({ acknowledged: true });
+    expect(agent.state.pendingMessages[0].text).toContain("hola");
+  });
+});
+
+describe("SupportAgent.processBuffer — liga el media capturado al mensaje (Bóveda)", () => {
+  beforeEach(() => {
+    vi.restoreAllMocks();
+    stubSettings();
+    captureIncomingMediaMock.mockReset();
+    attachMediaToMessageMock.mockReset();
+  });
+
+  it("con mediaIds pendientes, llama a attachMediaToMessage con el id del mensaje persistido", async () => {
+    const { agent } = makeAgent({ tier: "pro" });
+    streamTextMock.mockReset();
+    streamTextMock.mockImplementation(() => makeStreamResult("ok"));
+    vi.spyOn(MessagesRepo.prototype, "append").mockResolvedValue("msg-real-id" as any);
+    vi.spyOn(MessagesRepo.prototype, "lastN").mockResolvedValue([
+      { role: "user", content: "mira esto" },
+    ] as any);
+    vi.spyOn(ConversationsRepo.prototype, "touchLastMessage").mockResolvedValue(undefined as any);
+    vi.spyOn(senderMod, "pickAdapter").mockReturnValue({ sendReply: vi.fn(async () => {}) } as any);
+
+    agent.state.pendingMessages = [
+      { text: "mira esto", receivedAt: Date.now(), mediaIds: ["media-1", "media-2"] },
+    ];
+
+    await agent.processBuffer();
+
+    expect(attachMediaToMessageMock).toHaveBeenCalledWith(expect.anything(), ["media-1", "media-2"], "msg-real-id");
+  });
+
+  it("sin mediaIds pendientes, NO llama a attachMediaToMessage", async () => {
+    const { agent } = makeAgent({ tier: "pro" });
+    streamTextMock.mockReset();
+    streamTextMock.mockImplementation(() => makeStreamResult("ok"));
+    vi.spyOn(MessagesRepo.prototype, "append").mockResolvedValue("msg-real-id" as any);
+    vi.spyOn(MessagesRepo.prototype, "lastN").mockResolvedValue([
+      { role: "user", content: "hola" },
+    ] as any);
+    vi.spyOn(ConversationsRepo.prototype, "touchLastMessage").mockResolvedValue(undefined as any);
+    vi.spyOn(senderMod, "pickAdapter").mockReturnValue({ sendReply: vi.fn(async () => {}) } as any);
+
+    agent.state.pendingMessages = [{ text: "hola", receivedAt: Date.now() }];
+
+    await agent.processBuffer();
+
+    expect(attachMediaToMessageMock).not.toHaveBeenCalled();
   });
 });
 

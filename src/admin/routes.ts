@@ -41,6 +41,8 @@ import { renderKbList, renderKbEditor } from "./views/kb";
 import { KbDocsRepo, indexDoc, removeDocVectors, reindexAll, MAX_DOC_CHARS } from "../kb/docs";
 import { renderDocumentosList } from "./views/documentos";
 import { DocumentsRepo } from "../db/documents";
+import { renderBovedaList } from "./views/boveda";
+import { getMediaRow } from "../media/boveda";
 import { renderMejoras } from "./views/mejoras";
 import { runFlywheel, getLessons, saveLessons } from "../flywheel/detect";
 import { applySuggestion, dismissSuggestion } from "../flywheel/apply";
@@ -191,6 +193,29 @@ adminApp.post("/kb/:id/delete", async (c) => {
 adminApp.post("/kb/reindex", async (c) => {
   const r = await reindexAll(c.env);
   return c.redirect(`/admin/kb?reindexed=${r.indexed}`);
+});
+
+// --- Bóveda: imágenes/audios/documentos que los CLIENTES mandaron ----------
+
+adminApp.get("/boveda", async (c) => c.html(await renderBovedaList(c.env)));
+
+// Sirve los bytes desde R2 — mismo Basic Auth que el resto de /admin (nunca
+// una URL pública firmada: es media privada del cliente, no un asset del
+// negocio). direction 'in' o NULL (filas viejas sin esa columna todavía).
+adminApp.get("/media/:id", async (c) => {
+  const row = await getMediaRow(new Db(c.env.DB), c.req.param("id"));
+  if (!row || row.direction === "out") return c.notFound();
+  if (!c.env.MEDIA) return c.text("no configurado", 404);
+  const obj = await c.env.MEDIA.get(row.r2_key);
+  if (!obj) return c.text("archivo no encontrado (¿se borró del bucket?)", 410);
+  return new Response(obj.body, {
+    status: 200,
+    headers: {
+      "Content-Type": row.mime || "application/octet-stream",
+      ...(row.filename ? { "Content-Disposition": `inline; filename="${row.filename.replace(/"/g, "")}"` } : {}),
+      "Cache-Control": "private, max-age=900",
+    },
+  });
 });
 
 // --- Documentos comerciales (F-docs): archivos que el bot MANDA -------------

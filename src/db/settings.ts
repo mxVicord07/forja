@@ -130,6 +130,12 @@ export const SETTING_KEYS = {
   // los soporta (channels/shared.ts#BUTTON_CHANNELS), o a lista numerada en
   // texto donde no. Skill /botones lo prende y ayuda a configurar cuándo usarlo.
   buttonsEnabled: "buttons_enabled",
+  // Bóveda (superpoder Forja+ Pro, opt-in, default OFF): "1" archiva en el R2
+  // del miembro (binding MEDIA) las imágenes/audios/documentos que mandan los
+  // clientes — ver src/media/boveda.ts (captureIncomingMedia, llamado desde
+  // agent.ts#ingest) y el tab /admin/boveda. Sin binding MEDIA, prender esto
+  // no hace nada (captureIncomingMedia se sale en silencio). Skill /boveda.
+  bovedaEnabled: "boveda_enabled",
 } as const;
 
 export type SettingKey = (typeof SETTING_KEYS)[keyof typeof SETTING_KEYS];

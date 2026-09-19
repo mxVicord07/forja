@@ -40,6 +40,9 @@ export async function createTestMiniflare() {
   const mf = new Miniflare({
     modules: [{ type: "ESModule", path: "index.js", contents: INLINE_WORKER }],
     d1Databases: ["DB"],
+    // Bóveda (src/media/boveda.ts) es el único consumidor hoy — un binding
+    // extra sin usar no afecta al resto de los tests.
+    r2Buckets: ["MEDIA"],
     durableObjects: { AGENT: "SupportAgent" },
     compatibilityDate: "2026-05-01",
     compatibilityFlags: ["nodejs_compat"],

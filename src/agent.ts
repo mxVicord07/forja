@@ -33,7 +33,7 @@ export interface SupportAgentState {
   conversationId: string | null;
   channel: string;
   channelUserId: string;
-  pendingMessages: { text: string; receivedAt: number }[];
+  pendingMessages: { text: string; receivedAt: number; mediaIds?: string[] }[];
   lastAlarmAt: number;
   lastUserLang: string;
   toolCallsInLast2Turns: number;
@@ -142,8 +142,11 @@ export class SupportAgent extends Agent<Env, SupportAgentState> {
     // leído (palomitas azules): es el mismo endpoint, y es la señal que
     // buscamos — "ya te leí, ahí voy".
     // Nunca es ruta crítica: si algo falla acá, el turno sigue igual.
+    // Declarado FUERA del try (no solo para el indicador): más abajo también
+    // se lee cfgEarly.bovedaEnabled para decidir si archivar el media entrante.
+    let cfgEarly: Awaited<ReturnType<typeof resolveAgentConfig>> | null = null;
     try {
-      const cfgEarly = await resolveAgentConfig(this.env, []);
+      cfgEarly = await resolveAgentConfig(this.env, []);
       if (cfgEarly.typingIndicator && !cfgEarly.botPaused) {
         const ch = payload.channel as ChannelId;
         await showTypingSafe(
@@ -192,10 +195,41 @@ export class SupportAgent extends Agent<Env, SupportAgentState> {
       }
     }
 
+    // Bóveda (superpoder opt-in, skill /boveda): archiva en R2 lo que mandó el
+    // cliente ANTES de que la URL del proveedor expire — el mismo motivo por
+    // el que la transcripción/análisis de arriba corre sincrónico. FAIL-OPEN:
+    // captureIncomingMedia ya se traga sus propios errores (URL muerta, R2
+    // caído); este try/catch es solo por el import dinámico. Sin
+    // boveda_enabled o sin binding MEDIA, mediaIds queda vacío y no pasa nada.
+    const mediaIds: string[] = [];
+    if (cfgEarly?.bovedaEnabled && (payload.imageUrl || payload.audioUrl)) {
+      try {
+        const { captureIncomingMedia } = await import("./media/boveda");
+        if (payload.imageUrl) {
+          const id = await captureIncomingMedia(this.env, db, {
+            conversationId: conv.id,
+            url: payload.imageUrl,
+            kind: "image",
+          });
+          if (id) mediaIds.push(id);
+        }
+        if (payload.audioUrl) {
+          const id = await captureIncomingMedia(this.env, db, {
+            conversationId: conv.id,
+            url: payload.audioUrl,
+            kind: "audio",
+          });
+          if (id) mediaIds.push(id);
+        }
+      } catch (e) {
+        console.warn("[boveda] no se pudo archivar el media entrante:", e);
+      }
+    }
+
     // Append to buffer (we always persist the client's message)
     const pending = [
       ...this.state.pendingMessages,
-      { text: processedText, receivedAt: Date.now() },
+      { text: processedText, receivedAt: Date.now(), ...(mediaIds.length ? { mediaIds } : {}) },
     ];
     this.setState({
       ...this.state,
@@ -272,8 +306,17 @@ export class SupportAgent extends Agent<Env, SupportAgentState> {
     }
 
     // Persist user message
-    await msgs.append(convId, "user", combined);
+    const userMsgId = await msgs.append(convId, "user", combined);
     await convs.touchLastMessage(convId);
+
+    // Bóveda: liga el media archivado durante ingest() al mensaje recién
+    // creado (su id no existía todavía cuando se capturó). Best-effort — ver
+    // attachMediaToMessage.
+    const bufferedMediaIds = buffered.flatMap((m) => m.mediaIds ?? []);
+    if (bufferedMediaIds.length) {
+      const { attachMediaToMessage } = await import("./media/boveda");
+      await attachMediaToMessage(db, bufferedMediaIds, userMsgId);
+    }
 
     // Load history (last 20)
     const history = await msgs.lastN(convId, 20);

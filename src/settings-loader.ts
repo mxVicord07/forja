@@ -73,6 +73,9 @@ export interface AgentConfig {
   llm: LlmOverrides;
   /** Mostrar "escribiendo…" mientras se prepara la respuesta (default ON). */
   typingIndicator: boolean;
+  /** Bóveda (superpoder Forja+ Pro, opt-in): archivar en R2 lo que manda el
+   *  cliente. Requiere boveda_enabled="1" Y tier Pro — igual que brandVoice. */
+  bovedaEnabled: boolean;
 }
 
 /** Extract the BYO-LLM overrides from a settings snapshot. */
@@ -240,6 +243,8 @@ export async function resolveAgentConfig(env: Env, toolNames: string[]): Promise
   const botPaused = pauseState(get(SETTING_KEYS.botPaused), get(SETTING_KEYS.botPausedUntil)).paused;
   // Default ON: solo un "0" explícito lo apaga.
   const typingIndicator = get(SETTING_KEYS.typingIndicator) !== "0";
+  // Bóveda (skill /boveda): opt-in, default OFF, y Pro — igual que brandVoice.
+  const bovedaEnabled = isPro(env) && get(SETTING_KEYS.bovedaEnabled) === "1";
 
   const tempRaw = get(SETTING_KEYS.temperature);
   let temperature: number | undefined;
@@ -274,5 +279,6 @@ export async function resolveAgentConfig(env: Env, toolNames: string[]): Promise
     monthlyBudgetUsd,
     llm: llmOverridesFrom(settings),
     typingIndicator,
+    bovedaEnabled,
   };
 }

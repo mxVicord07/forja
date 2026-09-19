@@ -9,13 +9,13 @@
  * agregarlo aquí habría escrito settings que nadie lee):
  *   - brandStyle / admin/branding.ts — nuestro rebrand a BIRevX es fijo en el
  *     CSS del panel (src/admin/views/layout.ts), no un sistema configurable.
- *   - galeriaEnabled, bovedaEnabled, paymentsEnabled — Galería (el bot MANDA
- *     fotos/audios del negocio), Bóveda (archiva lo que el cliente manda) y
- *     Cobros no están portados: los primeros dos necesitan R2 provisionado
- *     (decisión de infraestructura pendiente), el tercero ni trae skill
- *     propio en el paquete descargado. buttonsEnabled SÍ está portado (ver
- *     skill/botones.md) — no es un superpoder del paquete (no vive en
- *     SUPERPOWERS de abajo), es un toggle propio sin infraestructura nueva.
+ *   - galeriaEnabled, paymentsEnabled — Galería (el bot MANDA fotos/audios del
+ *     negocio) y Cobros no están portados: el primero necesita catálogo de
+ *     media (self-hosted o R2) que nadie cargó todavía; el segundo ni trae
+ *     skill propio en el paquete descargado. buttonsEnabled y bovedaEnabled
+ *     SÍ están portados (ver skill/botones.md y skill/boveda.md) — ninguno
+ *     es un superpoder del paquete (no viven en SUPERPOWERS de abajo), son
+ *     toggles propios.
  *   - multiLanguage — el paquete lo modela como toggle independiente; este
  *     fork lo modela como el valor especial `bot_language = "espejo"` (ver
  *     memory.md, sesión 2-ago). Semántica distinta, no un simple rename.
@@ -100,6 +100,7 @@ export const SETTING_VALIDATORS: Record<string, (v: string) => boolean> = {
   [SETTING_KEYS.monthlyBudget]: monthlyBudgetOk,
   [SETTING_KEYS.customInstructions]: customInstructionsOk,
   [SETTING_KEYS.buttonsEnabled]: bool01,
+  [SETTING_KEYS.bovedaEnabled]: bool01,
 };
 
 /**
