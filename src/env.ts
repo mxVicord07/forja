@@ -158,4 +158,12 @@ export interface Env {
   // whsec_… del webhook (POST /webhooks/stripe) — firma cada evento entrante.
   // Sin este secret el webhook responde 503 y no procesa nada (fail-closed).
   STRIPE_WEBHOOK_SECRET?: string;
+
+  // Modo Demo (skill /demo, Modo Agencia): expone un chat web SIN autenticar
+  // en /demo para enseñarle el bot a un prospecto en vivo. "on" lo prende;
+  // cualquier otro valor, incluida la ausencia, lo deja apagado (default OFF
+  // — un bot de producción nunca debe exponer un chat gratis sin auth). Solo
+  // se prende en una instancia desechable del prospecto, nunca en un bot de
+  // cliente real en producción. Ver src/demo.ts.
+  DEMO_MODE?: string;
 }

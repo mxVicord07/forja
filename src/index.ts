@@ -24,6 +24,8 @@ import { tokensMatch, manychatWebhookAllowed } from "./http-auth";
 import { apiApp } from "./api";
 import { getAgentStub } from "./agentStub";
 import { handleStripeWebhook } from "./integrations/stripeWebhook";
+import { webAdapter } from "./channels/web";
+import { demoPage, demoPoll, demoEnabled, demoTurnsUsed, demoOverLimit } from "./demo";
 
 export { SupportAgent } from "./agent";
 
@@ -277,6 +279,22 @@ app.post("/webhooks/learn/:channel", async (c) => {
 // plane a propósito — Stripe autentica cada evento con su propia firma
 // (Stripe-Signature), no con el Bearer de CONTROL_PLANE_TOKEN.
 app.post("/webhooks/stripe", (c) => handleStripeWebhook(c.req.raw, c.env));
+
+// Modo Demo (skill /demo, Modo Agencia): chat web SIN autenticar para
+// enseñarle el bot a un prospecto en vivo. Solo vive si DEMO_MODE="on" — OFF
+// por default (ver src/demo.ts). Reusa el canal `web` (src/channels/web.ts) y
+// el mismo pipeline del agente que cualquier otro canal.
+app.get("/demo", (c) => demoPage(c));
+app.get("/demo/poll", (c) => demoPoll(c));
+app.post("/demo/send", async (c) => {
+  if (!demoEnabled(c.env)) return c.json({ ok: false, error: "demo_off" }, 404);
+  const body = (await c.req.raw.clone().json().catch(() => ({}))) as { sessionId?: string };
+  const sid = String(body.sessionId ?? "").slice(0, 64);
+  if (sid && demoOverLimit(await demoTurnsUsed(c.env, sid))) {
+    return c.json({ ok: false, error: "limit" }, 429);
+  }
+  return routeToAgent(c, webAdapter);
+});
 
 // Admin dashboard — Basic Auth guarded sub-app mounted at /admin/*.
 app.route("/admin", adminApp);

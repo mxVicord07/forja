@@ -23,6 +23,7 @@ const REFRESH_MS: Record<ChannelId, number> = {
   whatsapp: 20000,
   manychat: 0,
   twilio: 0,
+  web: 0, // sin proveedor — el navegador hace polling, no hay "typing" que encender
 };
 
 /**

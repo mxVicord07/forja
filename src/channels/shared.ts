@@ -1,4 +1,7 @@
-export type ChannelId = "manychat" | "telegram" | "twilio" | "messenger" | "instagram" | "whatsapp";
+// "web" = el canal sin proveedor externo: la página de demo (/demo, skill de
+// Modo Agencia) y, a futuro, el widget embebible del sitio del negocio. Ver
+// src/channels/web.ts.
+export type ChannelId = "manychat" | "telegram" | "twilio" | "messenger" | "instagram" | "whatsapp" | "web";
 
 // El union de arriba es solo de tipos — no existe en runtime. Esta constante
 // es la lista real para validar un `:channel` que llega como string (params
@@ -15,6 +18,7 @@ const CHANNEL_ID_SET = {
   messenger: 1,
   instagram: 1,
   whatsapp: 1,
+  web: 1,
 } satisfies Record<ChannelId, 1>;
 export const CHANNEL_IDS: readonly ChannelId[] = Object.keys(CHANNEL_ID_SET) as ChannelId[];
 

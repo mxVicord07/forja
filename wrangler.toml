@@ -49,6 +49,11 @@ YCLOUD_WA_FROM = "+524444237875"
 #   ANTHROPIC_BASE_URL = "https://gateway.ai.cloudflare.com/v1/<account>/<gw>/anthropic"
 #   CF_AIG_TOKEN               secret — AI Gateway (cf-aig-authorization)
 #
+# Modo Demo (skill /demo, Modo Agencia) — chat web SIN autenticar en /demo
+# para enseñarle el bot a un prospecto. OFF por default; solo prender en una
+# instancia DESECHABLE del prospecto, nunca en un bot de cliente real:
+#   DEMO_MODE = "on"
+#
 # Secrets (set with `wrangler secret put <NAME>` — never commit values):
 #   LEAD_EXPORT_WEBHOOK_URL    optional — webhook de n8n que hace el upsert del lead
 #                              en Odoo. Vivia aqui en [vars] hasta 2026-08-19, pero
