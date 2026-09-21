@@ -224,3 +224,45 @@ export function applyResolvedDate(start: string, resolvedDate: string): string {
   if (/^\d{4}-\d{2}-\d{2}T/.test(start)) return resolvedDate + start.slice(10);
   return start;
 }
+
+/**
+ * Offset de `timeZone` (en minutos, local menos UTC — negativo al oeste de
+ * Greenwich) en el instante `atUtcMs`. Usa Intl con `timeZoneName: "shortOffset"`
+ * en vez de aritmética manual: cubre DST sin tabla propia.
+ */
+function tzOffsetMinutes(timeZone: string, atUtcMs: number): number {
+  const parts = new Intl.DateTimeFormat("en-US", { timeZone, timeZoneName: "shortOffset" }).formatToParts(
+    new Date(atUtcMs),
+  );
+  const raw = parts.find((p) => p.type === "timeZoneName")?.value ?? "GMT+0";
+  const m = /GMT([+-])(\d{1,2})(?::?(\d{2}))?/.exec(raw);
+  if (!m) return 0;
+  const sign = m[1] === "-" ? -1 : 1;
+  const hours = Number(m[2]);
+  const minutes = m[3] ? Number(m[3]) : 0;
+  return sign * (hours * 60 + minutes);
+}
+
+/**
+ * Convierte una hora LOCAL del negocio ("HH:mm" en `timeZone`) + una fecha
+ * YYYY-MM-DD ya resuelta a un instante UTC real (ISO con "Z").
+ *
+ * Por qué existe: el modelo no debe hacer esta aritmética — igual que "el
+ * próximo martes" se resuelve en el servidor (ver resolveDateInput arriba),
+ * convertir "10:00 de México" a UTC requiere saber el offset exacto de la
+ * zona (y su DST si aplica), y un LLM lo adivina con confianza pero se
+ * equivoca fácil. Hallazgo real (20-sep-2026, birevx-support-bot en vivo): el
+ * modelo mandó "10:00:00Z" pensando "las 10am", cuando México es UTC-6 — la
+ * cita se intentó agendar a las 4am, fuera de horario, y Cal.com la rechazó
+ * con un 409 ambiguo que el modelo interpretó (mal) como "ya tienes otra
+ * cita" en vez de "hora inválida".
+ */
+export function localTimeToUtcIso(date: string, time: string, timeZone: string): string {
+  // Primer intento: trata los números de la hora local como si fueran UTC,
+  // solo para tener un instante aproximado con el que consultar el offset
+  // real de la zona en esa fecha (importa para DST en zonas que lo observan).
+  const naiveMs = Date.parse(`${date}T${time}:00Z`);
+  const offsetMin = tzOffsetMinutes(timeZone, naiveMs);
+  const utcMs = naiveMs - offsetMin * 60_000;
+  return new Date(utcMs).toISOString().replace(/\.\d{3}Z$/, "Z");
+}

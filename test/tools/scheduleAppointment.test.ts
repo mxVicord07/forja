@@ -25,7 +25,8 @@ afterEach(() => {
 });
 
 const args = {
-  startTime: "2026-07-20T15:00:00Z",
+  date: "2026-07-20",
+  time: "15:00",
   attendeeName: "Ana",
   attendeeEmail: "ana@example.com",
 };
@@ -123,20 +124,23 @@ describe("scheduleAppointmentTool", () => {
   });
   // --- Fecha resuelta en el servidor (adoptado del upstream) ---
 
-  it("la fecha en palabras del cliente gana sobre el YYYY-MM-DD del modelo", async () => {
+  it("la fecha en palabras del cliente se resuelve en el servidor", async () => {
     const fetchMock = vi.fn(async () =>
       new Response(JSON.stringify({ data: { id: 556, uid: "uid-2" } }), { status: 201 }),
     );
     vi.stubGlobal("fetch", fetchMock);
 
-    const tool = scheduleAppointmentTool(env, () => "telegram:1");
-    // El modelo mandó el 20 de julio; el cliente dijo "mañana" (= 2026-07-02).
+    // UTC explícito: esta prueba es sobre la FECHA, no sobre la conversión de
+    // hora (esa tiene su propio describe abajo) — sin esto, el default real
+    // del bot (America/Mexico_City) acoplaría este assert a la zona horaria.
+    const tool = scheduleAppointmentTool({ ...env, CALCOM_TIMEZONE: "UTC" }, () => "telegram:1");
+    // "hoy" está anclado en 2026-07-01; "mañana" = 2026-07-02.
     const res = (await tool.execute!({ ...args, date: "mañana" }, {} as any)) as any;
 
     expect(res.ok).toBe(true);
     expect(res.date).toBe("2026-07-02");
     const body = JSON.parse(String((fetchMock.mock.calls[0] as any[])[1].body));
-    expect(body.start).toBe("2026-07-02T15:00:00Z"); // hora y offset intactos
+    expect(body.start).toBe("2026-07-02T15:00:00Z");
     expect((await appts.findActive("telegram:1"))?.start).toBe("2026-07-02T15:00:00Z");
   });
 
@@ -151,5 +155,49 @@ describe("scheduleAppointmentTool", () => {
     expect(res.today).toBe("2026-07-01");
     expect(fetchMock).not.toHaveBeenCalled();
     expect(await appts.findActive("telegram:1")).toBeNull();
+  });
+
+  // --- Hora resuelta en el servidor (hallazgo real 20-sep-2026) ---
+
+  describe("hora local → UTC resuelta en el servidor", () => {
+    it("convierte la hora LOCAL del negocio a UTC con CALCOM_TIMEZONE", async () => {
+      const fetchMock = vi.fn(async () =>
+        new Response(JSON.stringify({ data: { id: 557, uid: "uid-3" } }), { status: 201 }),
+      );
+      vi.stubGlobal("fetch", fetchMock);
+
+      const tool = scheduleAppointmentTool({ ...env, CALCOM_TIMEZONE: "America/Mexico_City" }, () => "telegram:1");
+      // "10:00" en México (UTC-6) debe llegar a Cal.com como 16:00Z, NUNCA
+      // como 10:00Z (el bug real: eso son las 4am, fuera de horario).
+      const res = (await tool.execute!({ ...args, time: "10:00" }, {} as any)) as any;
+
+      expect(res.ok).toBe(true);
+      const body = JSON.parse(String((fetchMock.mock.calls[0] as any[])[1].body));
+      expect(body.start).toBe("2026-07-20T16:00:00Z");
+    });
+
+    it("rechaza un formato de hora inválido sin llamar a Cal.com", async () => {
+      const fetchMock = vi.fn();
+      vi.stubGlobal("fetch", fetchMock);
+
+      const tool = scheduleAppointmentTool(env, () => "telegram:1");
+      const res = (await tool.execute!({ ...args, time: "10am" }, {} as any)) as any;
+
+      expect(res.error).toBe("invalid_time");
+      expect(res.hint).toContain("HH:mm");
+      expect(fetchMock).not.toHaveBeenCalled();
+      expect(await appts.findActive("telegram:1")).toBeNull();
+    });
+
+    it("acepta horas de un solo dígito con cero a la izquierda (09:05)", async () => {
+      const fetchMock = vi.fn(async () =>
+        new Response(JSON.stringify({ data: { id: 558, uid: "uid-4" } }), { status: 201 }),
+      );
+      vi.stubGlobal("fetch", fetchMock);
+
+      const tool = scheduleAppointmentTool(env, () => "telegram:1");
+      const res = (await tool.execute!({ ...args, time: "09:05" }, {} as any)) as any;
+      expect(res.ok).toBe(true);
+    });
   });
 });

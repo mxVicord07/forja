@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   applyResolvedDate,
   businessTimeZone,
+  localTimeToUtcIso,
   resolveDateInput,
   todayInTz,
   weekdayName,
@@ -102,5 +103,33 @@ describe("applyResolvedDate", () => {
     expect(applyResolvedDate("2026-09-02T10:00:00+02:00", "2026-09-01")).toBe(
       "2026-09-01T10:00:00+02:00",
     );
+  });
+});
+
+// Hallazgo real (20-sep-2026, birevx-support-bot en vivo): el modelo mandaba
+// la hora ya "convertida" a UTC ("10:00:00Z") pensando en "las 10am" del
+// negocio, cuando la zona real es UTC-6 — la cita se agendaba a las 4am. Esta
+// función mueve esa conversión al servidor: el modelo solo dice la hora local.
+describe("localTimeToUtcIso", () => {
+  it("convierte una hora local de México (UTC-6, sin DST) a UTC", () => {
+    expect(localTimeToUtcIso("2026-09-23", "10:00", MEXICO)).toBe("2026-09-23T16:00:00Z");
+  });
+
+  it("convierte una hora local con minutos distintos de cero", () => {
+    expect(localTimeToUtcIso("2026-09-23", "15:30", MEXICO)).toBe("2026-09-23T21:30:00Z");
+  });
+
+  it("UTC se queda igual", () => {
+    expect(localTimeToUtcIso("2026-09-23", "10:00", "UTC")).toBe("2026-09-23T10:00:00Z");
+  });
+
+  it("respeta el horario de verano de una zona que sí lo observa", () => {
+    // Madrid en agosto está en CEST (UTC+2); en enero sería CET (UTC+1).
+    expect(localTimeToUtcIso("2026-08-27", "17:00", MADRID)).toBe("2026-08-27T15:00:00Z");
+  });
+
+  it("una hora cerca de medianoche puede cruzar al día siguiente en UTC", () => {
+    // 23:30 en México (UTC-6) del día 23 son las 05:30 UTC del día 24.
+    expect(localTimeToUtcIso("2026-09-23", "23:30", MEXICO)).toBe("2026-09-24T05:30:00Z");
   });
 });
