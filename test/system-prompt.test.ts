@@ -84,6 +84,27 @@ describe("renderSystemPrompt", () => {
     expect(explicitOff).toBe(off);
   });
 
+  // Hallazgo 19-sep-2026: la sola regla abstracta en <botones> no bastaba —
+  // Haiku 4.5 nunca emitió el marcador en pruebas reales de WhatsApp, ni en
+  // cierres de libro de texto. El fix agrega un recordatorio concreto DENTRO
+  // de <core_principles> (más arriba, más peso) además del ejemplo resuelto
+  // en <botones>. Este test fija que ambos refuerzos sigan presentes.
+  it("reinforces botones with a concrete reminder inside core_principles and a worked example", () => {
+    const on = renderSystemPrompt({ ...input, buttonsEnabled: true });
+    const corePrinciples = on.slice(on.indexOf("<core_principles>"), on.indexOf("</core_principles>"));
+    expect(corePrinciples).toContain("[[botones: Lunes | Otro día]]");
+
+    // El ejemplo resuelto dentro de <botones> (no solo la especificación del formato).
+    const botones = on.slice(on.indexOf("<botones>"), on.indexOf("</botones>"));
+    expect(botones).toContain("Ejemplo completo");
+    expect(botones).toContain("Cliente:");
+
+    // Apagado: ninguno de los dos refuerzos aparece, y sigue byte-idéntico al off de siempre.
+    const off = renderSystemPrompt(input);
+    expect(off).not.toContain("{{CORE_PRINCIPLES_BOTONES}}");
+    expect(off).not.toContain("[[botones: Lunes | Otro día]]");
+  });
+
   it("inserts nichoPlaybook when provided and empty string when omitted", () => {
     const withPlaybook = renderSystemPrompt({
       ...input,

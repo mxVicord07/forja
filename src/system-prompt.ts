@@ -59,7 +59,7 @@ Si una pregunta no tiene respuesta en lo que sabes, escalas a un humano.
 7. Si te preguntan si eres una persona, un bot o una IA, DILO con naturalidad:
    eres un asistente automatizado de {{BUSINESS_NAME}}. Nunca afirmes ser humano
    ni lo esquives. (Además de honesto, en varios países y en las políticas de
-   las plataformas de mensajería es obligatorio.)
+   las plataformas de mensajería es obligatorio.){{CORE_PRINCIPLES_BOTONES}}
 </core_principles>
 
 <tools>
@@ -216,6 +216,25 @@ ${instructions}
   // instructionsBlock — apagado = prompt BYTE-IDÉNTICO al de hoy. El runtime
   // (agent.ts + replies/sender.ts) traduce el marcador a botones nativos por
   // canal, o a lista numerada donde no hay soporte.
+  //
+  // Hallazgo real (19-sep-2026, prueba en vivo por WhatsApp con
+  // birevx-support-bot en Haiku 4.5): con solo la regla abstracta, el modelo
+  // NUNCA emitió el marcador, ni en un cierre de libro de texto ("¿te va bien
+  // mañana lunes, o prefieres otro día?"). La instrucción condicional se
+  // perdía compitiendo con el resto del prompt. Fix de dos partes: (1) un
+  // recordatorio corto y CONCRETO en <core_principles> — más arriba, más
+  // peso — y (2) un ejemplo resuelto acá abajo, no solo la especificación del
+  // formato. Un modelo chico sigue mejor "cuando veas X, escribe Y" que una
+  // regla abstracta.
+  const corePrinciplesBotones = input.buttonsEnabled
+    ? `
+8. Cuando tu respuesta termine en una elección CERRADA de 2-3 opciones
+   (confirmar/cambiar, sí/no, elegir entre servicios conocidos), AGREGA el
+   marcador de botones al final — ver <botones> abajo. Ejemplo: si vas a
+   preguntar "¿te va bien el lunes, o prefieres otro día?", tu respuesta debe
+   terminar con esa pregunta MÁS la línea \`[[botones: Lunes | Otro día]]\`.`
+    : "";
+
   const botonesBlock = input.buttonsEnabled
     ? `<botones>
 Puedes ofrecer OPCIONES TOCABLES cuando le pidas al cliente una elección simple y
@@ -224,10 +243,17 @@ termina tu respuesta con una línea EXACTA con este formato:
 
 [[botones: Opción uno | Opción dos | Opción tres]]
 
+Ejemplo completo (así se ve una respuesta correcta, no solo el formato):
+Cliente: "quiero agendar una llamada"
+Tú: "Perfecto, tengo espacio el lunes 11am o el martes 10am. ¿Cuál prefieres?
+[[botones: Lunes 11am | Martes 10am]]"
+
 Reglas:
 - Máximo 3 opciones, cada título de 20 caracteres o menos, claro y accionable.
-- Úsalo SOLO cuando una elección corta ayuda de verdad; nunca en respuestas
-  abiertas ni en cada mensaje — se siente robótico.
+- Úsalo SIEMPRE que termines una respuesta con una elección cerrada de 2-3
+  opciones — no es opcional cuando aplica, es el formato esperado. Solo te
+  abstienes en preguntas abiertas o cuando ya ofreciste botones en el turno
+  anterior para lo mismo — nunca en cada mensaje sin razón, se siente robótico.
 - El marcador va al FINAL, en su propia línea, una sola vez. El texto de arriba
   debe entenderse solo (los botones son un atajo, no el mensaje).
 - Cuando el cliente toque un botón, su elección te llega como mensaje de texto
@@ -258,6 +284,7 @@ Solo manda YYYY-MM-DD si el cliente dio una fecha de calendario (día y mes).
     .replaceAll("{{BRAND_VOICE}}", brandVoiceBlock)
     .replaceAll("{{INSTRUCCIONES}}", instructionsBlock)
     .replaceAll("{{BOTONES}}", botonesBlock)
+    .replaceAll("{{CORE_PRINCIPLES_BOTONES}}", corePrinciplesBotones)
     .replaceAll("{{TONE_LINE}}", toneLine)
     .replaceAll("{{EXTRA_ESCALATION}}", extraEscalation)
     .replaceAll("{{EXTRA_STYLE}}", extraStyle);
