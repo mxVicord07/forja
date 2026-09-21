@@ -106,6 +106,12 @@ export interface Env {
   CALCOM_EVENT_TYPE_ID?: string;           // event type por defecto (numérico, como string)
   CALCOM_EVENT_TYPES?: string;             // opcional: JSON {"corte":123,"barba":456} servicio→eventTypeId
   CALCOM_TIMEZONE?: string;                // zona horaria (default America/Mexico_City)
+  // JSON del objeto `location` que exige la API de Cal.com al reservar —
+  // SOLO hace falta si el event type tiene más de una ubicación configurada
+  // (ej. dirección del cliente + videollamada): sin esto, Cal.com no sabe
+  // cuál usar y el booking falla con 400. Un event type con una sola
+  // ubicación no lo necesita. Ver src/integrations/calcom.ts#parseLocation.
+  CALCOM_LOCATION?: string;
   GOOGLE_SERVICE_ACCOUNT_JSON?: string;  // base64-encoded JSON
   OWNER_EMAIL: string;  // for handoff notifications (email)
   OWNER_TELEGRAM_CHAT_ID?: string;  // for handoff notifications (default channel)

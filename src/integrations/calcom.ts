@@ -72,6 +72,27 @@ export function resolveEventTypeId(env: Env, servicio?: string): number | null {
   return Number.isFinite(def) && def > 0 ? def : null;
 }
 
+/**
+ * Parsea CALCOM_LOCATION (JSON) al objeto `location` que espera el body de
+ * POST /bookings. Inválido/ausente → undefined (mismo comportamiento de
+ * siempre: sin location, para un event type con una sola ubicación).
+ *
+ * Hallazgo real (20-sep-2026, birevx-support-bot en vivo): un event type con
+ * DOS ubicaciones configuradas (dirección del cliente + integración de video)
+ * rechaza el booking con 400 "requires attendee address" si no se especifica
+ * `location` — Cal.com no elige por default la de video solo porque sea la
+ * "obvia" para un negocio remoto.
+ */
+function parseLocation(raw?: string): Record<string, unknown> | undefined {
+  if (!raw) return undefined;
+  try {
+    const obj = JSON.parse(raw);
+    return obj && typeof obj === "object" ? (obj as Record<string, unknown>) : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
 function parseEventTypes(raw?: string): Record<string, number> | null {
   if (!raw) return null;
   try {
@@ -143,6 +164,7 @@ export async function createBooking(
 > {
   if (!env.CALCOM_API_KEY) return { ok: false, reason: "not_configured" };
   try {
+    const location = parseLocation(env.CALCOM_LOCATION);
     const res = await fetchCalcom(`${CALCOM_API}/bookings`, {
       method: "POST",
       headers: {
@@ -160,6 +182,7 @@ export async function createBooking(
           ...(args.phone ? { phoneNumber: args.phone } : {}),
         },
         ...(args.notes ? { bookingFieldsResponses: { notes: args.notes } } : {}),
+        ...(location ? { location } : {}),
       }),
     });
     if (!res.ok) {

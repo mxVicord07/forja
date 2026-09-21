@@ -141,6 +141,54 @@ describe("createBooking", () => {
     expect(res.ok).toBe(false);
   });
 
+  // Hallazgo real 20-sep-2026: un event type con dos ubicaciones (dirección +
+  // integración de video) rechaza el booking con 400 si no se especifica
+  // `location` — Cal.com no elige la de video por default.
+  it("sin CALCOM_LOCATION, el body NO trae location (default de siempre)", async () => {
+    const fetchMock = vi.fn(async (_url: any, _init: any) =>
+      new Response(JSON.stringify({ status: "success", data: { id: 1, uid: "x" } }), { status: 201 }),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+    await createBooking(env({ CALCOM_API_KEY: "cal_x" }), {
+      eventTypeId: 10,
+      start: "2026-07-20T15:00:00Z",
+      name: "Ana",
+      email: "ana@example.com",
+      timeZone: "UTC",
+    });
+    const body = JSON.parse((fetchMock.mock.calls[0][1] as any).body);
+    expect(body.location).toBeUndefined();
+  });
+
+  it("con CALCOM_LOCATION, lo manda tal cual como `location` en el body", async () => {
+    const fetchMock = vi.fn(async (_url: any, _init: any) =>
+      new Response(JSON.stringify({ status: "success", data: { id: 1, uid: "x" } }), { status: 201 }),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+    await createBooking(
+      env({ CALCOM_API_KEY: "cal_x", CALCOM_LOCATION: '{"type":"integration","integration":"office365-video"}' }),
+      { eventTypeId: 10, start: "2026-07-20T15:00:00Z", name: "Ana", email: "ana@example.com", timeZone: "UTC" },
+    );
+    const body = JSON.parse((fetchMock.mock.calls[0][1] as any).body);
+    expect(body.location).toEqual({ type: "integration", integration: "office365-video" });
+  });
+
+  it("CALCOM_LOCATION con JSON inválido se ignora — no revienta el booking", async () => {
+    const fetchMock = vi.fn(async (_url: any, _init: any) =>
+      new Response(JSON.stringify({ status: "success", data: { id: 1, uid: "x" } }), { status: 201 }),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+    await createBooking(env({ CALCOM_API_KEY: "cal_x", CALCOM_LOCATION: "{not json" }), {
+      eventTypeId: 10,
+      start: "2026-07-20T15:00:00Z",
+      name: "Ana",
+      email: "ana@example.com",
+      timeZone: "UTC",
+    });
+    const body = JSON.parse((fetchMock.mock.calls[0][1] as any).body);
+    expect(body.location).toBeUndefined();
+  });
+
   it("201 sin uid en data → ok:false (un booking sin uid no es usable)", async () => {
     vi.stubGlobal(
       "fetch",
