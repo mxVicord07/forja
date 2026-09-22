@@ -54,6 +54,19 @@ export class DocumentsRepo {
 }
 
 /**
+ * Quita acentos/diacríticos (mismo patrón que `fold()` en
+ * src/time/resolveDate.ts y `normalizeForSpam()` en src/spam.ts — NFD +
+ * despojar marcas combinantes). Hallazgo real (21-sep-2026): un documento
+ * cargado con la descripción sin tildes ("cotizacion") no emparejaba con un
+ * cliente que sí escribe bien el español ("cotización") — "distintos"
+ * literalmente por el acento, aunque sea la misma palabra. Se aplica a la
+ * query Y al título/descripción, así no importa de qué lado falta el acento.
+ */
+function foldAccents(s: string): string {
+  return s.normalize("NFD").replace(/\p{M}/gu, "");
+}
+
+/**
  * Empareja lo que pidió el cliente contra título/descripción de los
  * documentos disponibles. Igual de simple que catalogQuery (src/tools/
  * catalogQuery.ts): con el puñado de documentos que un negocio real comparte
@@ -61,9 +74,9 @@ export class DocumentsRepo {
  * vectorial para esto.
  */
 export function matchDocument(query: string, docs: DocumentRow[]): DocumentRow | null {
-  const q = query.toLowerCase().trim();
+  const q = foldAccents(query.toLowerCase().trim());
   if (!q) return null;
-  const haystack = (d: DocumentRow) => `${d.title} ${d.description}`.toLowerCase();
+  const haystack = (d: DocumentRow) => foldAccents(`${d.title} ${d.description}`.toLowerCase());
 
   const exact = docs.find((d) => haystack(d).includes(q));
   if (exact) return exact;
@@ -71,7 +84,8 @@ export function matchDocument(query: string, docs: DocumentRow[]): DocumentRow |
   // Match por PALABRA COMPLETA, no substring — un `.includes(w)` ingenuo hace
   // que "que" (parte de la query "algo que no existe") empareje "paQUEtes"
   // por accidente. Tokenizar y comparar contra el set de palabras evita eso.
-  const tokenize = (s: string): Set<string> => new Set(s.split(/[^a-z0-9áéíóúñ]+/i).filter(Boolean));
+  // (Ya sin acentos a esta altura — el rango solo necesita a-z0-9.)
+  const tokenize = (s: string): Set<string> => new Set(s.split(/[^a-z0-9]+/i).filter(Boolean));
   const words = tokenize(q);
   for (const w of [...words]) if (w.length <= 2) words.delete(w);
   if (words.size === 0) return null;

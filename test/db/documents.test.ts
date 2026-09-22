@@ -107,4 +107,23 @@ describe("matchDocument", () => {
     // de palabras (> 2 caracteres) — no debe emparejar nada.
     expect(matchDocument("un", docs)).toBeNull();
   });
+
+  // Hallazgo real (21-sep-2026): un documento cargado sin tildes en la
+  // descripción no emparejaba con un cliente que sí acentúa bien.
+  it("ignora acentos — el documento SIN tilde empareja con una query CON tilde", () => {
+    const sinTilde = [
+      doc({ id: "sistemas", title: "Sistemas Comerciales BIRevX", description: "cotizacion de sistema comercial, automatizacion" }),
+    ];
+    expect(matchDocument("cotización", sinTilde)?.id).toBe("sistemas");
+    expect(matchDocument("automatización", sinTilde)?.id).toBe("sistemas");
+  });
+
+  it("ignora acentos — la query SIN tilde empareja con un documento CON tilde", () => {
+    expect(matchDocument("cotizacion", docs)?.id).toBe("web");
+  });
+
+  it("ignora la diéresis de la ñ igual que el resto de acentos (mismo criterio que fold() de resolveDate)", () => {
+    const conEnie = [doc({ id: "d", title: "t", description: "diseño de campaña" })];
+    expect(matchDocument("diseno", conEnie)?.id).toBe("d");
+  });
 });
