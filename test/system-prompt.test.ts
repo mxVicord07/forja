@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   currentDateLine,
+  renderInternalSystemPrompt,
   renderSystemPrompt,
   systemPromptFromEnv,
   type SystemPromptInput,
@@ -240,5 +241,20 @@ describe("systemPromptFromEnv", () => {
     expect(on).toContain("<botones>");
     const off = systemPromptFromEnv(env, ["searchKb"], "ctx");
     expect(off).not.toContain("<botones>");
+  });
+});
+
+describe("renderInternalSystemPrompt", () => {
+  it("names the business and marks itself as the internal/team assistant", () => {
+    const prompt = renderInternalSystemPrompt("BIRevX");
+    expect(prompt).toContain("BIRevX");
+    expect(prompt).toContain("interno");
+  });
+
+  it("does not reuse the customer-facing template sections", () => {
+    const prompt = renderInternalSystemPrompt("BIRevX");
+    expect(prompt).not.toContain("<escalation_rules>");
+    expect(prompt).not.toContain("<anti_patterns>");
+    expect(prompt).not.toContain("<tools>");
   });
 });

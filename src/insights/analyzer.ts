@@ -61,8 +61,15 @@ interface PendingConv {
   open_tickets: number;
 }
 
-/** Conversations that are idle, have a real exchange, and lack a fresh insight. */
-async function pickPending(db: Db, now: number, limit: number): Promise<PendingConv[]> {
+/** Conversations that are idle, have a real exchange, and lack a fresh insight.
+ *  Excludes env.INTERNAL_CHANNEL (equipo interno, no clientes) cuando está
+ *  configurado — no tiene sentido gradear sentiment/venta de un chat interno. */
+async function pickPending(
+  db: Db,
+  now: number,
+  limit: number,
+  internalChannel?: string,
+): Promise<PendingConv[]> {
   return db.all<PendingConv>(
     `SELECT c.id,
        (SELECT COUNT(*) FROM tickets t
@@ -72,23 +79,26 @@ async function pickPending(db: Db, now: number, limit: number): Promise<PendingC
      WHERE c.last_message_at < ?
        AND (i.conversation_id IS NULL OR i.analyzed_at < c.last_message_at)
        AND (SELECT COUNT(*) FROM messages m WHERE m.conversation_id = c.id) >= 2
+       ${internalChannel ? "AND c.channel != ?" : ""}
      ORDER BY c.last_message_at DESC
      LIMIT ?`,
-    [now - IDLE_MS, limit],
+    internalChannel ? [now - IDLE_MS, internalChannel, limit] : [now - IDLE_MS, limit],
   );
 }
 
 /** How many idle conversations are still waiting for analysis (for the UI). */
 export async function countPending(env: Env, now = Date.now()): Promise<number> {
   const db = new Db(env.DB);
+  const internalChannel = env.INTERNAL_CHANNEL?.trim();
   const row = await db.first<{ n: number }>(
     `SELECT COUNT(*) as n
      FROM conversations c
      LEFT JOIN conversation_insights i ON i.conversation_id = c.id
      WHERE c.last_message_at < ?
        AND (i.conversation_id IS NULL OR i.analyzed_at < c.last_message_at)
-       AND (SELECT COUNT(*) FROM messages m WHERE m.conversation_id = c.id) >= 2`,
-    [now - IDLE_MS],
+       AND (SELECT COUNT(*) FROM messages m WHERE m.conversation_id = c.id) >= 2
+       ${internalChannel ? "AND c.channel != ?" : ""}`,
+    internalChannel ? [now - IDLE_MS, internalChannel] : [now - IDLE_MS],
   );
   return row?.n ?? 0;
 }
@@ -171,7 +181,7 @@ export async function analyzeConversations(
   const msgs = new MessagesRepo(db);
   const insights = new InsightsRepo(db);
 
-  const pending = await pickPending(db, now, limit);
+  const pending = await pickPending(db, now, limit, env.INTERNAL_CHANNEL?.trim());
   let analyzed = 0;
   let errors = 0;
 

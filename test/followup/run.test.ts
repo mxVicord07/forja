@@ -137,6 +137,17 @@ describe("pickFollowupCandidates — selección", () => {
     const c = await pickFollowupCandidates(env, NOW, 10);
     expect(c).toHaveLength(0);
   });
+
+  it("con INTERNAL_CHANNEL configurado, ese canal nunca recibe follow-up de venta", async () => {
+    const team = await seed("equipo1", { channel: "telegram" });
+    await markHot(team);
+    const customer = await seed("cliente1", { channel: "manychat" });
+    await markHot(customer);
+
+    const envInternal = { ...env, INTERNAL_CHANNEL: "telegram" } as Env;
+    const c = await pickFollowupCandidates(envInternal, NOW, 10);
+    expect(c.map((x) => x.id)).toEqual([customer]);
+  });
 });
 
 describe("runFollowups — envío y garantías", () => {

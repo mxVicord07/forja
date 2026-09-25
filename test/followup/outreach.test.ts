@@ -96,6 +96,14 @@ describe("runOutreach — encuestas", () => {
     expect(row?.n).toBe(1);
   });
 
+  it("con INTERNAL_CHANNEL=telegram, ese canal nunca recibe encuesta de satisfacción", async () => {
+    await settings.set(SETTING_KEYS.satisfactionSurvey, "1");
+    await seed("equipo1", { channel: "telegram" });
+    const r = await runOutreach({ ...env, INTERNAL_CHANNEL: "telegram" } as Env, { now: NOW });
+    expect(r.surveys).toBe(0);
+    expect(sendReplyMock).not.toHaveBeenCalled();
+  });
+
   it("NO manda si el modelo dice que no quedó resuelta", async () => {
     await settings.set(SETTING_KEYS.satisfactionSurvey, "1");
     generateTextMock.mockResolvedValue({ text: '{"resolved":false,"sentiment":"neutral"}' });

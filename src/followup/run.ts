@@ -63,6 +63,9 @@ export async function pickFollowupCandidates(
   limit: number,
 ): Promise<FollowupCandidate[]> {
   const db = new Db(env.DB);
+  // env.INTERNAL_CHANNEL (equipo interno, no clientes): nunca lo alcanza un
+  // follow-up de venta, igual que Instagram queda fuera por su propia razón.
+  const internalChannel = env.INTERNAL_CHANNEL?.trim();
   const rows = await db.all<CandidateRow>(
     `SELECT * FROM (
        SELECT c.id, c.channel, c.channel_user_id, c.display_name,
@@ -76,6 +79,7 @@ export async function pickFollowupCandidates(
        LEFT JOIN followup_sends f ON f.conversation_id = c.id
        WHERE f.conversation_id IS NULL
          AND c.channel != 'instagram'
+         ${internalChannel ? "AND c.channel != ?" : ""}
          AND (c.paused_until IS NULL OR c.paused_until < ?)
      )
      WHERE last_user_at IS NOT NULL
@@ -84,7 +88,9 @@ export async function pickFollowupCandidates(
        AND (COALESCE(sale_opportunity, 0) = 1 OR user_msgs >= 4 OR kw_hits > 0)
      ORDER BY COALESCE(sale_opportunity, 0) DESC, user_msgs DESC
      LIMIT ?`,
-    [now, now - MIN_IDLE_MS, now - MAX_IDLE_MS, limit],
+    internalChannel
+      ? [internalChannel, now, now - MIN_IDLE_MS, now - MAX_IDLE_MS, limit]
+      : [now, now - MIN_IDLE_MS, now - MAX_IDLE_MS, limit],
   );
   return rows.map((r) => ({
     id: r.id,

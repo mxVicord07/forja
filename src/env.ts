@@ -26,6 +26,15 @@ export interface Env {
   // re-etiqueta el dashboard, aporta el playbook del giro y sus columnas.
   // Ausente/desconocido → pack genérico (comportamiento actual). Ver src/niches/.
   BOT_NICHE?: string;
+  // Canal exclusivo del EQUIPO interno (nunca clientes) — ej. "telegram".
+  // Cuando un mensaje entra por este canal, el bot usa un system prompt
+  // interno mínimo (sin ventas, sin tools) en vez del prompt de cara al
+  // cliente, y ese canal se excluye del analizador de insights y de los
+  // envíos salientes (follow-up/reengage/encuesta). Vacío = comportamiento
+  // idéntico al de hoy, ningún canal es especial. Ver decisions.md
+  // (entrada 2026-09-24) — convención operativa, no verificación de
+  // identidad: asume que este canal nunca se comparte con un cliente.
+  INTERNAL_CHANNEL?: string;
   // LLM provider for the chat brain: "anthropic" (default) | "openai".
   // If unset and only OPENAI_API_KEY is present, auto-selects "openai".
   // (Voice transcription + embeddings always run on Cloudflare Workers AI.)

@@ -127,6 +127,9 @@ export async function runOutreach(
     )?.n ?? 0;
   if (sentToday >= dailyCap) return empty;
 
+  // env.INTERNAL_CHANNEL (equipo interno, no clientes): nunca le llega una
+  // encuesta/solicitud de reseña, igual que Instagram queda fuera.
+  const internalChannel = env.INTERNAL_CHANNEL?.trim();
   const rows = await db.all<CandidateRow>(
     `SELECT c.id, c.channel, c.channel_user_id, c.display_name
        FROM conversations c
@@ -136,6 +139,7 @@ export async function runOutreach(
          AND r.conversation_id IS NULL
          AND c.open_ticket_id IS NULL
          AND c.channel != 'instagram'
+         ${internalChannel ? "AND c.channel != ?" : ""}
          AND (c.paused_until IS NULL OR c.paused_until < ?)
          AND (SELECT MAX(created_at) FROM messages m WHERE m.conversation_id = c.id AND m.role = 'user')
                BETWEEN ? AND ?
@@ -143,7 +147,9 @@ export async function runOutreach(
          AND (SELECT COUNT(*) FROM messages m WHERE m.conversation_id = c.id AND m.role = 'user') >= 2
        ORDER BY c.last_message_at DESC
        LIMIT ?`,
-    [now, now - MAX_IDLE_MS, now - MIN_IDLE_MS, Math.min(limit, dailyCap - sentToday)],
+    internalChannel
+      ? [internalChannel, now, now - MAX_IDLE_MS, now - MIN_IDLE_MS, Math.min(limit, dailyCap - sentToday)]
+      : [now, now - MAX_IDLE_MS, now - MIN_IDLE_MS, Math.min(limit, dailyCap - sentToday)],
   );
   if (rows.length === 0) return empty;
 

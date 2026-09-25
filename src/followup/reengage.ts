@@ -74,6 +74,9 @@ export async function runReengage(
     )?.n ?? 0;
   if (sentToday >= dailyCap) return empty;
 
+  // env.INTERNAL_CHANNEL (equipo interno, no clientes): nunca lo alcanza un
+  // reenganche de lead frío, igual que Instagram queda fuera por su razón.
+  const internalChannel = env.INTERNAL_CHANNEL?.trim();
   const rows = await db.all<CandidateRow>(
     `SELECT c.id, c.channel, c.channel_user_id, c.display_name,
        i.sale_opportunity,
@@ -85,6 +88,7 @@ export async function runReengage(
      WHERE re.conversation_id IS NULL
        AND c.open_ticket_id IS NULL
        AND c.channel != 'instagram'
+       ${internalChannel ? "AND c.channel != ?" : ""}
        AND (c.paused_until IS NULL OR c.paused_until < ?)
      GROUP BY c.id
      HAVING last_user_at IS NOT NULL
@@ -92,7 +96,9 @@ export async function runReengage(
        AND (COALESCE(i.sale_opportunity, 0) = 1 OR kw_hits > 0)
      ORDER BY COALESCE(i.sale_opportunity, 0) DESC
      LIMIT ?`,
-    [now, now - MIN_COLD_MS, now - MAX_COLD_MS, Math.min(limit, dailyCap - sentToday)],
+    internalChannel
+      ? [internalChannel, now, now - MIN_COLD_MS, now - MAX_COLD_MS, Math.min(limit, dailyCap - sentToday)]
+      : [now, now - MIN_COLD_MS, now - MAX_COLD_MS, Math.min(limit, dailyCap - sentToday)],
   );
   if (rows.length === 0) return empty;
 

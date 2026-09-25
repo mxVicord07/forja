@@ -170,6 +170,29 @@ describe("analyzeConversations", () => {
     await analyzeConversations(env, { limit: 1 });
     expect(await countPending(env)).toBe(1);
   });
+
+  it("con INTERNAL_CHANNEL configurado, ese canal nunca entra a la cola de análisis", async () => {
+    // seedIdleConversation ya crea sus conversaciones por "telegram".
+    await seedIdleConversation("equipo1");
+    const envInternal = { ...env, INTERNAL_CHANNEL: "telegram" } as Env;
+
+    expect(await countPending(envInternal)).toBe(0);
+    const result = await analyzeConversations(envInternal);
+    expect(result.analyzed).toBe(0);
+    expect(generateTextMock).not.toHaveBeenCalled();
+  });
+
+  it("INTERNAL_CHANNEL no afecta a otros canales", async () => {
+    await convs.getOrCreate("whatsapp", "cliente1");
+    const conv = await convs.getOrCreate("whatsapp", "cliente1");
+    const old = Date.now() - IDLE_MS - 60_000;
+    await msgs.append(conv.id, "user", "Hola", { createdAt: old - 2000 });
+    await msgs.append(conv.id, "assistant", "¡Hola!", { createdAt: old - 1000 });
+    await convs.touchLastMessage(conv.id, old);
+
+    const envInternal = { ...env, INTERNAL_CHANNEL: "telegram" } as Env;
+    expect(await countPending(envInternal)).toBe(1);
+  });
 });
 
 describe("parseInsightJson", () => {

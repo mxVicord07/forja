@@ -146,7 +146,7 @@ export class SupportAgent extends Agent<Env, SupportAgentState> {
     // se lee cfgEarly.bovedaEnabled para decidir si archivar el media entrante.
     let cfgEarly: Awaited<ReturnType<typeof resolveAgentConfig>> | null = null;
     try {
-      cfgEarly = await resolveAgentConfig(this.env, []);
+      cfgEarly = await resolveAgentConfig(this.env, [], payload.channel);
       if (cfgEarly.typingIndicator && !cfgEarly.botPaused) {
         const ch = payload.channel as ChannelId;
         await showTypingSafe(
@@ -242,7 +242,7 @@ export class SupportAgent extends Agent<Env, SupportAgentState> {
 
     // Resolve effective config (D1 settings overlaid on env defaults).
     // We need at least bot_paused (to decide whether to reply) and the buffer.
-    const cfg = await resolveAgentConfig(this.env, []);
+    const cfg = await resolveAgentConfig(this.env, [], payload.channel);
 
     // Owner paused the bot via the dashboard → keep the message buffered but
     // stay silent: do NOT arm the alarm, so alarm() never runs.
@@ -378,7 +378,7 @@ export class SupportAgent extends Agent<Env, SupportAgentState> {
     const toolNames = Object.keys(tools);
 
     // Resolve effective config (D1 settings overlaid on env defaults).
-    const cfg = await resolveAgentConfig(this.env, toolNames);
+    const cfg = await resolveAgentConfig(this.env, toolNames, this.state.channel);
 
     // ── "Escribiendo…" mientras el bot piensa ─────────────────────────────
     // El indicador ya se encendió al recibir el mensaje (ver ingest), pero

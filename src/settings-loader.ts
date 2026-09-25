@@ -2,7 +2,7 @@ import type { Env } from "./env";
 import { Db } from "./db/client";
 import { SettingsRepo, SETTING_KEYS } from "./db/settings";
 import { pauseState } from "./lib/pause-state";
-import { systemPromptFromEnv } from "./system-prompt";
+import { systemPromptFromEnv, renderInternalSystemPrompt } from "./system-prompt";
 import { renderBusinessContext, renderBusinessHoursBlock, type BusinessHours } from "./businessContext";
 import { sanitizeFaqs, renderFaqsBlock } from "./faqs";
 import {
@@ -142,7 +142,11 @@ function parseSetting<T>(raw: string | undefined, sanitize: (v: unknown) => T): 
  * Resolve the effective agent config by overlaying D1 `settings` on top of env
  * defaults. Anything empty/absent in settings falls back to the env/default.
  */
-export async function resolveAgentConfig(env: Env, toolNames: string[]): Promise<AgentConfig> {
+export async function resolveAgentConfig(
+  env: Env,
+  toolNames: string[],
+  channel?: string,
+): Promise<AgentConfig> {
   const repo = new SettingsRepo(new Db(env.DB));
   const settings = await repo.all();
 
@@ -260,6 +264,12 @@ export async function resolveAgentConfig(env: Env, toolNames: string[]): Promise
     if (!Number.isNaN(t)) temperature = clamp(t, 0, 1);
   }
 
+  // Canal interno del equipo (INTERNAL_CHANNEL, env.ts): el prompt generado
+  // arriba y sus tools quedan descartados para este turno — ver
+  // renderInternalSystemPrompt. Vacío = comportamiento idéntico al de hoy.
+  const internalChannel = env.INTERNAL_CHANNEL?.trim();
+  const isInternalChannel = !!internalChannel && internalChannel === channel;
+
   const budgetRaw = get(SETTING_KEYS.monthlyBudget);
   let monthlyBudgetUsd: number | undefined;
   if (budgetRaw === undefined) {
@@ -275,13 +285,13 @@ export async function resolveAgentConfig(env: Env, toolNames: string[]): Promise
   }
 
   return {
-    systemPrompt,
+    systemPrompt: isInternalChannel ? renderInternalSystemPrompt(env.BUSINESS_NAME) : systemPrompt,
     bufferMs,
     maxChunks,
     interChunkDelayMs,
     modelOverride,
     botPaused,
-    enabledToolNames,
+    enabledToolNames: isInternalChannel ? [] : enabledToolNames,
     temperature,
     monthlyBudgetUsd,
     llm: llmOverridesFrom(settings),

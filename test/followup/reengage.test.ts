@@ -98,6 +98,13 @@ it("reengancha un lead frío en Telegram (free-form out-of-window)", async () =>
   expect(sendReplyMock).toHaveBeenCalledTimes(1);
 });
 
+it("con INTERNAL_CHANNEL=telegram, ese canal nunca recibe reenganche (aunque sea el único free-form)", async () => {
+  await seedHot("equipo1", "telegram");
+  const r = await runReengage({ ...env, INTERNAL_CHANNEL: "telegram" } as Env, { now: NOW });
+  expect(r).toEqual({ sent: 0, skipped: 0, errors: 0 });
+  expect(sendReplyMock).not.toHaveBeenCalled();
+});
+
 it("en WhatsApp fuera de ventana → skip, no quema el claim (sin plantilla configurada)", async () => {
   await seedHot("a", "twilio");
   const r = await runReengage(env, { now: NOW });

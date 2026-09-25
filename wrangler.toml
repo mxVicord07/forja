@@ -64,6 +64,14 @@ CALCOM_LOCATION = '{"type":"integration","integration":"office365-video"}'
 # instancia DESECHABLE del prospecto, nunca en un bot de cliente real:
 #   DEMO_MODE = "on"
 #
+# Canal interno del equipo (decisions.md, entrada 2026-09-24): OFF por
+# default — sin esto, ningún canal es especial. Al activarlo, ese canal usa
+# un system prompt interno mínimo (sin ventas, sin tools) y queda excluido
+# de insights/follow-up/reenganche/encuestas. Requiere TELEGRAM_BOT_TOKEN ya
+# configurado y es una CONVENCIÓN OPERATIVA, no verificación de identidad:
+# asume que este canal nunca se le da a un cliente.
+#   INTERNAL_CHANNEL = "telegram"
+#
 # Secrets (set with `wrangler secret put <NAME>` — never commit values):
 #   LEAD_EXPORT_WEBHOOK_URL    optional — webhook de n8n que hace el upsert del lead
 #                              en Odoo. Vivia aqui en [vars] hasta 2026-08-19, pero

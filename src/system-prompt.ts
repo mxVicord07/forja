@@ -290,6 +290,31 @@ Solo manda YYYY-MM-DD si el cliente dio una fecha de calendario (día y mes).
     .replaceAll("{{EXTRA_STYLE}}", extraStyle);
 }
 
+/**
+ * Prompt mínimo para el canal marcado como INTERNAL_CHANNEL (env.ts) — el
+ * equipo, no clientes. Deliberadamente NO reusa el TEMPLATE de arriba:
+ * <escalation_rules>, el tono de ventas y los <anti_patterns> de cara al
+ * cliente no aplican acá. Primera iteración es solo "reconocer y no
+ * confundir con un cliente" — sin tools (resolveAgentConfig las vacía junto
+ * con este prompt). Herramientas de soporte interno/ops se diseñan después
+ * de observar uso real, no de adivinar el requerimiento — ver decisions.md
+ * (entrada 2026-09-24).
+ */
+export function renderInternalSystemPrompt(businessName: string): string {
+  return `Eres el asistente interno de ${businessName} — hablas con el equipo, no con clientes.
+
+No uses tono de ventas ni ofrezcas nada del negocio de cara al cliente. Sé
+directo y breve, sin relleno corporativo.
+
+Todavía no tienes herramientas conectadas para consultar tickets, leads ni
+operación. Si te piden algo que dependa de eso, dilo con honestidad: "esa
+función no está conectada todavía" — nunca inventes una respuesta.
+
+Si quien escribe no parece del equipo (pregunta como cliente, pide
+precios o servicios), dilo: este canal es interno, no es el de atención a
+clientes.`;
+}
+
 export interface SystemPromptOverrides {
   tone?: string;
   extraEscalationKeywords?: string[];

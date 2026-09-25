@@ -331,3 +331,31 @@ describe("resolveAgentConfig — monthly_budget default (Forja Inbox, adoptado d
     expect(cfg.monthlyBudgetUsd).toBe(10);
   });
 });
+
+describe("resolveAgentConfig — INTERNAL_CHANNEL (equipo interno, no clientes)", () => {
+  it("sin INTERNAL_CHANNEL, cualquier canal usa el prompt normal con sus tools", async () => {
+    const cfg = await resolveAgentConfig(env, TOOLS, "telegram");
+    expect(cfg.systemPrompt).toContain("<role>");
+    expect(cfg.enabledToolNames).toEqual(TOOLS);
+  });
+
+  it("con INTERNAL_CHANNEL, el canal marcado usa el prompt interno y no trae tools", async () => {
+    const cfg = await resolveAgentConfig({ ...env, INTERNAL_CHANNEL: "telegram" }, TOOLS, "telegram");
+    expect(cfg.systemPrompt).toContain("asistente interno");
+    expect(cfg.systemPrompt).not.toContain("<role>");
+    expect(cfg.enabledToolNames).toEqual([]);
+  });
+
+  it("con INTERNAL_CHANNEL configurado, otro canal (whatsapp) sigue con el prompt normal", async () => {
+    const cfg = await resolveAgentConfig({ ...env, INTERNAL_CHANNEL: "telegram" }, TOOLS, "whatsapp");
+    expect(cfg.systemPrompt).toContain("<role>");
+    expect(cfg.enabledToolNames).toEqual(TOOLS);
+  });
+
+  it("el prompt interno gana incluso sobre un system_prompt_override manual (son prompts para audiencias distintas)", async () => {
+    await repo.set(SETTING_KEYS.systemPromptOverride, "MI PROMPT CUSTOM PARA CLIENTES");
+    const cfg = await resolveAgentConfig({ ...env, INTERNAL_CHANNEL: "telegram" }, TOOLS, "telegram");
+    expect(cfg.systemPrompt).toContain("asistente interno");
+    expect(cfg.systemPrompt).not.toBe("MI PROMPT CUSTOM PARA CLIENTES");
+  });
+});
