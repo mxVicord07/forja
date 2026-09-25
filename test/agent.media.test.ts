@@ -622,3 +622,61 @@ describe("SupportAgent.ingest — bot_paused (settings)", () => {
     expect(alarmAt - before).toBeLessThan(2_000);
   });
 });
+
+describe("SupportAgent.ingest — isOwnerMessage vs. canal interno (hallazgo 2026-09-25)", () => {
+  beforeEach(() => {
+    vi.restoreAllMocks();
+    stubSettings();
+  });
+
+  it("sin INTERNAL_CHANNEL, un mensaje del dueño pausa el bot 1h y NO se buferea (comportamiento previo intacto)", async () => {
+    const { agent } = makeAgent();
+    stubConversations();
+    const setPausedSpy = vi.spyOn(ConversationsRepo.prototype, "setPausedUntil").mockResolvedValue(undefined);
+
+    await agent.ingest({
+      channel: "telegram",
+      channelUserId: "owner1",
+      text: "tomo el control de esta conversación",
+      isOwnerMessage: true,
+    });
+
+    expect(setPausedSpy).toHaveBeenCalledWith("conv-1", expect.any(Number));
+    expect(agent.state.pendingMessages).toHaveLength(0);
+  });
+
+  it("con INTERNAL_CHANNEL=telegram, un mensaje del dueño por ese canal se procesa normal — NO pausa", async () => {
+    const { agent, env } = makeAgent();
+    env.INTERNAL_CHANNEL = "telegram";
+    stubConversations();
+    const setPausedSpy = vi.spyOn(ConversationsRepo.prototype, "setPausedUntil").mockResolvedValue(undefined);
+
+    await agent.ingest({
+      channel: "telegram",
+      channelUserId: "owner1",
+      text: "hola, dame un resumen",
+      isOwnerMessage: true,
+    });
+
+    expect(setPausedSpy).not.toHaveBeenCalled();
+    expect(agent.state.pendingMessages).toHaveLength(1);
+    expect(agent.state.pendingMessages[0].text).toBe("hola, dame un resumen");
+  });
+
+  it("con INTERNAL_CHANNEL configurado para OTRO canal, el mensaje del dueño en telegram sigue pausando", async () => {
+    const { agent, env } = makeAgent();
+    env.INTERNAL_CHANNEL = "whatsapp";
+    stubConversations();
+    const setPausedSpy = vi.spyOn(ConversationsRepo.prototype, "setPausedUntil").mockResolvedValue(undefined);
+
+    await agent.ingest({
+      channel: "telegram",
+      channelUserId: "owner1",
+      text: "tomo el control",
+      isOwnerMessage: true,
+    });
+
+    expect(setPausedSpy).toHaveBeenCalledWith("conv-1", expect.any(Number));
+    expect(agent.state.pendingMessages).toHaveLength(0);
+  });
+});

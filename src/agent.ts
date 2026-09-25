@@ -89,8 +89,17 @@ export class SupportAgent extends Agent<Env, SupportAgentState> {
       conversationId: conv.id,
     });
 
-    // Owner intervened → pause the bot, do NOT process this as user input
-    if (payload.isOwnerMessage) {
+    // Owner intervened → pause the bot, do NOT process this as user input.
+    // Exception: en el canal interno (env.INTERNAL_CHANNEL) no hay ninguna
+    // conversación de cliente que "tomar" — es el propio dueño/equipo
+    // chateando con el modo interno, así que un mensaje del dueño ahí se
+    // procesa normal en vez de pausar 1h en silencio (hallazgo real
+    // 2026-09-25: en Telegram, channel_user_id del dueño === el mismo
+    // OWNER_TELEGRAM_CHAT_ID que ya usa el handoff, así que CUALQUIER
+    // mensaje del dueño en ese chat disparaba esto antes de este fix).
+    const isInternalChannel =
+      !!this.env.INTERNAL_CHANNEL?.trim() && this.env.INTERNAL_CHANNEL.trim() === payload.channel;
+    if (payload.isOwnerMessage && !isInternalChannel) {
       const pausedUntil = Date.now() + 60 * 60 * 1000;
       await convs.setPausedUntil(conv.id, pausedUntil);
       return { acknowledged: true };
