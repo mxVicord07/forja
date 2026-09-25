@@ -44,6 +44,12 @@ DASHBOARD_BASE_URL = "https://birevx-support-bot.victor-m-426.workers.dev"
 WA_PROVIDER = "ycloud"
 YCLOUD_WA_FROM = "+524444237875"
 
+# Canal interno del equipo (decisions.md, entrada 2026-09-24): Telegram es
+# exclusivo del equipo BIRevX en este bot — nunca se le da a un cliente.
+# Confirmado 2026-09-25: los 4 contactos que ya habían escrito por Telegram
+# antes de activar esto eran pruebas del propio Victor, ninguno era cliente.
+INTERNAL_CHANNEL = "telegram"
+
 # Cal.com (agenda real — scheduleAppointment/checkAvailability). Event type
 # "diagnostico" (https://cal.com/birevx/diagnostico), único servicio agendable
 # hoy. CALCOM_API_KEY va como secret (wrangler secret put), nunca acá.
@@ -63,14 +69,6 @@ CALCOM_LOCATION = '{"type":"integration","integration":"office365-video"}'
 # para enseñarle el bot a un prospecto. OFF por default; solo prender en una
 # instancia DESECHABLE del prospecto, nunca en un bot de cliente real:
 #   DEMO_MODE = "on"
-#
-# Canal interno del equipo (decisions.md, entrada 2026-09-24): OFF por
-# default — sin esto, ningún canal es especial. Al activarlo, ese canal usa
-# un system prompt interno mínimo (sin ventas, sin tools) y queda excluido
-# de insights/follow-up/reenganche/encuestas. Requiere TELEGRAM_BOT_TOKEN ya
-# configurado y es una CONVENCIÓN OPERATIVA, no verificación de identidad:
-# asume que este canal nunca se le da a un cliente.
-#   INTERNAL_CHANNEL = "telegram"
 #
 # Secrets (set with `wrangler secret put <NAME>` — never commit values):
 #   LEAD_EXPORT_WEBHOOK_URL    optional — webhook de n8n que hace el upsert del lead
