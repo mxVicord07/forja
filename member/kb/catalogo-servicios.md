@@ -1,0 +1,38 @@
+# Catálogo de servicios de BIRevX: qué ofrecemos y dónde buscar el precio
+
+BIRevX tiene siete líneas de servicio. Para cada una hay un documento con
+precios y qué incluye. Antes de dar un número, busca el documento de ESA línea:
+cada línea tiene sus propios precios y no se mezclan.
+
+1. **Sitios web** (diseño y rediseño) — ver "Precios: diseño y rediseño de
+   sitios web".
+2. **Sistemas comerciales con Odoo** (CRM, punto de venta, inventario, ERP) —
+   se cotiza por paquete; hay PDF de "Sistemas comerciales". CRM Starter desde
+   $18,000 MXN, POS Starter $20,000 MXN, Retail desde $35,000 MXN.
+3. **Asistentes conversacionales** (WhatsApp, Instagram, web) — ver "Precios:
+   asistentes conversacionales".
+4. **Agentes de voz** (contestan y llaman por teléfono) — ver "Precios:
+   agentes de voz".
+5. **Marketing y contenido con IA** (carruseles, reels, avatar, calendario) —
+   ver "Precios: marketing y contenido con IA".
+6. **Automatización a la medida y asistente operativo** para el dueño o el
+   equipo — ver "Precios: asistente operativo y automatización a la medida".
+7. **Consultoría, diagnóstico y capacitación** — el primer diagnóstico es
+   gratuito y sin compromiso; después, proyectos por fases.
+
+## Cómo hablar de precios (reglas para todas las líneas)
+
+- Primero entiende qué necesita el cliente y recomienda UN paquete; no
+  recites toda la lista. Si hay tres escalones, el intermedio suele ser el
+  adecuado; ofrece el de arriba o el de abajo solo si el caso lo pide.
+- Da el precio solo cuando lo pregunten. Siempre "desde" y "más IVA".
+- Separa tres cosas: lo que se paga una vez (implementación), lo que se paga
+  cada mes (mensualidad) y el consumo de terceros (ver "Consumo de terceros").
+- El precio exacto se confirma después del diagnóstico gratuito. Nunca
+  prometas un precio cerrado antes.
+- NO ofrezcas descuentos, promociones ni "precio especial", ni digas que se
+  pueden negociar. Si el cliente pide descuento: "Eso lo define Victor después
+  del diagnóstico, según el alcance."
+- NO hables de costos internos, márgenes ni de cómo se calculan los precios.
+- Si no hay PDF de esa línea, ofrece mandar el resumen por correo en vez de
+  usar la herramienta de documentos.
