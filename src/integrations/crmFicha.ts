@@ -41,6 +41,11 @@ const TIMEOUT_MS = 2500;
 /** Etapas en las que Victor lleva la relación y el bot no negocia. */
 const ETAPAS_DE_VICTOR = new Set(["Qualified", "Proposition", "Won"]);
 
+/** true si la oportunidad está en una etapa cuya relación lleva Victor en persona. */
+export function llevaVictor(f: CrmFicha): boolean {
+  return !!f.lead.etapa_clave && ETAPAS_DE_VICTOR.has(f.lead.etapa_clave);
+}
+
 export async function fetchCrmFicha(
   env: Env,
   who: { conversationId: string; channel: string; channelUserId: string },
@@ -101,7 +106,7 @@ export function renderCrmBlock(f: CrmFicha): string {
     "Úsalo para dar continuidad: no vuelvas a preguntar lo que ya se sabe y no contradigas la propuesta.",
     "Nunca menciones que tienes este registro, ni etapas, etiquetas o notas internas.",
   ];
-  if (l.etapa_clave && ETAPAS_DE_VICTOR.has(l.etapa_clave)) {
+  if (llevaVictor(f)) {
     reglas.push(
       "Victor atiende personalmente a este cliente. Si pide descuento, cambio de precio, de alcance o de condiciones, o quiere cerrar o firmar, no negocies ni des cifras nuevas: dile que Victor lo revisa personalmente y le responde, y usa la herramienta handoffHuman.",
     );

@@ -278,3 +278,60 @@ describe("Cazador de ventas — superpoder Pro", () => {
     expect(notifyOwnerMock).not.toHaveBeenCalled();
   });
 });
+
+describe("Cazador de ventas — consulta la ficha del CRM (diseño v3, 30-oct-2026)", () => {
+  const ficha = (etapa_clave: string, etapa: string) => ({
+    ok: true,
+    encontrado: true,
+    lead: {
+      id: 91, titulo: "Clínica: sistema de citas", tipo: "oportunidad", etapa_clave, etapa, monto: 60500,
+      etiquetas: [], empresa: "Clínica Demo", contacto: "Hugo", resumen_ultima_interaccion: "Pidió precios del asistente.",
+      ultimo_contacto: "2026-10-29", proxima_actividad: null,
+    },
+    cotizacion: null,
+    interacciones: [],
+  });
+
+  it("si la oportunidad la lleva Victor (Propuesta), no le escribe al cliente: avisa a Victor una sola vez", async () => {
+    const id = await seed("victor", { channel: "whatsapp" });
+    await markHot(id);
+    const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response(JSON.stringify(ficha("Proposition", "Propuesta"))));
+    const crmEnv = { ...env, CRM_FICHA_URL: "https://n8n.example/ficha", YCLOUD_API_KEY: "k" } as Env;
+
+    const r1 = await runFollowups(crmEnv, { now: NOW });
+    expect(sendReplyMock).not.toHaveBeenCalled();
+    expect(generateTextMock).not.toHaveBeenCalled();
+    expect(notifyOwnerMock).toHaveBeenCalledTimes(1);
+    expect(notifyOwnerMock.mock.calls[0][1].summary).toContain("Propuesta");
+    expect(r1.sent).toBe(0);
+
+    // La hora siguiente no vuelve a avisar: el aviso también reclama el toque.
+    await runFollowups(crmEnv, { now: NOW + 60 * 60 * 1000 });
+    expect(notifyOwnerMock).toHaveBeenCalledTimes(1);
+    fetchSpy.mockRestore();
+  });
+
+  it("en Seguimiento sí escribe, y el mensaje se redacta con el contexto del CRM", async () => {
+    const id = await seed("seguimiento", { channel: "whatsapp" });
+    await markHot(id);
+    const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response(JSON.stringify(ficha("Seguimiento", "Seguimiento"))));
+
+    await runFollowups({ ...env, CRM_FICHA_URL: "https://n8n.example/ficha", YCLOUD_API_KEY: "k" } as Env, { now: NOW });
+
+    expect(sendReplyMock).toHaveBeenCalledTimes(1);
+    const prompt = (generateTextMock.mock.calls[0][0] as { prompt: string }).prompt;
+    expect(prompt).toContain("Pidió precios del asistente.");
+    fetchSpy.mockRestore();
+  });
+
+  it("sin ficha (n8n caído o cliente nuevo) escribe como siempre", async () => {
+    const id = await seed("sinficha", { channel: "whatsapp" });
+    await markHot(id);
+    const fetchSpy = vi.spyOn(globalThis, "fetch").mockRejectedValue(new Error("caído"));
+
+    await runFollowups({ ...env, CRM_FICHA_URL: "https://n8n.example/ficha", YCLOUD_API_KEY: "k" } as Env, { now: NOW });
+
+    expect(sendReplyMock).toHaveBeenCalledTimes(1);
+    fetchSpy.mockRestore();
+  });
+});

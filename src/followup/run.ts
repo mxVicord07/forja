@@ -31,6 +31,7 @@ import { pickAdapter } from "../replies/sender";
 import { notifyOwner } from "../tools/handoffHuman";
 import { isPro } from "../config";
 import type { ChannelId } from "../channels/shared";
+import { fetchCrmFicha, llevaVictor, renderCrmBlock } from "../integrations/crmFicha";
 
 /** Ventana de elegibilidad medida desde el último mensaje del cliente. */
 export const MIN_IDLE_MS = 3 * 60 * 60 * 1000; // 3 h
@@ -170,13 +171,38 @@ export async function runFollowups(
   let errors = 0;
 
   for (const cand of candidates) {
+    // Ficha del CRM (Odoo vía n8n, diseño v3): si la oportunidad ya la lleva
+    // Victor (Calificado, Propuesta o Ganado), el bot no le escribe al
+    // cliente; le avisa a Victor que se enfrió. Sin ficha, sigue como antes.
+    const ficha = await fetchCrmFicha(env, {
+      conversationId: cand.id,
+      channel: cand.channel,
+      channelUserId: cand.channel_user_id,
+    });
+    const deVictor = !!ficha && llevaVictor(ficha);
+
     // Claim ANTES de enviar: si otra corrida (o un tick concurrente) ya lo
-    // tomó, INSERT OR IGNORE no escribe y saltamos — imposible duplicar.
+    // tomó, INSERT OR IGNORE no escribe y saltamos — imposible duplicar. El
+    // aviso a Victor también reclama, para no repetirlo cada hora.
     const claim = await db.run(
       "INSERT OR IGNORE INTO followup_sends (conversation_id, reason, sent_at) VALUES (?, ?, ?)",
-      [cand.id, cand.reason, now],
+      [cand.id, deVictor ? "victor" : cand.reason, now],
     );
     if ((claim.meta.changes ?? 0) === 0) {
+      skipped++;
+      continue;
+    }
+
+    if (ficha && deVictor) {
+      const l = ficha.lead;
+      await notifyOwner(env, {
+        reason: "Cazador de ventas · te toca a ti",
+        summary:
+          `${cand.display_name ?? "Un cliente"} dejó de responder por ${cand.channel}. ` +
+          `Su oportunidad "${l.titulo}" está en ${l.etapa ?? "una etapa tuya"}, así que no le escribí: esa relación la llevas tú.` +
+          (l.resumen_ultima_interaccion ? `\n\nÚltima conversación: ${l.resumen_ultima_interaccion}` : ""),
+        ticketId: `hunter:${cand.id}`,
+      }).catch((e) => console.error("[followup] notifyOwner failed:", e));
       skipped++;
       continue;
     }
@@ -193,7 +219,7 @@ export async function runFollowups(
 
 Este cliente mostró interés y luego dejó de responder. ${REASON_HINT[cand.reason]}
 ${cand.display_name ? `Se llama ${cand.display_name}.` : ""}
-${businessContext ? `\nSobre el negocio (para que suenes tú, NO lo copies literal):\n${businessContext}\n` : ""}
+${businessContext ? `\nSobre el negocio (para que suenes tú, NO lo copies literal):\n${businessContext}\n` : ""}${ficha ? `\n${renderCrmBlock(ficha)}\n` : ""}
 Últimos mensajes:
 ${transcript}
 
