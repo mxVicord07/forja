@@ -24,6 +24,7 @@ import { CustomerFactsRepo } from "../db/facts";
 import { createModel } from "../llm/provider";
 import { loadLlmOverrides } from "../settings-loader";
 import { maybeAlertRisk } from "./alerts";
+import { pushConversationSummary } from "../tools/leadExport";
 
 /** A conversation counts as "closed" after this much silence. */
 export const IDLE_MS = 3 * 60 * 60 * 1000; // 3h
@@ -58,6 +59,9 @@ export interface AnalyzeResult {
 
 interface PendingConv {
   id: string;
+  channel: string;
+  channel_user_id: string;
+  last_message_at: number;
   open_tickets: number;
 }
 
@@ -71,7 +75,7 @@ async function pickPending(
   internalChannel?: string,
 ): Promise<PendingConv[]> {
   return db.all<PendingConv>(
-    `SELECT c.id,
+    `SELECT c.id, c.channel, c.channel_user_id, c.last_message_at,
        (SELECT COUNT(*) FROM tickets t
          WHERE t.conversation_id = c.id AND t.status != 'resolved') as open_tickets
      FROM conversations c
@@ -219,6 +223,21 @@ export async function analyzeConversations(
       await insights.upsert(input);
       if (insight.customer_facts.length > 0) {
         await new CustomerFactsRepo(db).addMany(conv.id, insight.customer_facts);
+      }
+
+      // Resumen al CRM (Odoo, vía el Upsert de n8n): la historia de lo que el
+      // cliente habló con el bot queda en su oportunidad. Fail-soft por
+      // contrato — nunca cuenta como error del Analista.
+      if (env.LEAD_EXPORT_WEBHOOK_URL) {
+        await pushConversationSummary(env, {
+          conversationId: conv.id,
+          channel: conv.channel,
+          channelUserId: conv.channel_user_id,
+          summary: insight.summary,
+          topics: insight.topics,
+          saleOpportunity: insight.sale_opportunity,
+          lastMessageAt: conv.last_message_at,
+        });
       }
 
       // [Vigilante] Alerta de riesgo (Pro): cliente molesto o venta abierta

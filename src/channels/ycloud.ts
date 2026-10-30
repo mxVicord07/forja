@@ -62,10 +62,27 @@ interface YCloudInboundMessage {
   };
 }
 
+// Ecos de coexistencia: el número vive a la vez en la app WhatsApp Business y
+// en la API. Lo que el dueño manda desde el teléfono llega como eco
+// (`from` = negocio, `to` = cliente). YCloud documenta dos contratos; se
+// aceptan ambos. Verificado con tráfico real (30-oct-2026, número de BIRevX
+// reconectado por coexistencia): llega `whatsapp.smb.message.echoes`, aun con
+// el endpoint suscrito solo a `whatsapp.echo_message.created`.
+const ECHO_EVENTS: ReadonlySet<string> = new Set(["whatsapp.smb.message.echoes", "whatsapp.echo_message.created"]);
+
+interface YCloudEchoMessage {
+  id?: string;
+  from?: string;
+  to?: string;
+  type?: string;
+  text?: { body?: string };
+}
+
 interface YCloudEvent {
   id?: string;
   type?: string;
   whatsappInboundMessage?: YCloudInboundMessage;
+  whatsappMessage?: YCloudEchoMessage;
 }
 
 /** URL firmada del proxy de media (o null si falta secret/base). */
@@ -91,6 +108,7 @@ export async function parseYCloudEvent(
   origin: string,
 ): Promise<IncomingMessage | null> {
   const event = body as YCloudEvent;
+  if (event?.type && ECHO_EVENTS.has(event.type)) return parseEcho(event);
   if (event?.type !== INBOUND_EVENT) return null;
 
   const m = event.whatsappInboundMessage;
@@ -138,6 +156,27 @@ export async function parseYCloudEvent(
     audioUrl,
     imageUrl,
     isOwnerMessage: false,
+    receivedAt: Date.now(),
+    rawPayload: event,
+  };
+}
+
+/**
+ * Eco de un mensaje que el dueño mandó desde la app del teléfono. Se entrega
+ * como mensaje del dueño en la conversación del cliente (`to`): el agente
+ * pausa al bot una hora ahí, igual que cuando el dueño interviene en otros
+ * canales, y no lo procesa como entrada del cliente.
+ */
+function parseEcho(event: YCloudEvent): IncomingMessage | null {
+  const m = event.whatsappMessage;
+  console.log("ycloud echo:", JSON.stringify({ event: event.type, type: m?.type, hasTo: !!m?.to }));
+  if (!m?.to) return null;
+  return {
+    channel: "whatsapp",
+    channelUserId: normalizePhone(m.to),
+    providerMessageId: m.id,
+    text: m.text?.body || undefined,
+    isOwnerMessage: true,
     receivedAt: Date.now(),
     rawPayload: event,
   };

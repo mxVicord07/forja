@@ -157,6 +157,38 @@ describe("parseYCloudEvent", () => {
     expect(out!.text).toBe("Sí");
   });
 
+  // Coexistencia (app WhatsApp Business + API en el mismo número): cuando el
+  // dueño contesta desde el teléfono, YCloud manda un eco con el mensaje
+  // saliente. `from` es el negocio y `to` el cliente: el cliente es quien
+  // identifica la conversación que hay que pausar.
+  const echo = (type: string, msg: Record<string, unknown>) => ({ id: "evt_echo", type, whatsappMessage: msg });
+
+  it("el eco de la app (smb.message.echoes) es mensaje del dueño en la conversación del cliente", async () => {
+    const out = await parseYCloudEvent(
+      echo("whatsapp.smb.message.echoes", {
+        id: "m1", from: "+524444237875", to: "+524441796793", type: "text", text: { body: "te escribo yo" },
+      }),
+      env, ORIGIN,
+    );
+    expect(out).toMatchObject({
+      channel: "whatsapp", channelUserId: "524441796793", isOwnerMessage: true, text: "te escribo yo",
+    });
+  });
+
+  it("acepta también el eco genérico (echo_message.created)", async () => {
+    const out = await parseYCloudEvent(
+      echo("whatsapp.echo_message.created", { from: "+524444237875", to: "+524441796793", type: "image" }),
+      env, ORIGIN,
+    );
+    expect(out).toMatchObject({ channelUserId: "524441796793", isOwnerMessage: true });
+  });
+
+  it("ignora un eco sin destinatario", async () => {
+    expect(
+      await parseYCloudEvent(echo("whatsapp.smb.message.echoes", { from: "+524444237875", type: "text" }), env, ORIGIN),
+    ).toBeNull();
+  });
+
   it("es defensiva si image/audio llegan sin link", async () => {
     expect(
       await parseYCloudEvent(evt({ from: "+525512345678", type: "image", image: { caption: "sin link" } }), env, ORIGIN),

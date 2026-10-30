@@ -627,6 +627,8 @@ describe("SupportAgent.ingest — isOwnerMessage vs. canal interno (hallazgo 202
   beforeEach(() => {
     vi.restoreAllMocks();
     stubSettings();
+    // El mensaje del dueño ahora se guarda en el historial (rol owner).
+    vi.spyOn(MessagesRepo.prototype, "append").mockResolvedValue("m0" as any);
   });
 
   it("sin INTERNAL_CHANNEL, un mensaje del dueño pausa el bot 1h y NO se buferea (comportamiento previo intacto)", async () => {
@@ -642,6 +644,34 @@ describe("SupportAgent.ingest — isOwnerMessage vs. canal interno (hallazgo 202
     });
 
     expect(setPausedSpy).toHaveBeenCalledWith("conv-1", expect.any(Number));
+    expect(agent.state.pendingMessages).toHaveLength(0);
+  });
+
+  it("si el dueño contesta mientras el bot esperaba (buffer), el bot no responde y ambos mensajes quedan en el historial", async () => {
+    // Coexistencia de WhatsApp (30-oct-2026): el cliente escribe, el dueño
+    // contesta desde la app dentro de la ventana del buffer. Antes el alarm ya
+    // armado contestaba igual, encima del dueño.
+    const { agent } = makeAgent();
+    stubConversations();
+    vi.spyOn(ConversationsRepo.prototype, "setPausedUntil").mockResolvedValue(undefined);
+    vi.spyOn(ConversationsRepo.prototype, "touchLastMessage").mockResolvedValue(undefined);
+    const appendSpy = vi.spyOn(MessagesRepo.prototype, "append").mockResolvedValue("m1" as any);
+    agent.setState({
+      ...agent.state,
+      pendingMessages: [{ text: "¿cuánto cuesta?", receivedAt: Date.now() }],
+    });
+
+    await agent.ingest({
+      channel: "whatsapp",
+      channelUserId: "524441796793",
+      text: "te escribo yo en un momento",
+      isOwnerMessage: true,
+    });
+
+    expect(appendSpy.mock.calls.map((c) => [c[1], c[2]])).toEqual([
+      ["user", "¿cuánto cuesta?"],
+      ["owner", "te escribo yo en un momento"],
+    ]);
     expect(agent.state.pendingMessages).toHaveLength(0);
   });
 

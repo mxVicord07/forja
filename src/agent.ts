@@ -28,6 +28,10 @@ import { SettingsRepo, SETTING_KEYS } from "./db/settings";
 import { renderBusinessContext } from "./businessContext";
 import { maskTelegramToken, unmaskTelegramToken } from "./telegramFiles";
 import { mapMessageToAiTurn } from "./history";
+import { fetchCrmFicha, renderCrmBlock, type CrmFicha } from "./integrations/crmFicha";
+
+/** Cada cuánto se vuelve a pedir la ficha del CRM en una conversación viva. */
+const CRM_FICHA_TTL_MS = 20 * 60 * 1000;
 
 export interface SupportAgentState {
   conversationId: string | null;
@@ -43,6 +47,10 @@ export interface SupportAgentState {
    *  Lo exige el indicador de "escribiendo…" cuando se re-enciende desde el
    *  alarm, ya fuera del webhook que lo trajo. */
   lastProviderMessageId: string;
+  /** Ficha del CRM (Odoo) en caché y cuándo se pidió. Opcionales: el estado
+   *  persistido de conversaciones anteriores al 30-oct-2026 no los trae. */
+  crmFicha?: CrmFicha | null;
+  crmFichaAt?: number;
 }
 
 export interface AgentIncomingPayload {
@@ -102,6 +110,16 @@ export class SupportAgent extends Agent<Env, SupportAgentState> {
     if (payload.isOwnerMessage && !isInternalChannel) {
       const pausedUntil = Date.now() + 60 * 60 * 1000;
       await convs.setPausedUntil(conv.id, pausedUntil);
+      // Si el cliente escribió y el dueño contestó dentro de la ventana del
+      // buffer (coexistencia de WhatsApp: el dueño responde desde la app), el
+      // alarm ya armado contestaría encima del dueño. Se vacía el buffer
+      // guardando lo del cliente, y la respuesta del dueño queda en el
+      // historial para que el bot la tenga en contexto al retomar.
+      const msgs = new MessagesRepo(db);
+      const pendingText = this.state.pendingMessages.map((m) => m.text).join("\n").trim();
+      if (pendingText) await msgs.append(conv.id, "user", pendingText);
+      this.setState({ ...this.state, pendingMessages: [] });
+      if (payload.text) await msgs.append(conv.id, "owner", payload.text);
       return { acknowledged: true };
     }
 
@@ -488,6 +506,40 @@ export class SupportAgent extends Agent<Env, SupportAgentState> {
         }
       } catch (e) {
         console.warn("[SupportAgent] customer facts lookup failed:", e);
+      }
+
+      // Ficha del CRM (Odoo, vía n8n): etapa, propuesta y últimas
+      // interacciones, para que el bot dé continuidad y no negocie lo que
+      // lleva Victor. Mismo trato que los facts: bloque sin caché de prompt y
+      // nunca en el camino crítico. No aplica al canal interno del equipo.
+      const isInternal = !!this.env.INTERNAL_CHANNEL?.trim() && this.env.INTERNAL_CHANNEL.trim() === this.state.channel;
+      if (this.env.CRM_FICHA_URL && !isInternal) {
+        try {
+          const now = Date.now();
+          let ficha = this.state.crmFicha ?? null;
+          const fresca = !this.state.crmFichaAt || now - this.state.crmFichaAt > CRM_FICHA_TTL_MS;
+          if (fresca) {
+            ficha = await fetchCrmFicha(this.env, {
+              conversationId: convId,
+              channel: this.state.channel,
+              channelUserId: this.state.channelUserId,
+            });
+            this.setState({ ...this.state, crmFicha: ficha, crmFichaAt: now });
+          }
+          if (ficha) system.push({ role: "system", content: renderCrmBlock(ficha) });
+          // Sin datos del cliente: solo id de Odoo y etapa, para poder auditar
+          // en `wrangler tail` qué contexto del CRM llevó cada respuesta.
+          console.log(
+            "[crm] ficha:",
+            JSON.stringify(
+              ficha
+                ? { lead: ficha.lead.id, etapa: ficha.lead.etapa_clave, origen: fresca ? "odoo" : "cache" }
+                : { lead: null, origen: fresca ? "odoo" : "cache" },
+            ),
+          );
+        } catch (e) {
+          console.warn("[SupportAgent] crm ficha lookup failed:", e);
+        }
       }
 
       let assistantText = "";

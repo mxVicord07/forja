@@ -1,5 +1,5 @@
-import { describe, it, expect } from "vitest";
-import { parseContactInfo } from "../../src/tools/leadExport";
+import { describe, it, expect, vi, afterEach } from "vitest";
+import { parseContactInfo, pushConversationSummary } from "../../src/tools/leadExport";
 
 describe("parseContactInfo", () => {
   it("caso real de producción: teléfono y email juntos con '/' — no corrompe el teléfono con dígitos del correo", () => {
@@ -49,5 +49,54 @@ describe("parseContactInfo", () => {
     expect(result.phone).toBeUndefined();
     expect(result.email).toBeUndefined();
     expect(result.otherContact).toBe("@tal_negocio");
+  });
+});
+
+describe("pushConversationSummary", () => {
+  const URL_UPSERT = "https://n8n.example/webhook/forja-lead-upsert";
+  const base = {
+    conversationId: "conv-1",
+    channel: "whatsapp",
+    channelUserId: "524441796793",
+    summary: "Preguntó precios del asistente para su clínica; Victor tomó la conversación.",
+    topics: ["precios"],
+    saleOpportunity: true,
+    lastMessageAt: Date.UTC(2026, 9, 30, 21, 53),
+  };
+
+  afterEach(() => vi.restoreAllMocks());
+
+  it("sin webhook configurado no llama a nada", async () => {
+    const spy = vi.spyOn(globalThis, "fetch");
+    expect(await pushConversationSummary({} as any, base)).toBe(false);
+    expect(spy).not.toHaveBeenCalled();
+  });
+
+  it("manda kind resumen con el teléfono en WhatsApp y la fecha del último mensaje", async () => {
+    const spy = vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response(JSON.stringify({ ok: true, accion: "resumen" })));
+    expect(await pushConversationSummary({ LEAD_EXPORT_WEBHOOK_URL: URL_UPSERT } as any, base)).toBe(true);
+    const body = JSON.parse((spy.mock.calls[0][1] as RequestInit).body as string);
+    expect(body).toEqual({
+      kind: "resumen",
+      conversationId: "conv-1",
+      channel: "whatsapp",
+      phone: "524441796793",
+      summary: base.summary,
+      topics: ["precios"],
+      saleOpportunity: true,
+      lastMessageAt: "2026-10-30T21:53:00.000Z",
+    });
+  });
+
+  it("fuera de WhatsApp no manda el id del canal como teléfono", async () => {
+    const spy = vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response(JSON.stringify({ ok: true })));
+    await pushConversationSummary({ LEAD_EXPORT_WEBHOOK_URL: URL_UPSERT } as any, { ...base, channel: "telegram" });
+    const body = JSON.parse((spy.mock.calls[0][1] as RequestInit).body as string);
+    expect(body.phone).toBeUndefined();
+  });
+
+  it("es fail-soft: si n8n falla devuelve false sin lanzar", async () => {
+    vi.spyOn(globalThis, "fetch").mockRejectedValue(new Error("timeout"));
+    expect(await pushConversationSummary({ LEAD_EXPORT_WEBHOOK_URL: URL_UPSERT } as any, base)).toBe(false);
   });
 });

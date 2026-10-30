@@ -377,6 +377,14 @@ export default {
     // de retraso, ventana de 72h. Nunca truena por un lead individual.
     await reconcileExportedLeads(env).catch((e) => console.error("reconcileExportedLeads:", e));
 
+    // Analista cada hora en bots con export al CRM (diseño v3, 30-oct-2026):
+    // el resumen de la conversación llega a Odoo unas 3 h después de que el
+    // cliente deja de escribir, no hasta la corrida nocturna. Solo califica lo
+    // que creció desde su último análisis, así que repetirlo no cuesta de más.
+    if (env.LEAD_EXPORT_WEBHOOK_URL) {
+      await analyzeConversations(env, { limit: 20 }).catch((e) => console.error("insights (hora):", e));
+    }
+
     // Los trabajos nocturnos SOLO corren en el tick diario (3am UTC) — un tick
     // más frecuente (si el miembro lo configura) no debe purgar/analizar de más.
     // Ojo: si NINGÚN cron configurado es DAILY_CRON, estos trabajos no corren

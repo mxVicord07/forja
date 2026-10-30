@@ -94,6 +94,29 @@ describe("analyzeConversations", () => {
     expect(call.prompt).toContain("Negocio Test");
   });
 
+  it("con export a Odoo configurado, manda el resumen de cada conversación calificada", async () => {
+    const conv = await convs.getOrCreate("whatsapp", "524441796793");
+    const old = Date.now() - IDLE_MS - 60_000;
+    await msgs.append(conv.id, "user", "¿Cuánto cuesta un asistente?", { createdAt: old - 2000 });
+    await msgs.append(conv.id, "owner", "Te escribo yo en un momento", { createdAt: old - 1000 });
+    await convs.touchLastMessage(conv.id, old);
+    const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response(JSON.stringify({ ok: true })));
+
+    await analyzeConversations({ ...env, LEAD_EXPORT_WEBHOOK_URL: "https://n8n.example/upsert" } as Env, { limit: 10 });
+
+    expect(fetchSpy).toHaveBeenCalledTimes(1);
+    const body = JSON.parse((fetchSpy.mock.calls[0][1] as RequestInit).body as string);
+    expect(body).toMatchObject({
+      kind: "resumen",
+      conversationId: conv.id,
+      channel: "whatsapp",
+      phone: "524441796793",
+      summary: GRADE.summary,
+      lastMessageAt: new Date(old).toISOString(),
+    });
+    fetchSpy.mockRestore();
+  });
+
   it("skips conversations that are still active (not idle)", async () => {
     const conv = await convs.getOrCreate("telegram", "u2");
     await msgs.append(conv.id, "user", "Hola");

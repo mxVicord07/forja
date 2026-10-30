@@ -113,3 +113,47 @@ export async function exportLeadToOdoo(env: Env, lead: LeadExportInput): Promise
     return { exported: false };
   }
 }
+
+export interface ConversationSummaryInput {
+  conversationId: string;
+  channel: string;
+  channelUserId: string;
+  summary: string;
+  topics: string[];
+  saleOpportunity: boolean;
+  lastMessageAt: number;
+}
+
+/**
+ * Manda el resumen de una conversación calificada por el Analista al mismo
+ * webhook del Upsert, con `kind: "resumen"` (diseño v3, 30-oct-2026). Del
+ * lado de n8n solo ACTUALIZA un lead que ya exista (nunca crea uno por un
+ * resumen): último contacto, resumen y una fila de x_interaccion por día.
+ * Fail-soft como exportLeadToOdoo: devuelve true/false, nunca lanza.
+ */
+export async function pushConversationSummary(env: Env, s: ConversationSummaryInput): Promise<boolean> {
+  if (!env.LEAD_EXPORT_WEBHOOK_URL) return false;
+  try {
+    const res = await fetch(env.LEAD_EXPORT_WEBHOOK_URL, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        kind: "resumen",
+        conversationId: s.conversationId,
+        channel: s.channel,
+        // En WhatsApp el id del canal ES el teléfono; en otros canales no.
+        ...(s.channel === "whatsapp" ? { phone: s.channelUserId } : {}),
+        summary: s.summary,
+        topics: s.topics,
+        saleOpportunity: s.saleOpportunity,
+        lastMessageAt: new Date(s.lastMessageAt).toISOString(),
+      }),
+      signal: AbortSignal.timeout(3000),
+    });
+    const data = (await res.json()) as { ok?: boolean };
+    return !!data?.ok;
+  } catch (err) {
+    console.error("[leadExport] resumen a Odoo falló:", err);
+    return false;
+  }
+}
