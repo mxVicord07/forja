@@ -22,6 +22,8 @@ import { LeadsRepo } from "./db/leads";
 import { exportLeadToOdoo } from "./tools/leadExport";
 import { notifyOwner } from "./tools/handoffHuman";
 import { demoTurnsUsed, demoOverLimit } from "./demo";
+import { chunkReply } from "./replies/chunker";
+import { extraeBotones, botonesATexto } from "./replies/sender";
 
 /** Turnos de visitantes web en 24 h, sumando todas las sesiones (tope de costo). */
 const MAX_WEB_TURNS_PER_DAY = 400;
@@ -220,12 +222,22 @@ export function registerWebRoutes(
     );
     if (!conv) return withCors(c.json({ ok: true, messages: [] }), origin);
     // Lo que escribe el dueño desde el panel (rol owner) también llega al visitante.
-    const rows = await db.all<{ content: string; created_at: number }>(
-      `SELECT content, created_at FROM messages
+    const rows = await db.all<{ role: string; content: string; created_at: number }>(
+      `SELECT role, content, created_at FROM messages
         WHERE conversation_id = ? AND created_at > ? AND role IN ('assistant', 'owner')
         ORDER BY created_at ASC LIMIT 20`,
       [conv.id, after],
     );
-    return withCors(c.json({ ok: true, messages: rows.map((r) => ({ text: r.content, at: r.created_at })) }), origin);
+    // Igual que en WhatsApp: la respuesta del bot sale en burbujas
+    // (chunkReply) y sin marcadores de botones, que en la web van como lista.
+    // Todas las burbujas de un mensaje comparten su `at`: el cursor avanza
+    // por mensaje, así que no se repiten ni se pierden.
+    const messages = rows.flatMap((r) => {
+      if (r.role !== "assistant") return [{ text: r.content, at: r.created_at }];
+      const ext = extraeBotones(chunkReply(r.content));
+      const partes = ext.buttons?.length ? [...ext.chunks, botonesATexto(ext.buttons)] : ext.chunks;
+      return partes.filter((p) => p.trim()).map((text) => ({ text, at: r.created_at }));
+    });
+    return withCors(c.json({ ok: true, messages }), origin);
   });
 }

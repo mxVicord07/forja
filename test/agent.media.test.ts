@@ -601,6 +601,16 @@ describe("SupportAgent.ingest — bot_paused (settings)", () => {
     expect(storage.setAlarm).toHaveBeenCalledTimes(2);
   });
 
+  it("en el chat del sitio (canal web) la espera es corta: el visitante está mirando la pantalla", async () => {
+    stubSettings();
+    const { agent, storage } = makeAgent({ tier: "free" });
+    stubConversations();
+    const before = Date.now();
+    await agent.ingest({ channel: "web", channelUserId: "sesion-1", text: "hola" });
+    const alarmAt = storage.setAlarm.mock.calls[0][0];
+    expect(alarmAt - before).toBeLessThanOrEqual(3_500);
+  });
+
   it("processes almost immediately when a buffered message is stranded", async () => {
     stubSettings();
     const { agent, storage } = makeAgent({ tier: "free" });

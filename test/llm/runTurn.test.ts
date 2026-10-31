@@ -35,6 +35,40 @@ describe("runLlmTurn", () => {
     generateTextMock.mockReset();
   });
 
+  it("con herramientas, devuelve solo el texto del último paso (no la narración previa)", async () => {
+    // Hallazgo real 30-oct-2026 (chat del sitio): el cliente vio
+    // "Déjame consultar…La búsqueda me dio poco, así que…" porque el stream
+    // junta el texto de todos los pasos, incluido el de antes de searchKb.
+    async function* gen() {
+      yield "Déjame consultar qué opciones tenemos.";
+      yield "Te cuento: diseñamos CRM y ERP a la medida.";
+    }
+    streamTextMock.mockImplementation(() => ({
+      textStream: gen(),
+      usage: Promise.resolve({ inputTokens: 10, outputTokens: 4, cachedInputTokens: 0 }),
+      steps: Promise.resolve([
+        { text: "Déjame consultar qué opciones tenemos.", toolCalls: [{ toolName: "searchKb", input: {} }] },
+        { text: "Te cuento: diseñamos CRM y ERP a la medida.", toolCalls: [] },
+      ]),
+    }));
+    const r = await runLlmTurn(ARGS);
+    expect(r.text).toBe("Te cuento: diseñamos CRM y ERP a la medida.");
+    expect(r.toolCallCount).toBe(1);
+  });
+
+  it("si el último paso no trae texto, conserva lo acumulado", async () => {
+    async function* gen() { yield "Listo, quedó tu cita."; }
+    streamTextMock.mockImplementation(() => ({
+      textStream: gen(),
+      usage: Promise.resolve({}),
+      steps: Promise.resolve([
+        { text: "Listo, quedó tu cita.", toolCalls: [{ toolName: "scheduleAppointment", input: {} }] },
+        { text: "", toolCalls: [] },
+      ]),
+    }));
+    expect((await runLlmTurn(ARGS)).text).toBe("Listo, quedó tu cita.");
+  });
+
   it("usa streamText cuando el stream produce texto", async () => {
     streamTextMock.mockImplementation(() => streamOk("buen día"));
     const r = await runLlmTurn(ARGS);

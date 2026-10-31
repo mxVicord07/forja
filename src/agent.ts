@@ -32,6 +32,8 @@ import { fetchCrmFicha, renderCrmBlock, type CrmFicha } from "./integrations/crm
 
 /** Cada cuánto se vuelve a pedir la ficha del CRM en una conversación viva. */
 const CRM_FICHA_TTL_MS = 20 * 60 * 1000;
+/** Ventana de agrupado de mensajes en el chat del sitio (canal web). */
+const WEB_BUFFER_MS = 3_000;
 
 export interface SupportAgentState {
   conversationId: string | null;
@@ -288,9 +290,13 @@ export class SupportAgent extends Agent<Env, SupportAgentState> {
     // "Hola?". If the oldest buffered message is already older than 2x the
     // normal wait, don't wait a whole buffer window again: process almost
     // immediately.
+    // En el chat del sitio (canal web) el visitante mira la pantalla esperando:
+    // la ventana de agrupado de WhatsApp (15 s) ahí se siente rota. 3 s bastan
+    // para juntar dos mensajes seguidos.
+    const bufferMs = payload.channel === "web" ? Math.min(cfg.bufferMs, WEB_BUFFER_MS) : cfg.bufferMs;
     const oldestAt = pending[0]?.receivedAt ?? Date.now();
-    const hasStranded = Date.now() - oldestAt > cfg.bufferMs * 2;
-    const alarmAt = Date.now() + (hasStranded ? 500 : cfg.bufferMs);
+    const hasStranded = Date.now() - oldestAt > bufferMs * 2;
+    const alarmAt = Date.now() + (hasStranded ? 500 : bufferMs);
     const alarmAtSec = Math.floor(alarmAt / 1000);
     this.sql`
       INSERT OR REPLACE INTO cf_agents_schedules

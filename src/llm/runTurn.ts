@@ -59,7 +59,18 @@ async function streamTurn(args: LlmTurnArgs): Promise<LlmTurnResult> {
   }
   const usage = await result.usage;
   const steps = await result.steps;
-  return { text, ...fromUsage(usage), ...fromSteps(steps) };
+  return { text: finalText(text, steps), ...fromUsage(usage), ...fromSteps(steps) };
+}
+
+/**
+ * textStream junta el texto de TODOS los pasos, incluido lo que el modelo dice
+ * antes de usar una herramienta ("Déjame consultar…"), que el cliente no debe
+ * ver. Con varios pasos se responde solo con el último (como generateText);
+ * si ese viene vacío, se conserva lo acumulado para no quedarse sin respuesta.
+ */
+function finalText(streamed: string, steps: any[] | undefined): string {
+  const last = steps && steps.length > 1 ? String(steps[steps.length - 1]?.text ?? "").trim() : "";
+  return last || streamed;
 }
 
 async function generateTurn(args: LlmTurnArgs): Promise<LlmTurnResult> {

@@ -149,6 +149,20 @@ describe("rutas /web/*", () => {
     expect(res.status).toBe(404);
   });
 
+  it("el poll parte la respuesta en burbujas, igual que en WhatsApp", async () => {
+    const { ConversationsRepo } = await import("../src/db/conversations");
+    const { MessagesRepo } = await import("../src/db/messages");
+    const { Db } = await import("../src/db/client");
+    const db = new Db(d1);
+    const conv = await new ConversationsRepo(db).getOrCreate("web", "s-burbujas");
+    await new MessagesRepo(db).append(conv.id, "assistant", "Hola, soy LIA.\n\nHacemos CRM y punto de venta.\n\n¿Qué tipo de negocio tienes?");
+    const res = await req("/web/chat/poll?session=s-burbujas&after=0", { origin: ORIGIN });
+    const { messages } = (await res.json()) as { messages: { text: string; at: number }[] };
+    expect(messages.length).toBeGreaterThan(1);
+    expect(messages.map((m) => m.text).join(" ")).toContain("¿Qué tipo de negocio tienes?");
+    expect(new Set(messages.map((m) => m.at)).size).toBe(1); // mismo cursor: no se repiten ni se pierden
+  });
+
   it("el chat exige el aviso de privacidad aceptado", async () => {
     const res = await req("/web/chat/send", { method: "POST", origin: ORIGIN, body: JSON.stringify({ sessionId: "s1", text: "hola" }) });
     expect(res.status).toBe(400);
