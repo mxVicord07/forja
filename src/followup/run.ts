@@ -31,7 +31,7 @@ import { pickAdapter } from "../replies/sender";
 import { notifyOwner } from "../tools/handoffHuman";
 import { isPro } from "../config";
 import type { ChannelId } from "../channels/shared";
-import { fetchCrmFicha, llevaVictor, renderCrmBlock } from "../integrations/crmFicha";
+import { fetchCrmFicha, llevaVictor, noTocar, renderCrmBlock } from "../integrations/crmFicha";
 
 /** Ventana de elegibilidad medida desde el último mensaje del cliente. */
 export const MIN_IDLE_MS = 3 * 60 * 60 * 1000; // 3 h
@@ -180,15 +180,22 @@ export async function runFollowups(
       channelUserId: cand.channel_user_id,
     });
     const deVictor = !!ficha && llevaVictor(ficha);
+    // El semáforo de Odoo manda sobre todo lo demás: ganado, pidió no ser contactado o en pausa = silencio total.
+    const sinContacto = !!ficha && noTocar(ficha);
 
     // Claim ANTES de enviar: si otra corrida (o un tick concurrente) ya lo
     // tomó, INSERT OR IGNORE no escribe y saltamos — imposible duplicar. El
     // aviso a Victor también reclama, para no repetirlo cada hora.
     const claim = await db.run(
       "INSERT OR IGNORE INTO followup_sends (conversation_id, reason, sent_at) VALUES (?, ?, ?)",
-      [cand.id, deVictor ? "victor" : cand.reason, now],
+      [cand.id, sinContacto ? "no_tocar" : deVictor ? "victor" : cand.reason, now],
     );
     if ((claim.meta.changes ?? 0) === 0) {
+      skipped++;
+      continue;
+    }
+
+    if (sinContacto) {
       skipped++;
       continue;
     }

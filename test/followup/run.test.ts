@@ -311,6 +311,43 @@ describe("Cazador de ventas — consulta la ficha del CRM (diseño v3, 30-oct-20
     fetchSpy.mockRestore();
   });
 
+  it("si el semáforo de contacto dice No tocar (pidió no ser contactado), no escribe ni avisa y no reintenta", async () => {
+    const id = await seed("notocar", { channel: "whatsapp" });
+    await markHot(id);
+    const f = { ...ficha("Seguimiento", "Seguimiento"), semaforo: { codigo: "no_tocar:no_contactar", texto: "No tocar · Pidió no ser contactado", siguiente_toque: null } };
+    const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response(JSON.stringify(f)));
+    const crmEnv = { ...env, CRM_FICHA_URL: "https://n8n.example/ficha", YCLOUD_API_KEY: "k" } as Env;
+
+    const r1 = await runFollowups(crmEnv, { now: NOW });
+    expect(sendReplyMock).not.toHaveBeenCalled();
+    expect(generateTextMock).not.toHaveBeenCalled();
+    expect(notifyOwnerMock).not.toHaveBeenCalled();
+    expect(r1.sent).toBe(0);
+    const claim = await db.first<{ reason: string }>("SELECT reason FROM followup_sends WHERE conversation_id = ?", [id]);
+    expect(claim?.reason).toBe("no_tocar");
+    fetchSpy.mockRestore();
+  });
+
+  it("un contacto reciente en el semáforo NO frena al cazador: esa banda de 0 a 48 h es de Forja", async () => {
+    const id = await seed("reciente", { channel: "whatsapp" });
+    await markHot(id);
+    const f = { ...ficha("Seguimiento", "Seguimiento"), semaforo: { codigo: "esperar:contacto_reciente", texto: "Esperar hasta 2026-11-01", siguiente_toque: "2026-11-01" } };
+    const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response(JSON.stringify(f)));
+    await runFollowups({ ...env, CRM_FICHA_URL: "https://n8n.example/ficha", YCLOUD_API_KEY: "k" } as Env, { now: NOW });
+    expect(sendReplyMock).toHaveBeenCalledTimes(1);
+    fetchSpy.mockRestore();
+  });
+
+  it("si la ficha trae la etapa con nombre en español (Propuesta), también la lleva Victor", async () => {
+    const id = await seed("espanol", { channel: "whatsapp" });
+    await markHot(id);
+    const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response(JSON.stringify(ficha("Propuesta", "Propuesta"))));
+    await runFollowups({ ...env, CRM_FICHA_URL: "https://n8n.example/ficha", YCLOUD_API_KEY: "k" } as Env, { now: NOW });
+    expect(sendReplyMock).not.toHaveBeenCalled();
+    expect(notifyOwnerMock).toHaveBeenCalledTimes(1);
+    fetchSpy.mockRestore();
+  });
+
   it("en Seguimiento sí escribe, y el mensaje se redacta con el contexto del CRM", async () => {
     const id = await seed("seguimiento", { channel: "whatsapp" });
     await markHot(id);

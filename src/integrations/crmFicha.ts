@@ -26,6 +26,8 @@ export interface CrmFicha {
     proxima_actividad: { fecha: string | null; resumen: string | null } | null;
   };
   cotizacion: { folio: string; estado: string; monto_sin_iva: number; vigencia: string | null } | null;
+  /** Semáforo de contacto de Odoo (BRX_Copiloto_Semaforo, 7:00): `codigo` es accion:razon y no cambia; `texto` es para leer. */
+  semaforo?: { codigo: string; texto: string | null; siguiente_toque: string | null } | null;
   interacciones: {
     fecha: string | null;
     canal: string | null;
@@ -38,12 +40,28 @@ export interface CrmFicha {
 /** Tiempo máximo de espera: la ficha nunca debe retrasar la respuesta. */
 const TIMEOUT_MS = 2500;
 
-/** Etapas en las que Victor lleva la relación y el bot no negocia. */
-const ETAPAS_DE_VICTOR = new Set(["Qualified", "Proposition", "Won"]);
+/**
+ * Etapas en las que Victor lleva la relación y el bot no negocia. La ficha ya trae la clave técnica, pero Odoo nombra las
+ * etapas en español y Victor las renombra (Pre-Calificados, Propuesta, Ganado): se aceptan también esos nombres, para que
+ * un renombrado no apague el candado en silencio.
+ */
+const ETAPAS_DE_VICTOR = new Set([
+  "Qualified", "Proposition", "Won",
+  "Calificado", "Pre-Calificados", "Propuesta", "Ganado",
+]);
 
 /** true si la oportunidad está en una etapa cuya relación lleva Victor en persona. */
 export function llevaVictor(f: CrmFicha): boolean {
   return !!f.lead.etapa_clave && ETAPAS_DE_VICTOR.has(f.lead.etapa_clave);
+}
+
+/**
+ * true si el semáforo de contacto de Odoo dice que a esta persona no se le escribe: ganada, pidió no ser contactada o está
+ * en pausa. Un "esperar: contacto reciente" NO cuenta: de 0 a 48 h el toque es de Forja (diseño en SEGUIMIENTO_Forja_Odoo.md).
+ */
+export function noTocar(f: CrmFicha): boolean {
+  const c = f.semaforo?.codigo ?? "";
+  return c.startsWith("no_tocar:") || c === "esperar:pausa";
 }
 
 export async function fetchCrmFicha(
@@ -65,7 +83,7 @@ export async function fetchCrmFicha(
     });
     const data = (await res.json()) as Partial<CrmFicha> & { ok?: boolean; encontrado?: boolean };
     if (!data?.ok || !data.encontrado || !data.lead) return null;
-    return { lead: data.lead, cotizacion: data.cotizacion ?? null, interacciones: data.interacciones ?? [] };
+    return { lead: data.lead, cotizacion: data.cotizacion ?? null, semaforo: data.semaforo ?? null, interacciones: data.interacciones ?? [] };
   } catch (err) {
     console.warn("[crmFicha] no se pudo leer la ficha:", err);
     return null;

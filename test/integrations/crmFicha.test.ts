@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, afterEach } from "vitest";
-import { fetchCrmFicha, renderCrmBlock, type CrmFicha } from "../../src/integrations/crmFicha";
+import { fetchCrmFicha, renderCrmBlock, llevaVictor, noTocar, type CrmFicha } from "../../src/integrations/crmFicha";
 
 const URL_FICHA = "https://n8n.example/webhook/forja-ficha-x";
 
@@ -91,5 +91,28 @@ describe("renderCrmBlock", () => {
   it("en etapa Nuevo no impone la regla de negociación", () => {
     const txt = renderCrmBlock({ ...base, lead: { ...base.lead, etapa_clave: "New", etapa: "Nuevo" }, cotizacion: null });
     expect(txt).not.toContain("handoffHuman");
+  });
+});
+
+describe("llevaVictor y noTocar", () => {
+  const conEtapa = (etapa_clave: string | null): CrmFicha => ({ ...base, lead: { ...base.lead, etapa_clave } });
+  const conSemaforo = (codigo: string | null): CrmFicha => ({ ...base, semaforo: codigo ? { codigo, texto: null, siguiente_toque: null } : null });
+
+  it("llevaVictor entiende la clave técnica y también los nombres en español que Victor puso en Odoo", () => {
+    for (const e of ["Qualified", "Proposition", "Won", "Calificado", "Pre-Calificados", "Propuesta", "Ganado"]) expect(llevaVictor(conEtapa(e))).toBe(true);
+    for (const e of ["New", "Seguimiento", "Nuevos Leads", null]) expect(llevaVictor(conEtapa(e))).toBe(false);
+  });
+
+  it("noTocar solo se activa con los códigos de ganado, no contactar y pausa", () => {
+    for (const c of ["no_tocar:ganado", "no_tocar:no_contactar", "esperar:pausa"]) expect(noTocar(conSemaforo(c))).toBe(true);
+    for (const c of ["esperar:contacto_reciente", "tocar:retomar", "victor:calificado", null]) expect(noTocar(conSemaforo(c))).toBe(false);
+    expect(noTocar(base)).toBe(false); // ficha sin semáforo: todo sigue como antes
+  });
+
+  it("fetchCrmFicha conserva el semáforo que trae la ficha", async () => {
+    const semaforo = { codigo: "no_tocar:ganado", texto: "No tocar · Ganado: ya es cliente", siguiente_toque: null };
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response(JSON.stringify({ ok: true, encontrado: true, ...base, semaforo })));
+    const f = await fetchCrmFicha({ CRM_FICHA_URL: URL_FICHA } as any, { conversationId: "c1", channel: "web", channelUserId: "u" });
+    expect(f?.semaforo).toEqual(semaforo);
   });
 });
