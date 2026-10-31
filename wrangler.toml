@@ -44,6 +44,10 @@ DASHBOARD_BASE_URL = "https://birevx-support-bot.victor-m-426.workers.dev"
 WA_PROVIDER = "ycloud"
 YCLOUD_WA_FROM = "+524444237875"
 
+# Chat y formulario del sitio (src/webchat.ts, 30-oct-2026): solo estos
+# orígenes exactos pueden usar /web/chat/* y /web/lead.
+WEB_CHAT_ORIGINS = "https://www.birevx.com,https://birevx.com"
+
 # Canal interno del equipo (decisions.md, entrada 2026-09-24): Telegram es
 # exclusivo del equipo BIRevX en este bot — nunca se le da a un cliente.
 # Confirmado 2026-09-25: los 4 contactos que ya habían escrito por Telegram
