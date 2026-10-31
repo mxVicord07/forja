@@ -107,12 +107,15 @@ export async function handleWebLead(
   if (!(await underIpLimit(db, ip, now))) return { ok: false, error: "rate" };
 
   const l = check.lead;
+  // El Upsert usa el intent como título de la oportunidad: corto y reconocible
+  // en el pipeline. El mensaje completo va en las notas (descripción).
+  const intent = `Sitio web · ${l.company || l.name}`.slice(0, 120);
   const notes = [
     l.company ? `Empresa y giro: ${l.company}` : null,
     `Presupuesto para automatizar: ${l.budget > 0 ? pesos(l.budget) : "no lo sabe aún"}`,
     `Formulario del sitio (${l.source}, ${l.lang})`,
+    l.message ? `\n${l.message}` : null,
   ].filter(Boolean).join("\n");
-  const intent = l.message || "Dejó sus datos en el formulario del sitio web";
   const contact = `${l.whatsapp} / ${l.email}`;
 
   const leads = new LeadsRepo(db);
@@ -136,7 +139,7 @@ export async function handleWebLead(
   await notifyOwner(env, {
     reason: "Nuevo prospecto desde el sitio web",
     summary: `${l.name}${l.company ? ` (${l.company})` : ""} · WhatsApp ${l.whatsapp} · ${l.email}\n` +
-      `Presupuesto: ${l.budget > 0 ? pesos(l.budget) : "no lo sabe aún"}\n\n${intent}` +
+      `Presupuesto: ${l.budget > 0 ? pesos(l.budget) : "no lo sabe aún"}\n\n${l.message || "(sin mensaje)"}` +
       (exported ? "" : "\n\n(Odoo no respondió; se reintenta solo en la próxima hora.)"),
     ticketId: `web:${leadId}`,
   }).catch((e) => console.error("[webchat] notifyOwner:", e));

@@ -89,8 +89,10 @@ describe("handleWebLead", () => {
 
     const body = JSON.parse((fetchSpy.mock.calls[0][1] as RequestInit).body as string);
     expect(body).toMatchObject({ channel: "web", name: "Hugo Loredo", email: "hugo@clinica.mx", phone: "4441234567" });
+    // El intent es el título de la oportunidad en Odoo: corto y legible en el pipeline.
+    expect(body.intent).toBe("Sitio web · Clínica Do Corpo · fisioterapia");
     expect(body.notes).toContain("60,000");
-    expect(body.notes).toContain("Clínica Do Corpo");
+    expect(body.notes).toContain("Quiero que mis pacientes agenden solos");
     const row = await d1.prepare("SELECT exported_to, metadata FROM leads").first();
     expect(row.exported_to).toBe("odoo");
     expect(JSON.parse(row.metadata).channel).toBe("web");
