@@ -1,6 +1,6 @@
 import type { Env } from "../env";
 import { Db } from "../db/client";
-import { LeadsRepo } from "../db/leads";
+import { LeadsRepo, leadMetadata } from "../db/leads";
 import { exportLeadToOdoo } from "../tools/leadExport";
 
 /** Reintenta exportar leads dentro de esta ventana; más viejos que esto se dan por perdidos. */
@@ -28,8 +28,10 @@ export async function reconcileExportedLeads(env: Env): Promise<void> {
     try {
       // `leads` no tiene columna `channel` propia, pero conversation_id tiene
       // la forma "<channel>:<channelUserId>" (db/conversations.ts) — se
-      // recupera el canal real de ahí sin tocar el schema ni hacer un JOIN.
-      const channel = lead.conversation_id?.split(":")[0] || "unknown";
+      // recupera el canal real de ahí sin tocar el schema ni hacer un JOIN. Los
+      // leads sin conversación (formulario del sitio, src/webchat.ts) lo guardan
+      // en metadata.channel.
+      const channel = lead.conversation_id?.split(":")[0] || leadMetadata(lead).channel || "unknown";
       const { exported, externalId } = await exportLeadToOdoo(env, {
         leadId: lead.id,
         conversationId: lead.conversation_id,

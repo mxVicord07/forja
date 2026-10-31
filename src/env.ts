@@ -110,6 +110,9 @@ export interface Env {
   // Ficha de solo lectura del cliente en Odoo (n8n BRX_Forja_Ficha_Cliente).
   // Ausente = el bot no ve el CRM (comportamiento anterior al 30-oct-2026).
   CRM_FICHA_URL?: string;
+  // Orígenes (coma) del sitio web que pueden usar /web/chat/* y /web/lead
+  // (src/webchat.ts). Ausente = apagado. Ej. "https://www.birevx.com,https://birevx.com".
+  WEB_CHAT_ORIGINS?: string;
 
   // ── Cal.com (agenda real para scheduleAppointment) ───────────────────────
   // Con estas vars, el bot consulta disponibilidad real y reserva en Cal.com.

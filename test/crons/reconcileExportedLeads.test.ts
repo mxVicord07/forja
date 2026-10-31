@@ -119,3 +119,18 @@ describe("reconcileExportedLeads cron", () => {
     void consoleErrorSpy;
   });
 });
+
+describe("reconcileExportedLeads · leads sin conversación (formulario web)", () => {
+  it("toma el canal del metadata cuando el lead no tiene conversación", async () => {
+    vi.useRealTimers();
+    const id = await leads.create({
+      conversationId: null, name: "Hugo", contact: "4441234567 / h@x.mx", channelUserId: null,
+      intent: "formulario", metadata: { channel: "web" },
+    });
+    const fetchSpy = vi.spyOn(globalThis, "fetch").mockImplementation(async () => new Response(JSON.stringify({ ok: true, odoo_lead_id: 7 })));
+    await reconcileExportedLeads(env);
+    // La base de pruebas puede traer leads de pruebas anteriores: se busca la llamada de este lead.
+    const bodies = fetchSpy.mock.calls.map((c) => JSON.parse((c[1] as RequestInit).body as string));
+    expect(bodies.find((b) => b.leadId === id)?.channel).toBe("web");
+  });
+});

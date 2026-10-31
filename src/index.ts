@@ -26,6 +26,7 @@ import { getAgentStub } from "./agentStub";
 import { handleStripeWebhook } from "./integrations/stripeWebhook";
 import { webAdapter } from "./channels/web";
 import { demoPage, demoPoll, demoEnabled, demoTurnsUsed, demoOverLimit } from "./demo";
+import { registerWebRoutes } from "./webchat";
 
 export { SupportAgent } from "./agent";
 
@@ -295,6 +296,11 @@ app.post("/demo/send", async (c) => {
   }
   return routeToAgent(c, webAdapter);
 });
+
+// Chat y formulario del sitio web del negocio (producción): solo para los
+// orígenes de WEB_CHAT_ORIGINS, con aviso de privacidad y topes de costo. Ver
+// src/webchat.ts. Mismo canal `web` y mismo pipeline que el demo.
+registerWebRoutes(app, (c) => routeToAgent(c, webAdapter));
 
 // Admin dashboard — Basic Auth guarded sub-app mounted at /admin/*.
 app.route("/admin", adminApp);
