@@ -187,6 +187,13 @@ describe("pickAdapter", () => {
     }
   });
 
+  it("web usa el adapter web (chat del sitio: la respuesta se recoge por poll)", async () => {
+    // Hallazgo real 30-oct-2026: el chat del sitio recibía el mensaje pero
+    // processBuffer tronaba con "unknown channel: web" y nunca contestaba.
+    const { webAdapter } = await import("../../src/channels/web");
+    expect(pickAdapter("web" as any, env)).toBe(webAdapter);
+  });
+
   it("throws on an unknown channel", () => {
     expect(() => pickAdapter("sms" as any, env)).toThrow(/unknown channel/);
   });

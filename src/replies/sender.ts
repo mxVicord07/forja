@@ -7,6 +7,7 @@ import { twilioAdapter } from "../channels/twilio";
 import { metaAdapter } from "../channels/meta";
 import { whatsappAdapter } from "../channels/whatsapp";
 import { ycloudAdapter } from "../channels/ycloud";
+import { webAdapter } from "../channels/web";
 
 const MIN_DELAY_MS = 800;
 const MAX_DELAY_MS = 1500;
@@ -114,6 +115,9 @@ export function pickAdapter(channel: ChannelId, env: Env): ChannelAdapter {
   if (channel === "twilio") return twilioAdapter;
   if (channel === "whatsapp") return pickWhatsAppAdapter(env);
   if (channel === "messenger" || channel === "instagram") return metaAdapter;
+  // Chat del sitio y Modo Demo: no hay proveedor que empujar; la página
+  // recoge la respuesta de D1 por poll (src/channels/web.ts).
+  if (channel === "web") return webAdapter;
   throw new Error(`unknown channel: ${channel}`);
 }
 
