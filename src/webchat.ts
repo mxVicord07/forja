@@ -30,6 +30,18 @@ const MAX_WEB_TURNS_PER_DAY = 400;
 /** Envíos del formulario por IP por hora. */
 const MAX_LEADS_PER_IP_HOUR = 5;
 const MAX_BUDGET = 300_000;
+/** Burbujas máximas por respuesta en la web (WhatsApp usa 3). */
+const WEB_MAX_BURBUJAS = 6;
+
+/**
+ * Una lista que el modelo escribe en una sola línea ("1. A 2. B 3. C") sale
+ * como una opción por burbuja. Solo actúa si ya hay un "1." y un "2.", para
+ * no cortar un número suelto dentro de una frase.
+ */
+export function separarLista(texto: string): string {
+  if (!/(^|\s)1\.\s/.test(texto) || !/\s2\.\s/.test(texto)) return texto;
+  return texto.replace(/\s+(\d{1,2})\.\s+(?=\S)/g, "\n\n$1. ");
+}
 
 export function allowedOrigin(env: Env, origin: string | null | undefined): string | null {
   if (!origin || !env.WEB_CHAT_ORIGINS) return null;
@@ -234,7 +246,7 @@ export function registerWebRoutes(
     // por mensaje, así que no se repiten ni se pierden.
     const messages = rows.flatMap((r) => {
       if (r.role !== "assistant") return [{ text: r.content, at: r.created_at }];
-      const ext = extraeBotones(chunkReply(r.content));
+      const ext = extraeBotones(chunkReply(separarLista(r.content), WEB_MAX_BURBUJAS));
       const partes = ext.buttons?.length ? [...ext.chunks, botonesATexto(ext.buttons)] : ext.chunks;
       return partes.filter((p) => p.trim()).map((text) => ({ text, at: r.created_at }));
     });

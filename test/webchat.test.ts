@@ -163,6 +163,24 @@ describe("rutas /web/*", () => {
     expect(new Set(messages.map((m) => m.at)).size).toBe(1); // mismo cursor: no se repiten ni se pierden
   });
 
+  it("una lista escrita en una sola línea (1. … 2. … 3. …) sale una opción por burbuja", async () => {
+    const { ConversationsRepo } = await import("../src/db/conversations");
+    const { MessagesRepo } = await import("../src/db/messages");
+    const { Db } = await import("../src/db/client");
+    const db = new Db(d1);
+    const conv = await new ConversationsRepo(db).getOrCreate("web", "s-lista");
+    await new MessagesRepo(db).append(
+      conv.id, "assistant",
+      "Tienes tres caminos:\n\n1. **Asistente de WhatsApp** — desde $17,500 MXN más IVA. 2. **Asistente operativo** — desde $32,000 MXN más IVA. 3. **A la medida** — de $17,500 a $70,000 MXN más IVA. ¿Cuál te interesa?",
+    );
+    const res = await req("/web/chat/poll?session=s-lista&after=0", { origin: ORIGIN });
+    const { messages } = (await res.json()) as { messages: { text: string }[] };
+    const textos = messages.map((m) => m.text);
+    expect(textos.filter((t) => /^[123]\./.test(t))).toHaveLength(3);
+    expect(textos.some((t) => t.includes("¿Cuál te interesa?"))).toBe(true);
+    expect(Math.max(...textos.map((t) => t.length))).toBeLessThan(160);
+  });
+
   it("el chat exige el aviso de privacidad aceptado", async () => {
     const res = await req("/web/chat/send", { method: "POST", origin: ORIGIN, body: JSON.stringify({ sessionId: "s1", text: "hola" }) });
     expect(res.status).toBe(400);
