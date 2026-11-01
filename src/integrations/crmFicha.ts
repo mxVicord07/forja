@@ -24,6 +24,8 @@ export interface CrmFicha {
     resumen_ultima_interaccion: string | null;
     ultimo_contacto: string | null;
     proxima_actividad: { fecha: string | null; resumen: string | null } | null;
+    /** Indicaciones que Victor escribe para el bot en la oportunidad (`x_brief_lia`). Opcional: fichas anteriores al 1-nov-2026 no lo traen. */
+    brief?: string | null;
   };
   cotizacion: { folio: string; estado: string; monto_sin_iva: number; vigencia: string | null } | null;
   /** Semáforo de contacto de Odoo (BRX_Copiloto_Semaforo, 7:00): `codigo` es accion:razon y no cambia; `texto` es para leer. */
@@ -116,6 +118,7 @@ export function renderCrmBlock(f: CrmFicha): string {
   if (l.resumen_ultima_interaccion) {
     lineas.push(`- Última conversación${l.ultimo_contacto ? ` (${l.ultimo_contacto})` : ""}: ${l.resumen_ultima_interaccion}`);
   }
+  if (l.brief?.trim()) lineas.push(`- Indicaciones de Victor para atender a este cliente: ${l.brief.trim()}`);
   for (const i of f.interacciones) {
     if (i.resumen) lineas.push(`- ${i.fecha ?? "Sin fecha"}, ${i.canal ?? "contacto"}: ${i.resumen}`);
   }
@@ -126,7 +129,7 @@ export function renderCrmBlock(f: CrmFicha): string {
   ];
   if (llevaVictor(f)) {
     reglas.push(
-      "Victor atiende personalmente a este cliente. Si pide descuento, cambio de precio, de alcance o de condiciones, o quiere cerrar o firmar, no negocies ni des cifras nuevas: dile que Victor lo revisa personalmente y le responde, y usa la herramienta handoffHuman.",
+      "Victor atiende personalmente a este cliente. Si pide descuento, cambio de precio, de alcance o de condiciones, o quiere cerrar o firmar, no negocies ni cambies la propuesta: dile que Victor lo revisa personalmente y le responde, y usa la herramienta handoffHuman. Sí puedes sugerir otro servicio del negocio como alternativa más ligera, a su precio de lista, aclarando que Victor la arma.",
     );
   }
 

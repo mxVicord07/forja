@@ -32,6 +32,13 @@ export function normalizeForSpam(text: string): string {
     .toLowerCase();
 }
 
+/**
+ * Solo cuenta lo que el cliente escribió después de la última respuesta del
+ * dueño: lo anterior fue una plática con una persona (coexistencia, I-023),
+ * burbuja por burbuja y sin pasar por el buffer, no turnos con el bot.
+ */
+const DESPUES_DEL_DUENO = `COALESCE((SELECT MAX(created_at) FROM messages WHERE conversation_id = ? AND role = 'owner'), 0)`;
+
 export async function isRepeatSpam(
   db: Db,
   conversationId: string,
@@ -43,8 +50,9 @@ export async function isRepeatSpam(
   const rows = await db.all<{ content: string }>(
     `SELECT content FROM messages
      WHERE conversation_id = ? AND role = 'user' AND created_at > ?
+       AND created_at > ${DESPUES_DEL_DUENO}
      ORDER BY created_at DESC LIMIT ?`,
-    [conversationId, now - SPAM_WINDOW_MS, SPAM_LOOKBACK],
+    [conversationId, now - SPAM_WINDOW_MS, conversationId, SPAM_LOOKBACK],
   );
   const same = rows.filter((r) => normalizeForSpam(r.content) === norm).length;
   return same >= SPAM_REPEATS;
@@ -68,8 +76,9 @@ export async function isOverDailyCap(
 ): Promise<boolean> {
   const row = await db.first<{ n: number }>(
     `SELECT COUNT(*) as n FROM messages
-     WHERE conversation_id = ? AND role = 'user' AND created_at > ?`,
-    [conversationId, now - 24 * 3600_000],
+     WHERE conversation_id = ? AND role = 'user' AND created_at > ?
+       AND created_at > ${DESPUES_DEL_DUENO}`,
+    [conversationId, now - 24 * 3600_000, conversationId],
   );
   return (row?.n ?? 0) >= DAILY_TURN_CAP;
 }

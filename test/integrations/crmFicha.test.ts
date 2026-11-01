@@ -88,6 +88,22 @@ describe("renderCrmBlock", () => {
     expect(txt).toMatch(/todavía no se le ha enviado/i);
   });
 
+  it("el candado deja ofrecer alternativas a precio de lista sin tocar la propuesta (decisión D3, I-023)", () => {
+    const txt = renderCrmBlock(base);
+    expect(txt).toMatch(/precio de lista/i);
+    expect(txt).not.toMatch(/ni des cifras nuevas/);
+  });
+
+  it("trae las indicaciones de Victor para LIA (brief) cuando existen", () => {
+    const txt = renderCrmBlock({ ...base, lead: { ...base.lead, brief: "Le pesa el monto; explorar empezar solo por la agenda." } });
+    expect(txt).toContain("Indicaciones de Victor para atender a este cliente: Le pesa el monto; explorar empezar solo por la agenda.");
+  });
+
+  it("sin brief no agrega la línea de indicaciones", () => {
+    expect(renderCrmBlock(base)).not.toContain("Indicaciones de Victor");
+    expect(renderCrmBlock({ ...base, lead: { ...base.lead, brief: "   " } })).not.toContain("Indicaciones de Victor");
+  });
+
   it("en etapa Nuevo no impone la regla de negociación", () => {
     const txt = renderCrmBlock({ ...base, lead: { ...base.lead, etapa_clave: "New", etapa: "Nuevo" }, cotizacion: null });
     expect(txt).not.toContain("handoffHuman");

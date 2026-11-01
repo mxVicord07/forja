@@ -29,6 +29,12 @@ import { renderBusinessContext } from "./businessContext";
 import { maskTelegramToken, unmaskTelegramToken } from "./telegramFiles";
 import { mapMessageToAiTurn } from "./history";
 import { fetchCrmFicha, renderCrmBlock, type CrmFicha } from "./integrations/crmFicha";
+import { esRelevo, relevoActivo, renderRelevoBlock, BACKLOG_MAX_MS, BACKLOG_TOPE, RELEVO_RAFAGA_MS } from "./relevo";
+
+/** Último mensaje de una persona o del bot; las notas internas y las herramientas no cuentan. */
+function ultimoTurnoReal<T extends { role: string }>(msgs: T[]): T | undefined {
+  return [...msgs].reverse().find((m) => m.role === "user" || m.role === "assistant" || m.role === "owner");
+}
 
 /** Cada cuánto se vuelve a pedir la ficha del CRM en una conversación viva. */
 const CRM_FICHA_TTL_MS = 20 * 60 * 1000;
@@ -39,7 +45,9 @@ export interface SupportAgentState {
   conversationId: string | null;
   channel: string;
   channelUserId: string;
-  pendingMessages: { text: string; receivedAt: number; mediaIds?: string[] }[];
+  /** `persistedId`: el mensaje ya está en D1 (se guardó durante una pausa) y
+   *  processBuffer solo lo responde, sin volver a guardarlo. */
+  pendingMessages: { text: string; receivedAt: number; mediaIds?: string[]; persistedId?: string }[];
   lastAlarmAt: number;
   lastUserLang: string;
   toolCallsInLast2Turns: number;
@@ -53,6 +61,12 @@ export interface SupportAgentState {
    *  persistido de conversaciones anteriores al 30-oct-2026 no los trae. */
   crmFicha?: CrmFicha | null;
   crmFichaAt?: number;
+  /** Cuándo el dueño soltó la conversación con su frase de relevo (src/relevo.ts). */
+  relevoAt?: number;
+  /** Lo que el cliente escribió mientras la conversación estaba pausada: ya
+   *  está en D1 y nadie le ha contestado todavía. Se responde solo si el
+   *  dueño devuelve la conversación a propósito (resumeAfterRelease). */
+  pauseBacklog?: { id: string; text: string; receivedAt: number; providerMessageId?: string }[];
 }
 
 export interface AgentIncomingPayload {
@@ -110,23 +124,62 @@ export class SupportAgent extends Agent<Env, SupportAgentState> {
     const isInternalChannel =
       !!this.env.INTERNAL_CHANNEL?.trim() && this.env.INTERNAL_CHANNEL.trim() === payload.channel;
     if (payload.isOwnerMessage && !isInternalChannel) {
-      const pausedUntil = Date.now() + 60 * 60 * 1000;
-      await convs.setPausedUntil(conv.id, pausedUntil);
+      // Relevo (I-023): si el dueño cierra su mensaje con una frase como "te
+      // dejo con Lía", la conversación queda suelta para el bot en vez de
+      // pausarse una hora.
+      // Las burbujas que manda justo después de la frase (el PDF, un saludo)
+      // tampoco pausan.
+      const relevo = esRelevo(payload.text, this.env.RELEVO_FRASES);
+      const enRafaga = !!this.state.relevoAt && Date.now() - this.state.relevoAt < RELEVO_RAFAGA_MS;
+      await convs.setPausedUntil(conv.id, relevo || enRafaga ? null : Date.now() + 60 * 60 * 1000);
+      if (relevo) await convs.setTakenBy(conv.id, null);
       // Si el cliente escribió y el dueño contestó dentro de la ventana del
       // buffer (coexistencia de WhatsApp: el dueño responde desde la app), el
       // alarm ya armado contestaría encima del dueño. Se vacía el buffer
       // guardando lo del cliente, y la respuesta del dueño queda en el
       // historial para que el bot la tenga en contexto al retomar.
       const msgs = new MessagesRepo(db);
-      const pendingText = this.state.pendingMessages.map((m) => m.text).join("\n").trim();
+      const pendingText = this.state.pendingMessages
+        .filter((m) => !m.persistedId)
+        .map((m) => m.text)
+        .join("\n")
+        .trim();
       if (pendingText) await msgs.append(conv.id, "user", pendingText);
-      this.setState({ ...this.state, pendingMessages: [] });
+      // Lo que el cliente escribió en la pausa ya lo atendió el dueño.
+      this.setState({
+        ...this.state,
+        pendingMessages: [],
+        pauseBacklog: [],
+        ...(relevo ? { relevoAt: Date.now() } : {}),
+      });
       if (payload.text) await msgs.append(conv.id, "owner", payload.text);
       return { acknowledged: true };
     }
 
-    // If paused, ignore (bot stays silent)
+    // Pausada: el bot no contesta, pero lo que escribe el cliente se guarda en
+    // el historial (antes se perdía y el bot retomaba sin saberlo) y queda
+    // pendiente por si el dueño devuelve la conversación (resumeAfterRelease).
     if (await convs.isPaused(conv.id)) {
+      const backlog = this.state.pauseBacklog ?? [];
+      // Un reintento del webhook trae el mismo id del proveedor: no se guarda dos veces.
+      if (payload.providerMessageId && backlog.some((b) => b.providerMessageId === payload.providerMessageId)) {
+        return { acknowledged: true };
+      }
+      const pie = payload.text?.trim() ?? "";
+      const texto = payload.imageUrl
+        ? pie ? `${pie} (con una imagen)` : "(el cliente mandó una imagen)"
+        : pie || (payload.audioUrl ? "(el cliente mandó un audio)" : "");
+      if (texto) {
+        const id = await new MessagesRepo(db).append(conv.id, "user", texto);
+        await convs.touchLastMessage(conv.id);
+        const entrada = {
+          id,
+          text: texto,
+          receivedAt: Date.now(),
+          ...(payload.providerMessageId ? { providerMessageId: payload.providerMessageId } : {}),
+        };
+        this.setState({ ...this.state, pauseBacklog: [...backlog, entrada].slice(-BACKLOG_TOPE) });
+      }
       return { acknowledged: true };
     }
 
@@ -263,6 +316,8 @@ export class SupportAgent extends Agent<Env, SupportAgentState> {
     this.setState({
       ...this.state,
       pendingMessages: pending,
+      // Lo escrito en una pausa ya vencida está en el historial: deja de ser pendiente.
+      pauseBacklog: [],
       imageRetryCount: hasImage ? 0 : this.state.imageRetryCount,
       // El alarm corre fuera del webhook: sin guardar el id acá, el keepalive
       // del indicador se quedaría sin a qué mensaje colgarse en WhatsApp.
@@ -296,7 +351,14 @@ export class SupportAgent extends Agent<Env, SupportAgentState> {
     const bufferMs = payload.channel === "web" ? Math.min(cfg.bufferMs, WEB_BUFFER_MS) : cfg.bufferMs;
     const oldestAt = pending[0]?.receivedAt ?? Date.now();
     const hasStranded = Date.now() - oldestAt > bufferMs * 2;
-    const alarmAt = Date.now() + (hasStranded ? 500 : bufferMs);
+    await this.armarBuffer(hasStranded ? 500 : bufferMs);
+
+    return { acknowledged: true };
+  }
+
+  /** Programa processBuffer dentro de `delayMs` (una sola fila 'msg-buffer': los mensajes seguidos se agrupan). */
+  private async armarBuffer(delayMs: number): Promise<void> {
+    const alarmAt = Date.now() + delayMs;
     const alarmAtSec = Math.floor(alarmAt / 1000);
     this.sql`
       INSERT OR REPLACE INTO cf_agents_schedules
@@ -312,8 +374,40 @@ export class SupportAgent extends Agent<Env, SupportAgentState> {
       await this.ctx.storage.setAlarm(alarmAt);
     }
     this.setState({ ...this.state, lastAlarmAt: alarmAt });
+  }
 
-    return { acknowledged: true };
+  /**
+   * El dueño devolvió la conversación al bot a propósito (Forja Inbox). Si el
+   * cliente escribió durante la pausa hace menos de 12 h y nadie le contestó
+   * después, se responde ahora; si es más viejo, queda solo como contexto para
+   * no contestar fuera de tiempo un "ok, gracias".
+   */
+  async resumeAfterRelease(): Promise<{ responde: boolean; motivo?: string }> {
+    const backlog = this.state.pauseBacklog ?? [];
+    this.setState({ ...this.state, pauseBacklog: [] });
+    if (!backlog.length) return { responde: false, motivo: "sin_pendientes" };
+    if (Date.now() - backlog[backlog.length - 1].receivedAt > BACKLOG_MAX_MS) {
+      return { responde: false, motivo: "viejo" };
+    }
+    const convId = this.state.conversationId;
+    if (convId) {
+      // El dueño pudo contestar desde Forja Inbox, que escribe directo en D1
+      // sin pasar por aquí: si lo último ya no es del cliente, está atendido.
+      // Las notas internas no cuentan como respuesta al cliente.
+      const ultimo = ultimoTurnoReal(await new MessagesRepo(new Db(this.env.DB)).lastN(convId, 10));
+      if (ultimo && ultimo.role !== "user") return { responde: false, motivo: "atendido" };
+    }
+    const cfg = await resolveAgentConfig(this.env, [], this.state.channel);
+    if (cfg.botPaused) return { responde: false, motivo: "bot_pausado" };
+    this.setState({
+      ...this.state,
+      pendingMessages: [
+        ...this.state.pendingMessages,
+        ...backlog.map((b) => ({ text: b.text, receivedAt: b.receivedAt, persistedId: b.id })),
+      ],
+    });
+    await this.armarBuffer(500);
+    return { responde: true };
   }
 
   /**
@@ -338,9 +432,14 @@ export class SupportAgent extends Agent<Env, SupportAgentState> {
       return;
     }
 
-    // Persist user message
-    const userMsgId = await msgs.append(convId, "user", combined);
-    await convs.touchLastMessage(convId);
+    // Persist user message. Lo que llegó durante una pausa ya está en D1
+    // (persistedId): solo se guarda lo nuevo.
+    const textoNuevo = buffered.filter((m) => !m.persistedId).map((m) => m.text).join("\n").trim();
+    let userMsgId = [...buffered].reverse().find((m) => m.persistedId)?.persistedId ?? "";
+    if (textoNuevo) {
+      userMsgId = await msgs.append(convId, "user", textoNuevo);
+      await convs.touchLastMessage(convId);
+    }
 
     // Bóveda: liga el media archivado durante ingest() al mensaje recién
     // creado (su id no existía todavía cuando se capturó). Best-effort — ver
@@ -353,6 +452,12 @@ export class SupportAgent extends Agent<Env, SupportAgentState> {
 
     // Load history (last 20)
     const history = await msgs.lastN(convId, 20);
+    // Solo respondía lo pendiente de una pausa: si el dueño contestó mientras
+    // tanto (Forja Inbox escribe directo en D1), no se responde encima.
+    if (!textoNuevo) {
+      const ultimo = ultimoTurnoReal(history);
+      if (ultimo && ultimo.role !== "user") return;
+    }
     // mapMessageToAiTurn (history.ts, porteado del paquete Forja+ v1.0.76):
     // mapeo EXPLÍCITO de los 5 roles reales de D1 (user/assistant/tool/owner/
     // note — el AI SDK solo conoce user/assistant) más un fix real que traía
@@ -361,10 +466,14 @@ export class SupportAgent extends Agent<Env, SupportAgentState> {
     // vencida gastando tokens sin que el modelo pudiera usarla). El turno
     // ÚLTIMO sigue armándose aparte abajo (necesita la URL cruda para el
     // mensaje multimodal).
-    const aiMessages: any[] = history.slice(0, -1).map(mapMessageToAiTurn);
+    // El último turno es el último mensaje del cliente: una nota interna que
+    // llegó después (Forja Inbox) va antes, con su marca de interna.
+    const iUltimoCliente = history.map((m) => m.role).lastIndexOf("user");
+    const iTurno = iUltimoCliente >= 0 ? iUltimoCliente : history.length - 1;
+    const aiMessages: any[] = history.filter((_, i) => i !== iTurno).map(mapMessageToAiTurn);
     // Build the LAST user message multimodal-aware: if it carries an
     // [IMAGE_URL: ...] marker AND we're on the Pro tier, attach the image.
-    const lastUserMsg = history[history.length - 1];
+    const lastUserMsg = history[iTurno];
     if (lastUserMsg) {
       const imgMatch = lastUserMsg.content.match(/\[IMAGE_URL: (.+?)\]/);
       if (imgMatch && isPro(this.env)) {
@@ -546,6 +655,16 @@ export class SupportAgent extends Agent<Env, SupportAgentState> {
         } catch (e) {
           console.warn("[SupportAgent] crm ficha lookup failed:", e);
         }
+      }
+
+      // Modo relevo (I-023): el dueño soltó la conversación o el cliente ya
+      // tiene una propuesta enviada. El bot escucha antes de proponer y cita
+      // lo último que escribió el dueño, porque en el historial sus mensajes
+      // se ven como del bot.
+      if (!isInternal && relevoActivo(this.state, this.state.crmFicha ?? null)) {
+        const ultimoDelDueno = [...history].reverse().find((m) => m.role === "owner")?.content ?? null;
+        const porRelevo = relevoActivo(this.state, null);
+        system.push({ role: "system", content: renderRelevoBlock(ultimoDelDueno, { porRelevo }) });
       }
 
       let assistantText = "";

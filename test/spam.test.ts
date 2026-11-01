@@ -108,3 +108,26 @@ describe("isOverDailyCap (backstop ChatGPT gratis)", () => {
     expect(DAILY_CAP_MESSAGE).not.toMatch(/[—–]/);
   });
 });
+
+describe("los mensajes anteriores a la última respuesta del dueño no cuentan (relevo, I-023)", () => {
+  const NOW = 1_800_000_000_000;
+  async function addOwnerMsg(createdAt: number) {
+    await db.run(
+      `INSERT INTO messages (id, conversation_id, role, content, created_at) VALUES (?, ?, 'owner', 'te contesto yo', ?)`,
+      [crypto.randomUUID(), convId, createdAt],
+    );
+  }
+
+  it("un 'ok' repetido que el cliente le mandó al dueño no vuelve spam el siguiente 'ok' al bot", async () => {
+    await addUserMsg("ok", NOW - 3000);
+    await addUserMsg("ok", NOW - 2000);
+    await addOwnerMsg(NOW - 1000);
+    expect(await isRepeatSpam(db, convId, "ok", NOW)).toBe(false);
+  });
+
+  it("las burbujas de una plática con el dueño no llenan el tope diario", async () => {
+    for (let i = 0; i < DAILY_TURN_CAP; i++) await addUserMsg(`mensaje ${i}`, NOW - 60_000 + i);
+    await addOwnerMsg(NOW - 1000);
+    expect(await isOverDailyCap(db, convId, NOW)).toBe(false);
+  });
+});

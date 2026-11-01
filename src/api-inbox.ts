@@ -616,6 +616,13 @@ inboxApi.post("/conversations/:id/handoff", async (c) => {
   // Cualquiera puede devolverla al bot, la haya tomado quien la haya tomado.
   await convs.setTakenBy(conv.id, null);
   await auditApp(db, actor, "conversacion_devuelta", conv.id);
+  // Si el cliente escribió durante la pausa y nadie le contestó, el bot lo
+  // atiende ahora (relevo, I-023). Nunca rompe la respuesta: el bot ya quedó suelto.
+  try {
+    await agentStub(c.env, conv.channel, conv.channel_user_id).resumeAfterRelease();
+  } catch (e) {
+    console.warn("[inbox] resumeAfterRelease falló:", e);
+  }
   return c.json({ ok: true, handoff: "bot" }, 200);
 });
 
