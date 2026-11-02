@@ -152,6 +152,8 @@ describe("guardReply — veredictos", () => {
     const prompt = (generateTextMock.mock.calls[0][0] as { prompt: string }).prompt;
     expect(prompt).toContain("registro_del_cliente");
     expect(prompt).toContain("S00099 por $17,500");
+    // el precio que el dueño le dio a ese cliente prevalece sobre un "desde" genérico de la KB
+    expect(prompt).toMatch(/prevalec/i);
   });
 
   it("en relevo, el reemplazo no habla de 'el equipo': dice que lo confirma quien lo atendió", async () => {

@@ -760,12 +760,13 @@ export class SupportAgent extends Agent<Env, SupportAgentState> {
           // que dijo el dueño) es fuente oficial: repetir una cifra de la propuesta no es inventar.
           const fichaTurno = isInternal ? null : (this.state.crmFicha ?? null);
           const enRelevo = !isInternal && relevoActivo(this.state, fichaTurno);
-          const ultimoDelDueno = enRelevo
-            ? ([...history].reverse().find((m) => m.role === "owner")?.content ?? null)
-            : null;
+          // Varios mensajes, no solo el último: la propuesta con sus cifras suele ir antes del "te dejo con Lía".
+          const delDueno = enRelevo
+            ? history.filter((m) => m.role === "owner").slice(-6).map((m) => m.content.slice(0, 800)).join("\n")
+            : "";
           const extraSources = [
             fichaTurno ? renderCrmBlock(fichaTurno) : "",
-            ultimoDelDueno ? `Lo último que escribió el dueño a este cliente: ${ultimoDelDueno.slice(0, 1500)}` : "",
+            delDueno ? `Lo que escribió el dueño a este cliente:\n${delDueno}` : "",
           ]
             .filter(Boolean)
             .join("\n");

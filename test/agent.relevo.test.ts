@@ -281,7 +281,8 @@ describe("processBuffer con mensajes ya guardados durante la pausa", () => {
     const { agent } = makeAgent();
     vi.spyOn(MessagesRepo.prototype, "append").mockResolvedValue("m-x" as any);
     vi.spyOn(MessagesRepo.prototype, "lastN").mockResolvedValue([
-      { role: "owner", content: "Te armé una propuesta: $17,500 más $3,500 al mes. Te dejo con Lía." },
+      { role: "owner", content: "Te armé una propuesta: $17,500 más $3,500 al mes, más IVA." },
+      { role: "owner", content: "Te dejo con Lía, mi asistente, para lo que necesites." },
       { role: "user", content: "es mucho para arrancar" },
     ] as any);
     vi.spyOn(SettingsRepo.prototype, "get").mockResolvedValue(null as any);
@@ -303,7 +304,9 @@ describe("processBuffer con mensajes ya guardados durante la pausa", () => {
     expect(opts.relevo).toBe(true);
     expect(opts.extraSources).toContain("S00099");
     expect(opts.extraSources).toContain("Clínica de rehabilitación");
+    // la cifra va en un mensaje anterior al de "te dejo con Lía": también cuenta
     expect(opts.extraSources).toContain("$17,500 más $3,500 al mes");
+    expect(opts.extraSources).toContain("Te dejo con Lía");
   });
 
   it("sin relevo ni propuesta enviada, no hay bloque <relevo>", async () => {

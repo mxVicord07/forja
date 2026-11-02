@@ -149,6 +149,7 @@ Tu ÚNICO trabajo: decidir si los DATOS FACTUALES del negocio que afirma la resp
 Reglas:
 - Solo cuentan afirmaciones factuales sobre el negocio. Saludos, cortesía, preguntas al cliente o frases sin datos NO son afirmaciones.
 - Una afirmación está respaldada si las fuentes dicen lo mismo (mismas cifras, mismos horarios). Parafrasear está bien; cambiar números no.
+- Lo que dice <registro_del_cliente> (la propuesta enviada y lo que el dueño le escribió a ese cliente) son los precios oficiales para ESE cliente: prevalecen sobre un "desde" o un rango genérico de las demás fuentes.
 - Si la respuesta no afirma ningún dato factual del negocio, responde supported=true.
 - Si una cifra, promesa o descuento NO aparece en las fuentes, responde supported=false.
 

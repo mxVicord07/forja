@@ -71,6 +71,10 @@ describe("renderRelevoBlock", () => {
     expect(b).not.toMatch(/alternativa más ligera/i);
   });
 
+  it("no repite montos si el cliente no los pidió", () => {
+    expect(renderRelevoBlock(null)).toMatch(/no repitas (los )?montos/i);
+  });
+
   it("si solo hay propuesta enviada (sin relevo), no afirma que el dueño acaba de atender", () => {
     const b = renderRelevoBlock(null, { porRelevo: false });
     expect(b).not.toMatch(/ya atendió a este cliente en persona/);
