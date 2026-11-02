@@ -783,6 +783,13 @@ export class SupportAgent extends Agent<Env, SupportAgentState> {
             extraSources: extraSources || undefined,
             relevo: enRelevo,
             consultasKb: enRelevo ? [RELEVO_CONSULTA_KB] : undefined,
+            siempre: enRelevo,
+            mensajesCliente:
+              history
+                .filter((m) => m.role === "user")
+                .slice(-4)
+                .map((m) => m.content.slice(0, 500))
+                .join("\n") || undefined,
             turnUsedKb,
             kbPassages: turnKbPassages,
             businessContext,

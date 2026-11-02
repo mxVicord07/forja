@@ -144,6 +144,8 @@ export interface VerifyOptions {
    * dijo el dueño): fuente oficial igual que la KB. Sin esto, repetir la propuesta enviada se marcaría "sin respaldo".
    */
   extraSources?: string;
+  /** Lo que el cliente dijo en los últimos mensajes: las cifras que dio son suyas y valen para sus propias cuentas. */
+  mensajesCliente?: string;
 }
 
 /**
@@ -180,6 +182,8 @@ Reglas:
 - Solo cuentan afirmaciones factuales sobre el negocio. Saludos, cortesía, preguntas al cliente o frases sin datos NO son afirmaciones.
 - Una afirmación está respaldada si las fuentes dicen lo mismo (mismas cifras, mismos horarios). Parafrasear está bien; cambiar números no.
 - Lo que dice <registro_del_cliente> (la propuesta enviada y lo que el dueño le escribió a ese cliente) son los precios oficiales para ESE cliente: prevalecen sobre un "desde" o un rango genérico de las demás fuentes.
+- Omitir "más IVA" o "desde" NO es un dato sin respaldo cuando la cifra coincide con las fuentes: eso es estilo, no invento. Marca solo cifras que no existen o que son distintas.
+- Las cuentas aritméticas hechas con cifras que el cliente dijo en <lo_que_dijo_el_cliente> y con precios de las fuentes son válidas si el resultado es correcto.
 - Si la respuesta no afirma ningún dato factual del negocio, responde supported=true.
 - Si una cifra, promesa o descuento NO aparece en las fuentes, responde supported=false.
 
@@ -193,6 +197,9 @@ ${(opts.systemPrompt ?? "").slice(0, 24000) || "(sin instrucciones)"}
 <registro_del_cliente>
 ${(opts.extraSources ?? "").slice(0, 6000) || "(sin registro del cliente)"}
 </registro_del_cliente>
+<lo_que_dijo_el_cliente>
+${(opts.mensajesCliente ?? "").slice(0, 2000) || "(nada)"}
+</lo_que_dijo_el_cliente>
 <pasajes_kb>
 ${passagesBlock}
 </pasajes_kb>
@@ -255,6 +262,10 @@ export interface GuardOptions {
   extraSources?: string;
   /** El dueño le pasó la conversación al bot: el reemplazo no habla de "el equipo". */
   relevo?: boolean;
+  /** Verifica siempre, aunque la respuesta no traiga cifras ni haya usado la KB (en relevo: una política inventada no lleva dígitos). */
+  siempre?: boolean;
+  /** Últimos mensajes del cliente (ver VerifyOptions.mensajesCliente). */
+  mensajesCliente?: string;
   /** Consultas a la KB que se hacen siempre (documentos que el bot debe poder citar aunque no los haya buscado). */
   consultasKb?: string[];
   conversationId: string | null;
@@ -283,7 +294,7 @@ export async function guardReply(env: Env, opts: GuardOptions): Promise<GuardRes
     return { finalText: original, action: "skipped-off" };
   }
 
-  if (!shouldVerify(original, opts.turnUsedKb)) {
+  if (!opts.siempre && !shouldVerify(original, opts.turnUsedKb)) {
     return { finalText: original, action: "skipped-no-claims" };
   }
 
@@ -308,6 +319,7 @@ export async function guardReply(env: Env, opts: GuardOptions): Promise<GuardRes
       timeoutMs: opts.timeoutMs,
       systemPrompt: opts.systemPrompt,
       extraSources: opts.extraSources,
+      mensajesCliente: opts.mensajesCliente,
     });
   } catch (e) {
     console.warn("[blindaje] verificador falló — fail-open, va la respuesta original:", e);

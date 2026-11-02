@@ -1,5 +1,11 @@
 [
   {
+    "id": "cambiar-de-paquete",
+    "source": "cambiar-de-paquete.md",
+    "title": "¿Qué pasa si empiezo con el Starter y luego quiero pasar al Negocio?",
+    "content": "# ¿Qué pasa si empiezo con el Starter y luego quiero pasar al Negocio?\n\nSí se puede crecer de paquete, y empezar con el Starter es una forma válida de\narrancar. Hoy no hay una política escrita de crédito ni de descuento al cambiar:\n\n- No digas que \"se aprovecha lo que ya está listo\", ni que lo ya pagado se\n  acredita, ni cuánto, ni tampoco que se paga todo de nuevo.\n- Lo que sí puedes decir: Victor revisa qué se reutiliza (conocimiento,\n  configuración) y qué es nuevo (agenda, más canales, integraciones), y le manda\n  por escrito la cotización de la diferencia.\n- Si el cliente quiere cerrar o definir condiciones del cambio, usa\n  handoffHuman.\n\nReferencia de paquetes (más IVA): Starter $17,500 de implementación más\n$3,500 al mes; Negocio $29,000 más $5,500 al mes. El Starter no incluye agenda;\nel Negocio sí."
+  },
+  {
     "id": "catalogo-servicios",
     "source": "catalogo-servicios.md",
     "title": "Catálogo de servicios de BIRevX: qué ofrecemos y dónde buscar el precio",
@@ -16,6 +22,12 @@
     "source": "consumo-de-terceros.md",
     "title": "Consumo de terceros: lo que se paga aparte, a costo",
     "content": "# Consumo de terceros: lo que se paga aparte, a costo\n\nAlgunos servicios usan plataformas de terceros que cobran por uso. BIRevX lo\nsepara de la mensualidad y lo transparenta, sin margen, y cuando se puede la\ncuenta queda a nombre del cliente.\n\n## WhatsApp (lo cobra Meta)\n- Cuando el cliente escribe primero, las primeras 1,000 respuestas al mes por\n  número son gratis.\n- Mensajes que inicia el negocio: plantillas de utilidad (recordatorios,\n  confirmaciones) cerca de $0.16 MXN cada una; plantillas de marketing\n  (promociones, felicitaciones) cerca de $0.73 MXN cada una. Son tarifas de\n  Meta, vigentes desde octubre de 2026 y pueden cambiar.\n- El proveedor de conexión (YCloud) no suma margen sobre Meta. Para enviar\n  plantillas se necesita verificar el negocio con Meta y aprobar las plantillas.\n- Ejemplo de orden de magnitud: un negocio con unos mil mensajes salientes al\n  mes gasta del orden de $1,000 MXN en Meta.\n\n## Inteligencia artificial y minutos\n- Asistentes y asistente operativo: el uso de IA suele ser de $300 a $1,500 MXN\n  al mes según el volumen.\n- Agentes de voz: los minutos incluidos están en el plan; los extra se cobran al\n  precio por minuto de cada paquete.\n\n## Otros\nDominios, calendario (Cal.com) y hospedaje propio del cliente, si aplican, los\npaga el cliente directamente.\n\nSiempre da estos números como aproximados y aclara que el estimado exacto se\ncalcula con el volumen real del negocio en el diagnóstico."
+  },
+  {
+    "id": "envios-masivos-por-whatsapp",
+    "source": "envios-masivos-por-whatsapp.md",
+    "title": "¿El asistente puede mandar mensajes en masa por WhatsApp? ¿Sustituye a las listas de difusión?",
+    "content": "# ¿El asistente puede mandar mensajes en masa por WhatsApp? ¿Sustituye a las listas de difusión?\n\nNo es una función estándar de los paquetes, y no sustituye a una lista de\ndifusión. No lo presentes como \"más potente\" que una lista.\n\n- Mandar un mensaje a muchos contactos por WhatsApp exige plantillas aprobadas\n  por Meta, contactos que hayan aceptado recibirlos y tiene costo por mensaje\n  (utilidad, cerca de $0.16 MXN; marketing, cerca de $0.73 MXN; tarifas de Meta\n  que pueden cambiar).\n- Con la coexistencia las listas de difusión de la app se desactivan. Si el\n  negocio vive de listas de difusión, no ofrezcas esa opción como equivalente:\n  explica por qué y ofrece otra.\n- Lo que el asistente sí hace por su cuenta: seguimiento a quien dejó de\n  contestar, encuestas y reseñas después de una conversación (paquete Pro).\n- Si el cliente necesita campañas a una lista de contactos, se evalúa como un\n  proyecto a la medida y Victor lo revisa. Usa handoffHuman."
   },
   {
     "id": "faq-desaparecen-despues",
@@ -120,9 +132,21 @@
     "content": "# Proceso de trabajo — las 4 fases\n\nBIRevX trabaja siempre en el mismo orden estructurado, sin excepciones:\n\n1. **Diagnóstico** — analizamos los procesos actuales del negocio e\n   identificamos las oportunidades de automatización con mayor impacto. Esta\n   sesión inicial de valoración es sin compromiso; Victor define si va sin costo\n   o como diagnóstico acreditable cuando el alcance es grande.\n2. **Diseño** — arquitecturamos la solución ideal con las herramientas de IA\n   más adecuadas para la industria del cliente.\n3. **Implementación** — construimos e integramos el sistema en el stack\n   tecnológico actual del cliente, sin interrumpir su operación.\n4. **Optimización** — monitoreamos resultados y ajustamos continuamente para\n   maximizar el retorno de la inversión.\n\nEl diagnóstico inicial suele tomar pocas semanas, y ya en esa fase el cliente\ntiene un mapa claro de qué esperar. Las primeras mejoras visibles suelen\nllegar antes de terminar la fase de Diseño."
   },
   {
+    "id": "que-cubre-la-mensualidad",
+    "source": "que-cubre-la-mensualidad.md",
+    "title": "¿Qué cubre la mensualidad de un asistente?",
+    "content": "# ¿Qué cubre la mensualidad de un asistente?\n\nLa mensualidad mantiene vivo al asistente: hospedaje y mantenimiento de la\nplataforma, monitoreo para que no se caiga, actualizaciones, el uso normal de la\ninteligencia artificial y las horas de ajustes del paquete (Starter 1 hora al\nmes, Negocio 2 horas, Pro 4 horas). Todos los precios son más IVA.\n\n## Lo que no cubre\n- **El consumo de WhatsApp (Meta).** Se cobra aparte y a costo, sin margen de\n  BIRevX. Meta da gratis las primeras 1,000 respuestas del negocio al mes por\n  número; lo que pase de ahí y las plantillas que inicia el negocio (utilidad,\n  cerca de $0.16 MXN cada una; marketing, cerca de $0.73) sí tienen costo. Ver\n  \"Consumo de terceros\".\n- La inteligencia artificial cuando el volumen es muy alto.\n- Dominios, calendario u otros servicios del propio cliente.\n\n## Aclaraciones\n- Las llamadas son de la línea de agentes de voz; los asistentes de WhatsApp no\n  llevan llamadas.\n- El estimado exacto del consumo se calcula con el volumen real del negocio en\n  el diagnóstico. No des cifras de consumo como definitivas."
+  },
+  {
     "id": "que-vendemos-y-que-no",
     "source": "que-vendemos-y-que-no.md",
     "title": "Qué vende y qué no vende BIRevX",
     "content": "# Qué vende y qué no vende BIRevX\n\nBIRevX SÍ vende: asistentes virtuales personalizados (WhatsApp, web y otros\ncanales), agentes de voz que contestan y llaman por teléfono, marketing y\ncontenido con IA (carruseles, reels, avatar de marca), asistentes operativos\npara el dueño o el equipo, automatización de tareas repetitivas, sistemas de\natención y seguimiento de clientes, diseño de sitios web, infraestructura\noperativa digital propia (VPS autoalojado), CRM, ERP, dashboards y reportes, y\nacompañamiento en la implementación y el mantenimiento de todos esos flujos.\nPrecios y paquetes de cada línea: ver \"Catálogo de servicios de BIRevX\".\n\nBIRevX NO vende: chatbots genéricos de menú simple, software estándar de\nmercado sin personalizar, \"IA por sí sola\" sin aplicación operativa, ni\ntecnología sin estrategia detrás. La filosofía del fundador es clara: \"No\ndigitalizamos el caos. Primero lo eliminamos, después lo automatizamos.\"\n\nSi un prospecto pregunta si esto es \"solo un chatbot\", la respuesta correcta\nes: no — es un asistente operativo entrenado con la lógica y las reglas\nespecíficas de su negocio, no una herramienta de respuestas genéricas."
+  },
+  {
+    "id": "renta-por-uso-asistentes",
+    "source": "renta-por-uso-asistentes.md",
+    "title": "¿Hay un esquema de renta por uso para asistentes de WhatsApp?",
+    "content": "# ¿Hay un esquema de renta por uso para asistentes de WhatsApp?\n\nNo. Los asistentes de WhatsApp se contratan con una implementación y una\nmensualidad fija por paquete (Starter, Negocio y Pro). Lo que sí depende del uso\nes el consumo de WhatsApp (Meta), que se cobra aparte y a costo; no es un\nesquema de renta.\n\nSi el cliente busca algo todavía más ligero, dilo con honestidad: Victor revisa\nsi hay una opción para su caso. No menciones precios, planes ni modalidades que\nno estén escritos en tu base de conocimiento."
   }
 ]

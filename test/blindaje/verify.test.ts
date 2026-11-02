@@ -201,6 +201,50 @@ describe("guardReply — veredictos", () => {
     expect(prompt).not.toContain("Texto sin relación");
   });
 
+  it("A: omitir 'más IVA' o 'desde' no es dato sin respaldo, y lo que dijo el cliente va como fuente para sus propias cuentas", async () => {
+    generateTextMock.mockResolvedValue(verdict(true));
+    await guardReply(env, {
+      replyText: "Con tu ticket de $400 hacen falta unas 9 citas extra al mes.",
+      turnUsedKb: false,
+      kbPassages: [],
+      businessContext: "",
+      mensajesCliente: "nuestro ticket promedio de consulta es de $400 MXN",
+      conversationId: convId,
+    });
+    const prompt = (generateTextMock.mock.calls[0][0] as { prompt: string }).prompt;
+    expect(prompt).toContain("lo_que_dijo_el_cliente");
+    expect(prompt).toContain("ticket promedio de consulta es de $400");
+    expect(prompt).toMatch(/omitir "más IVA" o "desde"/i);
+    expect(prompt).toMatch(/cuentas aritméticas/i);
+  });
+
+  it("B: con siempre=true se verifica aunque la respuesta no traiga cifras ni haya usado la KB", async () => {
+    generateTextMock.mockResolvedValue(verdict(false, "se aprovecha lo ya pagado"));
+    const r = await guardReply(env, {
+      replyText: "No pagas todo de nuevo: se aprovecha lo que ya está listo.",
+      turnUsedKb: false,
+      kbPassages: [],
+      businessContext: "",
+      siempre: true,
+      relevo: true,
+      conversationId: convId,
+    });
+    expect(generateTextMock).toHaveBeenCalledTimes(1);
+    expect(r.action).toBe("replaced");
+  });
+
+  it("sin siempre, una respuesta sin cifras ni KB sigue sin verificarse", async () => {
+    const r = await guardReply(env, {
+      replyText: "Claro, cuéntame un poco más de tu clínica.",
+      turnUsedKb: false,
+      kbPassages: [],
+      businessContext: "",
+      conversationId: convId,
+    });
+    expect(r.action).toBe("skipped-no-claims");
+    expect(generateTextMock).not.toHaveBeenCalled();
+  });
+
   it("consultasKb: en relevo se trae el documento de opciones aunque la consulta por la respuesta no lo encuentre", async () => {
     generateTextMock.mockResolvedValue(verdict(true));
     const query = vi

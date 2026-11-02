@@ -303,6 +303,8 @@ describe("processBuffer con mensajes ya guardados durante la pausa", () => {
     const opts = guard.mock.calls[0][1] as any;
     expect(opts.relevo).toBe(true);
     expect(opts.consultasKb).toEqual(["Opciones para arrancar con menos inversión"]);
+    expect(opts.siempre).toBe(true);
+    expect(opts.mensajesCliente).toContain("es mucho para arrancar");
     expect(opts.extraSources).toContain("S00099");
     expect(opts.extraSources).toContain("Clínica de rehabilitación");
     // la cifra va en un mensaje anterior al de "te dejo con Lía": también cuenta
