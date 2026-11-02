@@ -71,6 +71,16 @@ describe("renderRelevoBlock", () => {
     expect(b).not.toMatch(/alternativa más ligera/i);
   });
 
+  it("si le pesa el arranque menciona el pago en 3 o 6 pagos de la KB; si le pesa la mensualidad, hace la cuenta con sus números", () => {
+    const b = renderRelevoBlock(null);
+    expect(b).toMatch(/Opciones para arrancar con menos inversión/);
+    expect(b).toMatch(/searchKb/);
+    expect(b).toMatch(/3 o 6 pagos/);
+    expect(b).toMatch(/ticket promedio/i);
+    expect(b).toMatch(/sin prometer un retorno/i);
+    expect(b).toMatch(/no calcules planes ni plazos/i);
+  });
+
   it("no repite montos si el cliente no los pidió", () => {
     expect(renderRelevoBlock(null)).toMatch(/no repitas (los )?montos/i);
   });

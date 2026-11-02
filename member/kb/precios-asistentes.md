@@ -12,6 +12,7 @@ implementación y una mensualidad que cubre la operación y los ajustes.
   (precios, servicios, políticas), bandeja única para ver las conversaciones,
   pausar el bot y contestar tú, y aviso al dueño.
 - Verificación para que el asistente no invente datos.
+- No incluye agenda ni recordatorios de citas (eso es del paquete Negocio).
 - 1 hora de ajustes al mes. Reporte semanal. Entrega en 10 a 15 días hábiles.
 
 ## Negocio — $29,000 de implementación + $5,500 al mes (el recomendado)
@@ -29,6 +30,8 @@ implementación y una mensualidad que cubre la operación y los ajustes.
   depende del alcance de las integraciones.
 
 ## Aclaraciones
+- La implementación se puede pagar en 3 o 6 pagos; ver "Opciones para arrancar
+  con menos inversión".
 - No es un chatbot de menú: entiende el contexto y conoce el negocio.
 - La mensualidad no incluye el costo de WhatsApp (Meta) ni de la IA cuando el
   volumen es alto; ver "Consumo de terceros".
