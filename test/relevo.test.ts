@@ -104,6 +104,16 @@ describe("renderRelevoBlock", () => {
     expect(veta("te manda la cotización de solo la diferencia")).toBe(true);
     expect(veta("no pagas todo de nuevo")).toBe(true);
     expect(veta("Victor revisa qué se reutiliza y te manda una cotización")).toBe(false);
+    // paráfrasis de la promesa de retorno vistas el 3-nov
+    expect(veta("Si recuperas esas 2-3 citas en los primeros meses, el math cierra rápido")).toBe(true);
+    expect(veta("el asistente recupera eso rápido, solo respondiendo")).toBe(true);
+    expect(veta("tiene un retorno rápido")).toBe(true);
+    // cierres que empujan a agendar con el dueño
+    expect(veta("¿Te agendo con Victor hoy o mañana para que cierre todo?")).toBe(true);
+    expect(veta("¿Quieres que Victor te llame hoy para cerrar detalles y armar el plan?")).toBe(true);
+    expect(veta("¿Pasamos a agendar con él o hay algo más?")).toBe(true);
+    expect(veta("Victor revisa cómo empezar y te cuenta")).toBe(false);
+    expect(veta("¿Qué te pesa más, el arranque o la mensualidad?")).toBe(false);
   });
 
   it("cuando el cliente da su ticket, el número de la tabla va en ese mismo mensaje", () => {

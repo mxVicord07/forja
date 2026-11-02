@@ -184,6 +184,8 @@ Reglas:
 - Lo que dice <registro_del_cliente> (la propuesta enviada y lo que el dueño le escribió a ese cliente) son los precios oficiales para ESE cliente: prevalecen sobre un "desde" o un rango genérico de las demás fuentes.
 - Omitir "más IVA" o "desde" NO es un dato sin respaldo cuando la cifra coincide con las fuentes: eso es estilo, no invento. Marca solo cifras que no existen o que son distintas.
 - Las cuentas aritméticas hechas con cifras que el cliente dijo en <lo_que_dijo_el_cliente> y con precios de las fuentes son válidas si el resultado es correcto.
+- Las cifras sobre el cliente (cuántas citas o clientes pierde, su ticket, cuántos pacientes tiene) que no aparecen en <lo_que_dijo_el_cliente> son inventadas: sin respaldo. Una pregunta o una hipótesis claramente marcada ("si perdieras 2 citas…") no cuenta como afirmación.
+- Si la respuesta dice que un paquete incluye una función que las fuentes atribuyen a otro paquete (por ejemplo seguimiento automático, encuestas o agenda en el Starter), es sin respaldo.
 - Si la respuesta no afirma ningún dato factual del negocio, responde supported=true.
 - Si una cifra, promesa o descuento NO aparece en las fuentes, responde supported=false.
 

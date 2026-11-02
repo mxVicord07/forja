@@ -21,6 +21,18 @@ export const RELEVO_FRASES_VETADAS = [
   "no pagas todo de nuevo",
   "solo la diferencia",
   "se aprovecha (lo|todo|tu)",
+  // paráfrasis de la promesa de retorno ("el math cierra rápido", "recupera eso rápido")
+  "cierra r[aá]pido",
+  "\\bel math\\b",
+  "recuper[a-záéíóúñ]* (eso|esa|ese|esas|esos|la inversi[oó]n|lo invertido|el costo) (r[aá]pido|en los primeros)",
+  "retorno (r[aá]pido|garantizado)",
+  // cierres que empujan a agendar o cerrar con el dueño en cada respuesta
+  "te agendo",
+  "quieres que (v[ií]ctor|el due[ñn]o) te llame",
+  "pasamos a agendar",
+  "armar el plan",
+  "arme el plan",
+  "cierre todo",
 ];
 
 /** Frases por defecto, ya normalizadas (sin acentos, minúsculas). */

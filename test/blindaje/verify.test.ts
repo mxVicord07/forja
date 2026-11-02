@@ -218,6 +218,14 @@ describe("guardReply — veredictos", () => {
     expect(prompt).toMatch(/cuentas aritméticas/i);
   });
 
+  it("el verificador sabe que no se inventan cifras del cliente ni se cambian funciones de paquete", async () => {
+    generateTextMock.mockResolvedValue(verdict(true));
+    await guardReply(env, { replyText: "Con tu ticket pierdes 2 o 3 citas.", turnUsedKb: false, kbPassages: [], businessContext: "", mensajesCliente: "mi ticket es de $400", conversationId: convId });
+    const prompt = (generateTextMock.mock.calls[0][0] as { prompt: string }).prompt;
+    expect(prompt).toMatch(/cifras sobre el cliente/i);
+    expect(prompt).toMatch(/atribuyen a otro paquete/i);
+  });
+
   it("B: con siempre=true se verifica aunque la respuesta no traiga cifras ni haya usado la KB", async () => {
     generateTextMock.mockResolvedValue(verdict(false, "se aprovecha lo ya pagado"));
     const r = await guardReply(env, {
