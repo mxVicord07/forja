@@ -30,7 +30,7 @@ import { Db } from "../../src/db/client";
 import { ConversationsRepo } from "../../src/db/conversations";
 import { TicketsRepo } from "../../src/db/tickets";
 import { SettingsRepo, SETTING_KEYS } from "../../src/db/settings";
-import { shouldVerify, safeConfirmReply, guardReply } from "../../src/blindaje/verify";
+import { shouldVerify, safeConfirmReply, guardReply, esRespuestaSegura } from "../../src/blindaje/verify";
 import type { SearchKbResult } from "../../src/tools/searchKb";
 import type { Env } from "../../src/env";
 
@@ -171,6 +171,58 @@ describe("guardReply — veredictos", () => {
     expect(r.finalText).toMatch(/quien te atendi/i);
     expect(r.finalText).not.toMatch(/el equipo/i);
     expect(await new TicketsRepo(db).listOpen()).toHaveLength(1);
+  });
+
+  it("el verificador consulta la KB por su cuenta con la respuesta: no depende de que el bot haya usado searchKb", async () => {
+    generateTextMock.mockResolvedValue(verdict(true));
+    const envConKb = {
+      ...env,
+      AI: { run: vi.fn(async () => ({ data: [[0.1, 0.2, 0.3]] })) },
+      KB: {
+        query: vi.fn(async () => ({
+          matches: [
+            { score: 0.82, metadata: { title: "Opciones para arrancar", content: "Pago de la implementación en 3 pagos iguales sin recargo." } },
+            { score: 0.2, metadata: { title: "Ruido", content: "Texto sin relación" } },
+          ],
+        })),
+      },
+    } as unknown as Env;
+
+    await guardReply(envConKb, {
+      replyText: "Puedes pagar la implementación en 3 pagos iguales.",
+      turnUsedKb: false,
+      kbPassages: [],
+      businessContext: "",
+      conversationId: convId,
+    });
+
+    const prompt = (generateTextMock.mock.calls[0][0] as { prompt: string }).prompt;
+    expect(prompt).toContain("Pago de la implementación en 3 pagos iguales sin recargo.");
+    expect(prompt).not.toContain("Texto sin relación");
+  });
+
+  it("si la consulta de la KB falla, el verificador sigue con lo que tenga (fail-open)", async () => {
+    generateTextMock.mockResolvedValue(verdict(true));
+    const envRota = { ...env, AI: { run: vi.fn(async () => { throw new Error("ai caído"); }) }, KB: { query: vi.fn() } } as unknown as Env;
+    const r = await guardReply(envRota, {
+      replyText: "El corte cuesta $150.",
+      turnUsedKb: false,
+      kbPassages: KB_PASSAGES,
+      businessContext: "",
+      conversationId: convId,
+    });
+    expect(r.action).toBe("sent-original");
+    expect(generateTextMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("esRespuestaSegura reconoce los textos de reemplazo, en cualquier idioma y modo", () => {
+    for (const lang of ["es", "es-ES", "en", "pt"]) {
+      expect(esRespuestaSegura(safeConfirmReply(lang))).toBe(true);
+      expect(esRespuestaSegura(safeConfirmReply(lang, { relevo: true }))).toBe(true);
+    }
+    expect(esRespuestaSegura("  " + safeConfirmReply("es") + " ")).toBe(true);
+    expect(esRespuestaSegura("Claro, te explico cómo funciona.")).toBe(false);
+    expect(esRespuestaSegura("")).toBe(false);
   });
 
   it("safeConfirmReply en relevo respeta el idioma", () => {

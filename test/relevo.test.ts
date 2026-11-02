@@ -81,6 +81,12 @@ describe("renderRelevoBlock", () => {
     expect(b).toMatch(/no calcules planes ni plazos/i);
   });
 
+  it("la pregunta de qué pesa más es una sola, sin cifras ni insinuar planes más ligeros", () => {
+    const b = renderRelevoBlock(null);
+    expect(b).toMatch(/una sola pregunta/i);
+    expect(b).toMatch(/sin insinuar planes más ligeros/i);
+  });
+
   it("no repite montos si el cliente no los pidió", () => {
     expect(renderRelevoBlock(null)).toMatch(/no repitas (los )?montos/i);
   });

@@ -20,7 +20,7 @@ import { formatLlmError } from "./llm/errorDetail";
 import { runLlmTurn } from "./llm/runTurn";
 import { costOfUsage } from "./pricing";
 import type { ChannelId } from "./channels/shared";
-import { guardReply } from "./blindaje/verify";
+import { guardReply, esRespuestaSegura } from "./blindaje/verify";
 import type { DocumentRow } from "./db/documents";
 import { signedFileUrl } from "./files/share";
 import type { SearchKbResult } from "./tools/searchKb";
@@ -470,7 +470,15 @@ export class SupportAgent extends Agent<Env, SupportAgentState> {
     // llegó después (Forja Inbox) va antes, con su marca de interna.
     const iUltimoCliente = history.map((m) => m.role).lastIndexOf("user");
     const iTurno = iUltimoCliente >= 0 ? iUltimoCliente : history.length - 1;
-    const aiMessages: any[] = history.filter((_, i) => i !== iTurno).map(mapMessageToAiTurn);
+    // Los textos de reemplazo del blindaje ("eso lo confirma el equipo") se guardan como respuestas del bot, pero el modelo
+    // los copiaba como si fueran suyos: se le muestran como una nota neutra.
+    const aiMessages: any[] = history
+      .filter((_, i) => i !== iTurno)
+      .map((m) =>
+        m.role === "assistant" && esRespuestaSegura(m.content)
+          ? mapMessageToAiTurn({ ...m, content: "(Dije que ese dato lo confirmaría con el dueño.)" })
+          : mapMessageToAiTurn(m),
+      );
     // Build the LAST user message multimodal-aware: if it carries an
     // [IMAGE_URL: ...] marker AND we're on the Pro tier, attach the image.
     const lastUserMsg = history[iTurno];

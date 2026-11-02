@@ -309,6 +309,24 @@ describe("processBuffer con mensajes ya guardados durante la pausa", () => {
     expect(opts.extraSources).toContain("Te dejo con Lía");
   });
 
+  it("los textos de reemplazo del blindaje no llegan al modelo como si fueran suyos (los copiaba)", async () => {
+    const { agent } = makeAgent();
+    vi.spyOn(MessagesRepo.prototype, "append").mockResolvedValue("m-x" as any);
+    vi.spyOn(MessagesRepo.prototype, "lastN").mockResolvedValue([
+      { role: "assistant", content: verifyMod.safeConfirmReply("es") },
+      { role: "assistant", content: verifyMod.safeConfirmReply("es", { relevo: true }) },
+      { role: "user", content: "la mensualidad" },
+    ] as any);
+    agent.state.pendingMessages = [{ text: "la mensualidad", receivedAt: Date.now() }];
+
+    await agent.processBuffer();
+
+    const enviado = JSON.stringify(streamTextMock.mock.calls[0][0].messages);
+    expect(enviado).not.toContain("Esa me la confirma el equipo");
+    expect(enviado).not.toContain("quien te atendió");
+    expect(enviado).toContain("confirmaría con el dueño");
+  });
+
   it("sin relevo ni propuesta enviada, no hay bloque <relevo>", async () => {
     const { agent } = makeAgent();
     vi.spyOn(MessagesRepo.prototype, "append").mockResolvedValue("m-x" as any);

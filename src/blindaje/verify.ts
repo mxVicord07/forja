@@ -18,7 +18,7 @@
 import type { Env } from "../env";
 import { isPro } from "../config";
 import { createModel, type LlmOverrides } from "../llm/provider";
-import type { SearchKbResult } from "../tools/searchKb";
+import { consultaKb, type SearchKbResult } from "../tools/searchKb";
 import { Db } from "../db/client";
 import { SettingsRepo, SETTING_KEYS } from "../db/settings";
 import { TicketsRepo } from "../db/tickets";
@@ -65,6 +65,30 @@ const SAFE_REPLY_RELEVO: Record<string, string> = {
   en: "I'll confirm that with the person who helped you and get back to you today, so I don't give you the wrong info.",
   "pt-BR": "Vou confirmar esse dado com quem te atendeu e te respondo hoje, para não te passar um dado errado.",
 };
+
+/** Todos los textos de reemplazo posibles (idioma y modo), normalizados para compararlos. */
+const norm = (t: string) => t.replace(/\s+/g, " ").trim().toLowerCase();
+const TEXTOS_SEGUROS = new Set(
+  [...Object.values(SAFE_REPLY_BY_LANG), ...Object.values(SAFE_REPLY_RELEVO)].map(norm),
+);
+
+/**
+ * true si el texto es uno de los reemplazos del blindaje. El agente los guarda como respuestas suyas: si el modelo los ve
+ * en el historial, los copia en vez de contestar (visto el 2-nov-2026).
+ */
+export function esRespuestaSegura(texto: string | undefined | null): boolean {
+  return !!texto && TEXTOS_SEGUROS.has(norm(texto));
+}
+
+/** Pasajes de la KB relacionados con la respuesta, con score mínimo; nunca lanza ni tarda más de `ms`. */
+async function pasajesDeLaRespuesta(env: Env, respuesta: string, ms = 2500): Promise<SearchKbResult[]> {
+  try {
+    const todos = await withTimeout(consultaKb(env, respuesta.slice(0, 400), 4), ms);
+    return todos.filter((p) => p.score >= 0.5 && p.content);
+  } catch {
+    return [];
+  }
+}
 
 /**
  * Indexa por el idioma REAL del bot (BOT_LANGUAGE es "es"/"en"/"pt", no
@@ -256,8 +280,14 @@ export async function guardReply(env: Env, opts: GuardOptions): Promise<GuardRes
   }
 
   let verdict: VerifyVerdict;
+  // La KB se consulta también por la respuesta misma: el bot casi no usa searchKb por su cuenta (I-018) y
+  // un dato correcto que sí está en la KB no debe frenarse solo porque no la buscó.
+  const propios = await pasajesDeLaRespuesta(env, original);
+  const vistos = new Set(opts.kbPassages.map((p) => p.content));
+  const pasajes = [...opts.kbPassages, ...propios.filter((p) => !vistos.has(p.content))].slice(0, 10);
+
   try {
-    verdict = await verifyReply(env, original, opts.kbPassages, opts.businessContext ?? "", {
+    verdict = await verifyReply(env, original, pasajes, opts.businessContext ?? "", {
       llm: opts.llm,
       timeoutMs: opts.timeoutMs,
       systemPrompt: opts.systemPrompt,
