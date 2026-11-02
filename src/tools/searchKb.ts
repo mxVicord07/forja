@@ -19,7 +19,7 @@ export async function consultaKb(env: Env, query: string, topK = 5): Promise<Sea
   const embedding = await env.AI.run("@cf/baai/bge-m3", { text: query });
   const vec = (embedding as any).data?.[0];
   if (!Array.isArray(vec)) throw new Error("embedding shape unexpected");
-  const matches = await env.KB.query(vec, { topK });
+  const matches = await env.KB.query(vec, { topK, returnMetadata: "all" });
   return (matches.matches ?? []).map((m: any) => ({
     title: (m.metadata?.title as string) ?? "",
     content: (m.metadata?.content as string) ?? "",

@@ -18,6 +18,14 @@ describe("searchKbTool", () => {
     expect(result.results[0].score).toBe(0.91);
   });
 
+  it("pide el metadata completo a Vectorize: por defecto es \"none\" y sin él no vuelve ni título ni texto", async () => {
+    const query = vi.fn(async () => ({ matches: [{ id: "c1", score: 0.9, metadata: { title: "T", content: "C" } }] }));
+    const fakeEnv = { AI: { run: vi.fn(async () => ({ data: [[0.1, 0.2]] })) }, KB: { query } } as any;
+    const tool = searchKbTool(fakeEnv);
+    await (tool.execute as (input: { query: string }) => Promise<any>)({ query: "precio" });
+    expect(query).toHaveBeenCalledWith([0.1, 0.2], expect.objectContaining({ topK: 5, returnMetadata: "all" }));
+  });
+
   it("returns empty results when KB throws", async () => {
     const fakeEnv = {
       AI: { run: vi.fn(async () => ({ data: [[0.1, 0.2]] })) },
