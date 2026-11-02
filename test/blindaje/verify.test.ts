@@ -233,6 +233,36 @@ describe("guardReply — veredictos", () => {
     expect(r.action).toBe("replaced");
   });
 
+  it("frasesProhibidas: una frase vetada se rechaza sin preguntarle al modelo, aunque no traiga cifras", async () => {
+    const r = await guardReply(env, {
+      replyText: "Con eso la mensualidad se paga sola en poco tiempo.",
+      turnUsedKb: false,
+      kbPassages: [],
+      businessContext: "",
+      frasesProhibidas: ["se paga(r[aá])? sol[oa]"],
+      reintentable: true,
+      conversationId: convId,
+    });
+    expect(r.action).toBe("rejected");
+    expect(r.unsupportedClaim).toMatch(/frase vetada.*se paga sola/i);
+    expect(generateTextMock).not.toHaveBeenCalled();
+    expect(await new TicketsRepo(db).listOpen()).toHaveLength(0);
+  });
+
+  it("frasesProhibidas: en el segundo intento (no reintentable) la frase vetada se reemplaza con ticket", async () => {
+    const r = await guardReply(env, {
+      replyText: "El asistente se paga solo.",
+      turnUsedKb: false,
+      kbPassages: [],
+      businessContext: "",
+      frasesProhibidas: ["se paga(r[aá])? sol[oa]"],
+      relevo: true,
+      conversationId: convId,
+    });
+    expect(r.action).toBe("replaced");
+    expect(await new TicketsRepo(db).listOpen()).toHaveLength(1);
+  });
+
   it("reintentable: un rechazo no reemplaza ni abre ticket; devuelve el claim y las fuentes para que el bot corrija", async () => {
     generateTextMock.mockResolvedValue(verdict(false, "la mensualidad cubre llamadas"));
     const r = await guardReply(env, {

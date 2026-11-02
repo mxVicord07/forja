@@ -263,6 +263,8 @@ export interface GuardOptions {
   extraSources?: string;
   /** El dueño le pasó la conversación al bot: el reemplazo no habla de "el equipo". */
   relevo?: boolean;
+  /** Regex de frases vetadas: si la respuesta contiene una se rechaza sin preguntarle al modelo (reglas duras que el verificador de lenguaje deja pasar). */
+  frasesProhibidas?: string[];
   /** Un rechazo no reemplaza ni abre ticket: devuelve "rejected" con el claim y las fuentes para que el bot corrija y se verifique de nuevo. */
   reintentable?: boolean;
   /** Verifica siempre, aunque la respuesta no traiga cifras ni haya usado la KB (en relevo: una política inventada no lleva dígitos). */
@@ -299,7 +301,17 @@ export async function guardReply(env: Env, opts: GuardOptions): Promise<GuardRes
     return { finalText: original, action: "skipped-off" };
   }
 
-  if (!opts.siempre && !shouldVerify(original, opts.turnUsedKb)) {
+  const vetada = (opts.frasesProhibidas ?? [])
+    .map((f) => {
+      try {
+        return new RegExp(f, "i").exec(original);
+      } catch {
+        return null;
+      }
+    })
+    .find((m) => m);
+
+  if (!vetada && !opts.siempre && !shouldVerify(original, opts.turnUsedKb)) {
     return { finalText: original, action: "skipped-no-claims" };
   }
 
@@ -319,7 +331,9 @@ export async function guardReply(env: Env, opts: GuardOptions): Promise<GuardRes
   pasajes.splice(10);
 
   try {
-    verdict = await verifyReply(env, original, pasajes, opts.businessContext ?? "", {
+    verdict = vetada
+      ? { supported: false, unsupported_claim: `frase vetada: «${vetada[0]}»` }
+      : await verifyReply(env, original, pasajes, opts.businessContext ?? "", {
       llm: opts.llm,
       timeoutMs: opts.timeoutMs,
       systemPrompt: opts.systemPrompt,

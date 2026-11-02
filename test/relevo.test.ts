@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { esRelevo, relevoActivo, renderRelevoBlock, RELEVO_VIGENCIA_MS } from "../src/relevo";
+import { esRelevo, relevoActivo, renderRelevoBlock, RELEVO_VIGENCIA_MS, RELEVO_FRASES_VETADAS } from "../src/relevo";
 
 describe("esRelevo — el dueño le pasa la conversación al bot con una frase natural", () => {
   it("reconoce la frase con acento, mayúsculas y texto alrededor", () => {
@@ -85,6 +85,20 @@ describe("renderRelevoBlock", () => {
     const b = renderRelevoBlock(null);
     expect(b).toMatch(/una sola pregunta/i);
     expect(b).toMatch(/sin insinuar planes más ligeros/i);
+  });
+
+  it("no inventa cifras del cliente: si no sabe cuántas citas pierde, propone medirlas", () => {
+    const b = renderRelevoBlock(null);
+    expect(b).toMatch(/no supongas cuántas citas/i);
+    expect(b).toMatch(/medir/i);
+    expect(b).toMatch(/tabla/i);
+  });
+
+  it("las frases vetadas atrapan 'se paga sola' y 'se paga solo' pero no una pregunta honesta", () => {
+    const veta = (t: string) => RELEVO_FRASES_VETADAS.some((f) => new RegExp(f, "i").test(t));
+    expect(veta("la mensualidad se paga sola en poco tiempo")).toBe(true);
+    expect(veta("el asistente se pagaría solo")).toBe(true);
+    expect(veta("Victor calcula cuál es tu retorno real con tus números")).toBe(false);
   });
 
   it("no repite montos si el cliente no los pidió", () => {

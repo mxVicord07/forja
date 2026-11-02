@@ -12,6 +12,9 @@
 /** Documento de la KB con las formas de arrancar con menos inversión: el bloque manda buscarlo y el blindaje lo trae como fuente. */
 export const RELEVO_CONSULTA_KB = "Opciones para arrancar con menos inversión";
 
+/** Frases que Lía nunca dice en relevo (regex): prometen un retorno que nadie puede garantizar. */
+export const RELEVO_FRASES_VETADAS = ["se paga(r[aá]|ria|ría)? sol[oa]", "\\bROI\\b"];
+
 /** Frases por defecto, ya normalizadas (sin acentos, minúsculas). */
 export const FRASES_RELEVO_DEFAULT = [
   "te dejo con lia",
@@ -109,6 +112,7 @@ export function renderRelevoBlock(ultimoDelDueno: string | null, opts: { porRele
     "Escucha antes de proponer. Haz una sola pregunta por mensaje.",
     "Si viene al caso, averigua con tacto: si la propuesta resolvió lo que necesitaba, si hoy tiene otra prioridad, si el monto o el momento le pesan, y qué parte le daría resultado más rápido.",
     "Si el cliente dice que es mucho o que le pesa el monto, no inventes cifras ni alcances y no repitas los montos de la propuesta si no te los pide: haz una sola pregunta, sin cifras y sin insinuar planes más ligeros: qué le pesa más (lo de arranque o la mensualidad); y dile que el dueño revisa cómo empezar.",
+    "No supongas cuántas citas o clientes pierde: si no lo sabe, propón medirlo unas semanas y usa la tabla de «Cómo valorar la inversión con tus números» para decirle cuántas citas extra necesitaría según su ticket. Nunca digas que algo «se paga solo» ni prometas un retorno.",
     `Si le pesa el arranque, busca con searchKb «${RELEVO_CONSULTA_KB}» y menciona el pago en 3 o 6 pagos tal como está escrito, diciendo que el dueño arma el plan. Si le pesa la mensualidad, pregunta su ticket promedio y cuántas citas o clientes pierde, y devuelve la cuenta con sus números, sin prometer un retorno. No calcules planes ni plazos que no estén escritos: si pide otro, usa handoffHuman.`,
     "Solo menciona otros servicios que existan en tu base de conocimiento, a su precio de lista y diciendo que el dueño los arma. No inventes paquetes recortados ni versiones \"básicas\" de lo que no está en tu información. No cambies la propuesta enviada.",
     "Si pide descuento, cambio de alcance o de condiciones, o quiere cerrar o firmar, no negocies: dile que el dueño lo revisa hoy y usa handoffHuman.",

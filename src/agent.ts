@@ -29,7 +29,7 @@ import { renderBusinessContext } from "./businessContext";
 import { maskTelegramToken, unmaskTelegramToken } from "./telegramFiles";
 import { mapMessageToAiTurn } from "./history";
 import { fetchCrmFicha, renderCrmBlock, type CrmFicha } from "./integrations/crmFicha";
-import { esRelevo, relevoActivo, renderRelevoBlock, BACKLOG_MAX_MS, BACKLOG_TOPE, RELEVO_CONSULTA_KB, RELEVO_RAFAGA_MS } from "./relevo";
+import { esRelevo, relevoActivo, renderRelevoBlock, BACKLOG_MAX_MS, BACKLOG_TOPE, RELEVO_CONSULTA_KB, RELEVO_FRASES_VETADAS, RELEVO_RAFAGA_MS } from "./relevo";
 
 /** Último mensaje de una persona o del bot; las notas internas y las herramientas no cuentan. */
 function ultimoTurnoReal<T extends { role: string }>(msgs: T[]): T | undefined {
@@ -785,6 +785,7 @@ export class SupportAgent extends Agent<Env, SupportAgentState> {
             relevo: enRelevo,
             consultasKb: enRelevo ? [RELEVO_CONSULTA_KB] : undefined,
             siempre: enRelevo,
+            frasesProhibidas: enRelevo ? RELEVO_FRASES_VETADAS : undefined,
             mensajesCliente:
               history
                 .filter((m) => m.role === "user")

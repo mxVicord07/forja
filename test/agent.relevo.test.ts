@@ -304,6 +304,7 @@ describe("processBuffer con mensajes ya guardados durante la pausa", () => {
     expect(opts.relevo).toBe(true);
     expect(opts.consultasKb).toEqual(["Opciones para arrancar con menos inversión"]);
     expect(opts.siempre).toBe(true);
+    expect(opts.frasesProhibidas?.length).toBeGreaterThan(0);
     expect(opts.mensajesCliente).toContain("es mucho para arrancar");
     expect(opts.extraSources).toContain("S00099");
     expect(opts.extraSources).toContain("Clínica de rehabilitación");
