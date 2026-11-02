@@ -756,8 +756,23 @@ export class SupportAgent extends Agent<Env, SupportAgentState> {
           const settings = new SettingsRepo(db);
           const businessContext =
             (await settings.get(SETTING_KEYS.businessContext)) || renderBusinessContext();
+          // Lo que el negocio mismo escribió del cliente (ficha del CRM con la propuesta enviada, Brief y lo último
+          // que dijo el dueño) es fuente oficial: repetir una cifra de la propuesta no es inventar.
+          const fichaTurno = isInternal ? null : (this.state.crmFicha ?? null);
+          const enRelevo = !isInternal && relevoActivo(this.state, fichaTurno);
+          const ultimoDelDueno = enRelevo
+            ? ([...history].reverse().find((m) => m.role === "owner")?.content ?? null)
+            : null;
+          const extraSources = [
+            fichaTurno ? renderCrmBlock(fichaTurno) : "",
+            ultimoDelDueno ? `Lo último que escribió el dueño a este cliente: ${ultimoDelDueno.slice(0, 1500)}` : "",
+          ]
+            .filter(Boolean)
+            .join("\n");
           const guard = await guardReply(this.env, {
             replyText: assistantText,
+            extraSources: extraSources || undefined,
+            relevo: enRelevo,
             turnUsedKb,
             kbPassages: turnKbPassages,
             businessContext,

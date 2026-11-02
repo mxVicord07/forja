@@ -63,6 +63,14 @@ describe("renderRelevoBlock", () => {
     expect(b).not.toMatch(/Lo último que escribió el dueño/);
   });
 
+  it("ante 'es mucho para arrancar' pregunta qué pesa más y no inventa paquetes ni cifras", () => {
+    const b = renderRelevoBlock(null);
+    expect(b).toMatch(/qué le pesa más/i);
+    expect(b).toMatch(/no inventes/i);
+    expect(b).toMatch(/base de conocimiento/i);
+    expect(b).not.toMatch(/alternativa más ligera/i);
+  });
+
   it("si solo hay propuesta enviada (sin relevo), no afirma que el dueño acaba de atender", () => {
     const b = renderRelevoBlock(null, { porRelevo: false });
     expect(b).not.toMatch(/ya atendió a este cliente en persona/);

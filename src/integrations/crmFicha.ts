@@ -129,7 +129,7 @@ export function renderCrmBlock(f: CrmFicha): string {
   ];
   if (llevaVictor(f)) {
     reglas.push(
-      "Victor atiende personalmente a este cliente. Si pide descuento, cambio de precio, de alcance o de condiciones, o quiere cerrar o firmar, no negocies ni cambies la propuesta: dile que Victor lo revisa personalmente y le responde, y usa la herramienta handoffHuman. Sí puedes sugerir otro servicio del negocio como alternativa más ligera, a su precio de lista, aclarando que Victor la arma.",
+      "Victor atiende personalmente a este cliente. Si pide descuento, cambio de precio, de alcance o de condiciones, o quiere cerrar o firmar, no negocies ni cambies la propuesta: dile que Victor lo revisa personalmente y le responde, y usa la herramienta handoffHuman. Solo puedes mencionar otro servicio del negocio si existe en tu base de conocimiento, a su precio de lista y aclarando que Victor lo arma; no inventes paquetes recortados.",
     );
   }
 

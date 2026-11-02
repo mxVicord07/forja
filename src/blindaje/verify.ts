@@ -58,14 +58,28 @@ const SAFE_REPLY_BY_LANG: Record<string, string> = {
   "pt-BR": "Deixa eu confirmar isso com a equipe para não te passar um dado errado — já te retorno.",
 };
 
+// En modo relevo el cliente ya habló con una persona: no existe "el equipo", lo confirma quien lo atendió.
+const SAFE_REPLY_RELEVO: Record<string, string> = {
+  "es-419": "Ese dato te lo confirmo con quien te atendió y te respondo hoy, para no darte uno equivocado.",
+  "es-ES": "Ese dato te lo confirmo con quien te atendió y te respondo hoy, para no darte uno equivocado.",
+  en: "I'll confirm that with the person who helped you and get back to you today, so I don't give you the wrong info.",
+  "pt-BR": "Vou confirmar esse dado com quem te atendeu e te respondo hoje, para não te passar um dado errado.",
+};
+
 /**
  * Indexa por el idioma REAL del bot (BOT_LANGUAGE es "es"/"en"/"pt", no
  * "es-MX"/"en-US"): comparar contra el valor crudo nunca haría match y todo
  * caería al español, incluso un bot en inglés en el momento más delicado
  * (cuando el blindaje frena un dato inventado).
  */
-export function safeConfirmReply(lang: string | undefined): string {
+export function safeConfirmReply(lang: string | undefined, opts: { relevo?: boolean } = {}): string {
   const v = (lang ?? "").trim().toLowerCase();
+  if (opts.relevo) {
+    if (v === "es-es" || v === "es_es") return SAFE_REPLY_RELEVO["es-ES"];
+    if (v.startsWith("pt")) return SAFE_REPLY_RELEVO["pt-BR"];
+    if (v.startsWith("en")) return SAFE_REPLY_RELEVO.en;
+    return SAFE_REPLY_RELEVO["es-419"];
+  }
   if (v === "es-es" || v === "es_es") return SAFE_REPLY_BY_LANG["es-ES"];
   if (v.startsWith("pt")) return SAFE_REPLY_BY_LANG["pt-BR"];
   if (v.startsWith("en")) return SAFE_REPLY_BY_LANG.en;
@@ -95,6 +109,11 @@ export interface VerifyOptions {
    * marca como "sin respaldo" aunque sea correcto.
    */
   systemPrompt?: string;
+  /**
+   * Registro del cliente que el negocio mismo escribió (ficha del CRM con la propuesta enviada, Brief, lo último que
+   * dijo el dueño): fuente oficial igual que la KB. Sin esto, repetir la propuesta enviada se marcaría "sin respaldo".
+   */
+  extraSources?: string;
 }
 
 /**
@@ -133,13 +152,16 @@ Reglas:
 - Si la respuesta no afirma ningún dato factual del negocio, responde supported=true.
 - Si una cifra, promesa o descuento NO aparece en las fuentes, responde supported=false.
 
-FUENTES (información oficial del negocio — las TRES cuentan igual como respaldo):
+FUENTES (información oficial del negocio — todas cuentan igual como respaldo):
 <contexto_negocio>
 ${businessContext || "(vacío)"}
 </contexto_negocio>
 <instrucciones_oficiales_del_bot>
 ${(opts.systemPrompt ?? "").slice(0, 24000) || "(sin instrucciones)"}
 </instrucciones_oficiales_del_bot>
+<registro_del_cliente>
+${(opts.extraSources ?? "").slice(0, 6000) || "(sin registro del cliente)"}
+</registro_del_cliente>
 <pasajes_kb>
 ${passagesBlock}
 </pasajes_kb>
@@ -198,6 +220,10 @@ export interface GuardOptions {
   businessContext?: string;
   /** System prompt activo — fuente oficial para el verificador (ver VerifyOptions). */
   systemPrompt?: string;
+  /** Ficha del CRM + Brief + lo último que escribió el dueño (ver VerifyOptions.extraSources). */
+  extraSources?: string;
+  /** El dueño le pasó la conversación al bot: el reemplazo no habla de "el equipo". */
+  relevo?: boolean;
   conversationId: string | null;
   llm?: LlmOverrides;
   /** Solo para tests; default VERIFY_TIMEOUT_MS. */
@@ -234,6 +260,7 @@ export async function guardReply(env: Env, opts: GuardOptions): Promise<GuardRes
       llm: opts.llm,
       timeoutMs: opts.timeoutMs,
       systemPrompt: opts.systemPrompt,
+      extraSources: opts.extraSources,
     });
   } catch (e) {
     console.warn("[blindaje] verificador falló — fail-open, va la respuesta original:", e);
@@ -274,7 +301,7 @@ export async function guardReply(env: Env, opts: GuardOptions): Promise<GuardRes
   console.warn(`[blindaje] respuesta reemplazada (dato sin respaldo): "${claim.slice(0, 120)}"`);
 
   return {
-    finalText: safeConfirmReply(env.BOT_LANGUAGE),
+    finalText: safeConfirmReply(env.BOT_LANGUAGE, { relevo: opts.relevo }),
     action: "replaced",
     unsupportedClaim: claim,
   };

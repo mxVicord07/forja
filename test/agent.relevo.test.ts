@@ -35,6 +35,7 @@ import { ConversationsRepo } from "../src/db/conversations";
 import { MessagesRepo } from "../src/db/messages";
 import { SettingsRepo } from "../src/db/settings";
 import * as senderMod from "../src/replies/sender";
+import * as verifyMod from "../src/blindaje/verify";
 
 function makeStreamResult(text: string) {
   async function* gen() {
@@ -274,6 +275,35 @@ describe("processBuffer con mensajes ya guardados durante la pausa", () => {
     const llamada = JSON.stringify(streamTextMock.mock.calls[0][0].system);
     expect(llamada).toContain("<relevo>");
     expect(llamada).toContain("Hugo, va la propuesta v2.");
+  });
+
+  it("el blindaje recibe la ficha y lo último del dueño como fuentes, y sabe que hay relevo", async () => {
+    const { agent } = makeAgent();
+    vi.spyOn(MessagesRepo.prototype, "append").mockResolvedValue("m-x" as any);
+    vi.spyOn(MessagesRepo.prototype, "lastN").mockResolvedValue([
+      { role: "owner", content: "Te armé una propuesta: $17,500 más $3,500 al mes. Te dejo con Lía." },
+      { role: "user", content: "es mucho para arrancar" },
+    ] as any);
+    vi.spyOn(SettingsRepo.prototype, "get").mockResolvedValue(null as any);
+    const guard = vi
+      .spyOn(verifyMod, "guardReply")
+      .mockResolvedValue({ finalText: "Claro, te explico.", action: "sent-original" } as any);
+    agent.state.relevoAt = Date.now() - HORA;
+    agent.state.crmFichaAt = Date.now();
+    agent.state.crmFicha = {
+      lead: { id: 126, titulo: "Voz", tipo: "lead", etapa_clave: "New", etapa: "Nuevo", monto: 0, etiquetas: [], empresa: null, contacto: "Manuel", resumen_ultima_interaccion: null, ultimo_contacto: null, proxima_actividad: null, brief: "Clínica de rehabilitación" },
+      cotizacion: { folio: "S00099", estado: "enviada", monto_sin_iva: 17500, vigencia: null },
+      interacciones: [],
+    };
+    agent.state.pendingMessages = [{ text: "es mucho para arrancar", receivedAt: Date.now() }];
+
+    await agent.processBuffer();
+
+    const opts = guard.mock.calls[0][1] as any;
+    expect(opts.relevo).toBe(true);
+    expect(opts.extraSources).toContain("S00099");
+    expect(opts.extraSources).toContain("Clínica de rehabilitación");
+    expect(opts.extraSources).toContain("$17,500 más $3,500 al mes");
   });
 
   it("sin relevo ni propuesta enviada, no hay bloque <relevo>", async () => {

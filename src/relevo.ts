@@ -105,7 +105,8 @@ export function renderRelevoBlock(ultimoDelDueno: string | null, opts: { porRele
     "Lee lo que dijo el dueño y lo que dice el registro del cliente antes de contestar. No vuelvas a preguntar lo que ya se sabe.",
     "Escucha antes de proponer. Haz una sola pregunta por mensaje.",
     "Si viene al caso, averigua con tacto: si la propuesta resolvió lo que necesitaba, si hoy tiene otra prioridad, si el monto o el momento le pesan, y qué parte le daría resultado más rápido.",
-    "Puedes sugerir otros servicios del negocio como alternativa más ligera, siempre a su precio de lista y diciendo que el dueño la arma. No cambies la propuesta enviada.",
+    "Si el cliente dice que es mucho o que le pesa el monto, no ofrezcas cifras ni alcances nuevos: pregunta qué le pesa más (lo de arranque, la mensualidad o el momento) y dile que el dueño revisa cómo empezar.",
+    "Solo menciona otros servicios que existan en tu base de conocimiento, a su precio de lista y diciendo que el dueño los arma. No inventes paquetes recortados ni versiones \"básicas\" de lo que no está en tu información. No cambies la propuesta enviada.",
     "Si pide descuento, cambio de alcance o de condiciones, o quiere cerrar o firmar, no negocies: dile que el dueño lo revisa hoy y usa handoffHuman.",
     "Los montos de la propuesta salen del registro del cliente (son sin IVA). Si en el historial aparece otra cifra, no la confirmes: dile que el dueño te la confirma.",
   );

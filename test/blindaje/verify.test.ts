@@ -139,6 +139,44 @@ describe("guardReply — veredictos", () => {
     expect(await settings.get(SETTING_KEYS.blindajeBlocked)).toBeNull();
   });
 
+  it("el registro del cliente (ficha de Odoo, Brief, lo que escribió el dueño) cuenta como fuente oficial", async () => {
+    generateTextMock.mockResolvedValue(verdict(true));
+    await guardReply(env, {
+      replyText: "La propuesta es de $17,500 más $3,500 al mes, más IVA.",
+      turnUsedKb: false,
+      kbPassages: [],
+      businessContext: "",
+      extraSources: "Propuesta enviada: S00099 por $17,500 MXN + IVA",
+      conversationId: convId,
+    });
+    const prompt = (generateTextMock.mock.calls[0][0] as { prompt: string }).prompt;
+    expect(prompt).toContain("registro_del_cliente");
+    expect(prompt).toContain("S00099 por $17,500");
+  });
+
+  it("en relevo, el reemplazo no habla de 'el equipo': dice que lo confirma quien lo atendió", async () => {
+    generateTextMock.mockResolvedValue(verdict(false, "paquete básico"));
+    const r = await guardReply(env, {
+      replyText: "Puedes empezar con un automático básico de $9,000.",
+      turnUsedKb: false,
+      kbPassages: [],
+      businessContext: "",
+      relevo: true,
+      conversationId: convId,
+    });
+    expect(r.action).toBe("replaced");
+    expect(r.finalText).toBe(safeConfirmReply("es", { relevo: true }));
+    expect(r.finalText).toMatch(/quien te atendi/i);
+    expect(r.finalText).not.toMatch(/el equipo/i);
+    expect(await new TicketsRepo(db).listOpen()).toHaveLength(1);
+  });
+
+  it("safeConfirmReply en relevo respeta el idioma", () => {
+    expect(safeConfirmReply("en", { relevo: true })).toMatch(/who helped you/i);
+    expect(safeConfirmReply("pt", { relevo: true })).toMatch(/atendeu/i);
+    expect(safeConfirmReply("es", { relevo: false })).toBe(safeConfirmReply("es"));
+  });
+
   it("unsupported → respuesta segura + ticket con el claim + aviso al dueño", async () => {
     generateTextMock.mockResolvedValue(verdict(false, "el corte cuesta $80"));
 
