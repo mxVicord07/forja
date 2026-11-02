@@ -36,6 +36,7 @@ import { MessagesRepo } from "../src/db/messages";
 import { SettingsRepo } from "../src/db/settings";
 import * as senderMod from "../src/replies/sender";
 import * as verifyMod from "../src/blindaje/verify";
+import { FRASES_VOSEO } from "../src/blindaje/voseo";
 
 function makeStreamResult(text: string) {
   async function* gen() {
@@ -305,6 +306,7 @@ describe("processBuffer con mensajes ya guardados durante la pausa", () => {
     expect(opts.consultasKb).toEqual(["Opciones para arrancar con menos inversión"]);
     expect(opts.siempre).toBe(true);
     expect(opts.frasesProhibidas?.length).toBeGreaterThan(0);
+    expect(opts.frasesProhibidas).toEqual(expect.arrayContaining(FRASES_VOSEO));
     expect(opts.mensajesCliente).toContain("es mucho para arrancar");
     expect(opts.extraSources).toContain("S00099");
     expect(opts.extraSources).toContain("Clínica de rehabilitación");
@@ -360,6 +362,7 @@ describe("processBuffer con mensajes ya guardados durante la pausa", () => {
     const segunda = streamTextMock.mock.calls[1][0];
     const sistema = JSON.stringify(segunda.system);
     expect(sistema).toContain("rechazado");
+    expect(sistema).toMatch(/español de México/);
     expect(sistema).toContain("cubre llamadas y mensajes");
     expect(sistema).toContain("WhatsApp (Meta) va aparte");
     expect(Object.keys(segunda.tools ?? {})).toHaveLength(0);

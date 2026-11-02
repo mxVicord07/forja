@@ -21,6 +21,7 @@ import { runLlmTurn } from "./llm/runTurn";
 import { costOfUsage } from "./pricing";
 import type { ChannelId } from "./channels/shared";
 import { guardReply, esRespuestaSegura } from "./blindaje/verify";
+import { FRASES_VOSEO } from "./blindaje/voseo";
 import type { DocumentRow } from "./db/documents";
 import { signedFileUrl } from "./files/share";
 import type { SearchKbResult } from "./tools/searchKb";
@@ -787,7 +788,13 @@ export class SupportAgent extends Agent<Env, SupportAgentState> {
             relevo: enRelevo,
             consultasKb: enRelevo ? [RELEVO_CONSULTA_KB] : undefined,
             siempre: enRelevo,
-            frasesProhibidas: enRelevo ? RELEVO_FRASES_VETADAS : undefined,
+            frasesProhibidas: (() => {
+              const f = [
+                ...((this.env.BOT_LANGUAGE ?? "").toLowerCase().startsWith("es") ? FRASES_VOSEO : []),
+                ...(enRelevo ? RELEVO_FRASES_VETADAS : []),
+              ];
+              return f.length ? f : undefined;
+            })(),
             mensajesCliente:
               history
                 .filter((m) => m.role === "user")
@@ -812,7 +819,7 @@ export class SupportAgent extends Agent<Env, SupportAgentState> {
               .join("\n");
             system.push({
               role: "system",
-              content: `<correccion>\nTu borrador anterior fue rechazado porque afirmaba algo sin respaldo: «${guard.unsupportedClaim}».\nReescribe tu respuesta usando solo estas fuentes oficiales, lo que el cliente te dijo y lo que escribió el dueño. Esto manda sobre lo que hayas dicho antes en la conversación, que puede estar equivocado. Lo que no esté en las fuentes no lo afirmes: di que el dueño lo confirma. No prometas retornos. Una sola pregunta.\n<fuentes>\n${fuentesTxt || "(sin pasajes)"}\n</fuentes>\n</correccion>`,
+              content: `<correccion>\nTu borrador anterior fue rechazado porque afirmaba algo sin respaldo: «${guard.unsupportedClaim}».\nReescribe tu respuesta usando solo estas fuentes oficiales, lo que el cliente te dijo y lo que escribió el dueño. Esto manda sobre lo que hayas dicho antes en la conversación, que puede estar equivocado. Lo que no esté en las fuentes no lo afirmes: di que el dueño lo confirma. Habla en español de México con «tú»; nunca uses voseo (vos, tenés, podés, decime). No prometas retornos. Una sola pregunta.\n<fuentes>\n${fuentesTxt || "(sin pasajes)"}\n</fuentes>\n</correccion>`,
             });
             const previo = { texto: assistantText, entrada: inputTokens, salida: outputTokens, cache: cachedTokens, tools: toolCallsMade, n: toolCallCount };
             try {
