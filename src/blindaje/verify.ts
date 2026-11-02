@@ -248,6 +248,7 @@ export type GuardAction =
   | "skipped-off" // el dueño apagó blindaje_enabled
   | "skipped-no-claims" // la respuesta no afirma datos y no hubo KB este turno
   | "sent-original" // verificada y respaldada — sale tal cual
+  | "rejected" // sin respaldo y reintentable: sin ticket ni reemplazo; el agente corrige y vuelve a verificar
   | "replaced" // sin respaldo — sale el "déjame confirmarlo" + ticket
   | "fail-open"; // el verificador falló/timeout — sale la original intacta
 
@@ -262,6 +263,8 @@ export interface GuardOptions {
   extraSources?: string;
   /** El dueño le pasó la conversación al bot: el reemplazo no habla de "el equipo". */
   relevo?: boolean;
+  /** Un rechazo no reemplaza ni abre ticket: devuelve "rejected" con el claim y las fuentes para que el bot corrija y se verifique de nuevo. */
+  reintentable?: boolean;
   /** Verifica siempre, aunque la respuesta no traiga cifras ni haya usado la KB (en relevo: una política inventada no lleva dígitos). */
   siempre?: boolean;
   /** Últimos mensajes del cliente (ver VerifyOptions.mensajesCliente). */
@@ -278,6 +281,8 @@ export interface GuardResult {
   finalText: string;
   action: GuardAction;
   unsupportedClaim?: string;
+  /** Pasajes que vio el verificador (solo con "rejected"): se le muestran al bot para que corrija. */
+  fuentes?: SearchKbResult[];
 }
 
 /**
@@ -331,6 +336,9 @@ export async function guardReply(env: Env, opts: GuardOptions): Promise<GuardRes
   if (verdict.supported) return { finalText: original, action: "sent-original" };
 
   const claim = (verdict.unsupported_claim ?? original).slice(0, 200);
+  if (opts.reintentable) {
+    return { finalText: original, action: "rejected", unsupportedClaim: claim, fuentes: pasajes };
+  }
   const mejor = pasajes.reduce((m, p) => Math.max(m, p.score), 0);
   const fuentes = `KB consultada: ${pasajes.length} pasaje${pasajes.length === 1 ? "" : "s"}${pasajes.length ? `, mejor ${mejor.toFixed(2)}` : ""}`;
 

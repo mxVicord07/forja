@@ -684,12 +684,12 @@ export class SupportAgent extends Agent<Env, SupportAgentState> {
       let usedModelId = modelId;
 
       // Corre el loop del LLM con un modelo dado; deja los resultados en las vars.
-      const attempt = async (m: any) => {
+      const attempt = async (m: any, sinTools = false) => {
         const turn = await runLlmTurn({
           model: m,
           system,
           messages: aiMessages,
-          tools: enabledTools,
+          tools: sinTools ? ({} as typeof enabledTools) : enabledTools,
           stopWhen: ({ steps }) => steps.length >= 6,
           ...(cfg.temperature !== undefined ? { temperature: cfg.temperature } : {}),
         });
@@ -778,8 +778,9 @@ export class SupportAgent extends Agent<Env, SupportAgentState> {
           ]
             .filter(Boolean)
             .join("\n");
-          const guard = await guardReply(this.env, {
-            replyText: assistantText,
+          const opcionesGuard = (texto: string, reintentable: boolean) => ({
+            replyText: texto,
+            reintentable,
             extraSources: extraSources || undefined,
             relevo: enRelevo,
             consultasKb: enRelevo ? [RELEVO_CONSULTA_KB] : undefined,
@@ -797,6 +798,33 @@ export class SupportAgent extends Agent<Env, SupportAgentState> {
             conversationId: convId,
             llm: cfg.llm,
           });
+          let guard = await guardReply(this.env, opcionesGuard(assistantText, true));
+
+          // Corrección guiada: el verificador rechazó el borrador. En vez de soltar el "lo confirma el equipo", el
+          // bot reescribe con el claim rechazado y las fuentes oficiales (sin tools: no repite efectos). Si el
+          // segundo borrador tampoco pasa, sale el texto de seguridad con ticket.
+          if (guard.action === "rejected") {
+            const fuentesTxt = (guard.fuentes ?? [])
+              .map((p) => `- ${p.title ? `${p.title}: ` : ""}${p.content.slice(0, 700)}`)
+              .join("\n");
+            system.push({
+              role: "system",
+              content: `<correccion>\nTu borrador anterior fue rechazado porque afirmaba algo sin respaldo: «${guard.unsupportedClaim}».\nReescribe tu respuesta usando solo estas fuentes oficiales, lo que el cliente te dijo y lo que escribió el dueño. Esto manda sobre lo que hayas dicho antes en la conversación, que puede estar equivocado. Lo que no esté en las fuentes no lo afirmes: di que el dueño lo confirma. No prometas retornos. Una sola pregunta.\n<fuentes>\n${fuentesTxt || "(sin pasajes)"}\n</fuentes>\n</correccion>`,
+            });
+            const previo = { texto: assistantText, entrada: inputTokens, salida: outputTokens, cache: cachedTokens, tools: toolCallsMade, n: toolCallCount };
+            try {
+              await attempt(model, true);
+              inputTokens += previo.entrada;
+              outputTokens += previo.salida;
+              cachedTokens += previo.cache;
+            } catch (e) {
+              console.warn("[blindaje] la corrección falló; se verifica el borrador original:", e);
+              assistantText = previo.texto;
+            }
+            toolCallsMade = previo.tools;
+            toolCallCount = previo.n;
+            guard = await guardReply(this.env, opcionesGuard(assistantText, false));
+          }
           if (guard.action === "replaced") {
             assistantText = guard.finalText;
           }

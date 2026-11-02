@@ -233,6 +233,37 @@ describe("guardReply — veredictos", () => {
     expect(r.action).toBe("replaced");
   });
 
+  it("reintentable: un rechazo no reemplaza ni abre ticket; devuelve el claim y las fuentes para que el bot corrija", async () => {
+    generateTextMock.mockResolvedValue(verdict(false, "la mensualidad cubre llamadas"));
+    const r = await guardReply(env, {
+      replyText: "La mensualidad cubre llamadas y mensajes.",
+      turnUsedKb: true,
+      kbPassages: KB_PASSAGES,
+      businessContext: "",
+      reintentable: true,
+      conversationId: convId,
+    });
+    expect(r.action).toBe("rejected");
+    expect(r.unsupportedClaim).toBe("la mensualidad cubre llamadas");
+    expect(r.fuentes?.length).toBe(KB_PASSAGES.length);
+    expect(r.finalText).toBe("La mensualidad cubre llamadas y mensajes.");
+    expect(await new TicketsRepo(db).listOpen()).toHaveLength(0);
+    expect(fetchMock.mock.calls.find(([u]) => String(u).includes("api.telegram.org"))).toBeUndefined();
+  });
+
+  it("reintentable: si la respuesta sí tiene respaldo, sale igual que siempre", async () => {
+    generateTextMock.mockResolvedValue(verdict(true));
+    const r = await guardReply(env, {
+      replyText: "El corte cuesta $150.",
+      turnUsedKb: true,
+      kbPassages: KB_PASSAGES,
+      businessContext: "",
+      reintentable: true,
+      conversationId: convId,
+    });
+    expect(r.action).toBe("sent-original");
+  });
+
   it("sin siempre, una respuesta sin cifras ni KB sigue sin verificarse", async () => {
     const r = await guardReply(env, {
       replyText: "Claro, cuéntame un poco más de tu clínica.",

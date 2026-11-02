@@ -330,6 +330,46 @@ describe("processBuffer con mensajes ya guardados durante la pausa", () => {
     expect(enviado).toContain("confirmaría con el dueño");
   });
 
+  it("si el blindaje rechaza el borrador, el bot lo corrige con el claim y las fuentes, sin tools, y se verifica de nuevo", async () => {
+    const { agent } = makeAgent();
+    const sendReply = vi.fn(async () => {});
+    vi.spyOn(senderMod, "pickAdapter").mockReturnValue({ sendReply } as any);
+    vi.spyOn(MessagesRepo.prototype, "append").mockResolvedValue("m-x" as any);
+    vi.spyOn(MessagesRepo.prototype, "lastN").mockResolvedValue([{ role: "user", content: "¿qué cubre la mensualidad?" }] as any);
+    vi.spyOn(SettingsRepo.prototype, "get").mockResolvedValue(null as any);
+    streamTextMock.mockReset();
+    streamTextMock
+      .mockImplementationOnce(() => makeStreamResult("Cubre llamadas y mensajes."))
+      .mockImplementationOnce(() => makeStreamResult("Cubre hospedaje, IA y ajustes; WhatsApp va aparte."));
+    const guard = vi
+      .spyOn(verifyMod, "guardReply")
+      .mockResolvedValueOnce({
+        finalText: "Cubre llamadas y mensajes.",
+        action: "rejected",
+        unsupportedClaim: "cubre llamadas y mensajes",
+        fuentes: [{ title: "Mensualidad", content: "WhatsApp (Meta) va aparte, a costo.", score: 0.85 }],
+      } as any)
+      .mockResolvedValueOnce({ finalText: "Cubre hospedaje, IA y ajustes; WhatsApp va aparte.", action: "sent-original" } as any);
+    agent.state.relevoAt = Date.now() - HORA;
+    agent.state.pendingMessages = [{ text: "¿qué cubre la mensualidad?", receivedAt: Date.now() }];
+
+    await agent.processBuffer();
+
+    expect(streamTextMock).toHaveBeenCalledTimes(2);
+    const segunda = streamTextMock.mock.calls[1][0];
+    const sistema = JSON.stringify(segunda.system);
+    expect(sistema).toContain("rechazado");
+    expect(sistema).toContain("cubre llamadas y mensajes");
+    expect(sistema).toContain("WhatsApp (Meta) va aparte");
+    expect(Object.keys(segunda.tools ?? {})).toHaveLength(0);
+    expect(guard).toHaveBeenCalledTimes(2);
+    expect((guard.mock.calls[0][1] as any).reintentable).toBe(true);
+    expect((guard.mock.calls[1][1] as any).reintentable).toBeFalsy();
+    const enviado = JSON.stringify((sendReply.mock.calls[0] as any)[0].chunks);
+    expect(enviado).toContain("hospedaje");
+    expect(enviado).not.toContain("llamadas y mensajes");
+  });
+
   it("sin relevo ni propuesta enviada, no hay bloque <relevo>", async () => {
     const { agent } = makeAgent();
     vi.spyOn(MessagesRepo.prototype, "append").mockResolvedValue("m-x" as any);
