@@ -99,6 +99,14 @@ describe("renderRelevoBlock", () => {
     expect(veta("la mensualidad se paga sola en poco tiempo")).toBe(true);
     expect(veta("el asistente se pagaría solo")).toBe(true);
     expect(veta("Victor calcula cuál es tu retorno real con tus números")).toBe(false);
+    expect(veta("lo documentamos para que pases a Negocio sin perder lo que ya pagaste")).toBe(true);
+    expect(veta("te manda la cotización de solo la diferencia")).toBe(true);
+    expect(veta("no pagas todo de nuevo")).toBe(true);
+    expect(veta("Victor revisa qué se reutiliza y te manda una cotización")).toBe(false);
+  });
+
+  it("no cierra cada respuesta empujando a cerrar con el dueño", () => {
+    expect(renderRelevoBlock(null)).toMatch(/no termines cada respuesta invitando a cerrar/i);
   });
 
   it("no repite montos si el cliente no los pidió", () => {

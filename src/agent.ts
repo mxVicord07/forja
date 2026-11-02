@@ -477,7 +477,9 @@ export class SupportAgent extends Agent<Env, SupportAgentState> {
       .map((m) =>
         m.role === "assistant" && esRespuestaSegura(m.content)
           ? mapMessageToAiTurn({ ...m, content: "(Dije que ese dato lo confirmaría con el dueño.)" })
-          : mapMessageToAiTurn(m),
+          : m.role === "assistant" && RELEVO_FRASES_VETADAS.some((f) => new RegExp(f, "i").test(m.content))
+            ? mapMessageToAiTurn({ ...m, content: "(Dije algo sobre retornos o créditos que no debía y que el dueño no ha confirmado; no lo repitas.)" })
+            : mapMessageToAiTurn(m),
       );
     // Build the LAST user message multimodal-aware: if it carries an
     // [IMAGE_URL: ...] marker AND we're on the Pro tier, attach the image.
