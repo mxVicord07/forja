@@ -201,6 +201,48 @@ describe("guardReply — veredictos", () => {
     expect(prompt).not.toContain("Texto sin relación");
   });
 
+  it("consultasKb: en relevo se trae el documento de opciones aunque la consulta por la respuesta no lo encuentre", async () => {
+    generateTextMock.mockResolvedValue(verdict(true));
+    const query = vi
+      .fn()
+      .mockResolvedValueOnce({ matches: [] }) // consulta con la respuesta: nada
+      .mockResolvedValueOnce({
+        matches: [{ score: 0.41, metadata: { title: "Opciones para arrancar", content: "Pago en 3 pagos iguales; el dueño arma el plan." } }],
+      });
+    const envConKb = { ...env, AI: { run: vi.fn(async () => ({ data: [[0.1, 0.2]] })) }, KB: { query } } as unknown as Env;
+
+    await guardReply(envConKb, {
+      replyText: "Victor puede dividir el pago en 3 o 6 cuotas.",
+      turnUsedKb: false,
+      kbPassages: [],
+      businessContext: "",
+      consultasKb: ["Opciones para arrancar con menos inversión"],
+      conversationId: convId,
+    });
+
+    const prompt = (generateTextMock.mock.calls[0][0] as { prompt: string }).prompt;
+    expect(prompt).toContain("el dueño arma el plan");
+  });
+
+  it("el ticket dice cuántos pasajes de la KB vio el verificador y la mejor coincidencia", async () => {
+    generateTextMock.mockResolvedValue(verdict(false, "el corte cuesta $80"));
+    const envConKb = {
+      ...env,
+      AI: { run: vi.fn(async () => ({ data: [[0.1]] })) },
+      KB: { query: vi.fn(async () => ({ matches: [{ score: 0.62, metadata: { title: "Precios", content: "Corte: $150" } }] })) },
+    } as unknown as Env;
+    await guardReply(envConKb, {
+      replyText: "El corte te sale en $80.",
+      turnUsedKb: false,
+      kbPassages: [],
+      businessContext: "",
+      conversationId: convId,
+    });
+    const [t] = await new TicketsRepo(db).listOpen();
+    expect(t.summary).toMatch(/KB consultada: 1 pasaje/);
+    expect(t.summary).toMatch(/mejor 0\.62/);
+  });
+
   it("si la consulta de la KB falla, el verificador sigue con lo que tenga (fail-open)", async () => {
     generateTextMock.mockResolvedValue(verdict(true));
     const envRota = { ...env, AI: { run: vi.fn(async () => { throw new Error("ai caído"); }) }, KB: { query: vi.fn() } } as unknown as Env;

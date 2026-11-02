@@ -6,5 +6,8 @@ de qué esperar. Las primeras mejoras visibles suelen llegar antes de terminar
 la Fase 2. Por eso empezamos siempre con diagnóstico: sabes exactamente qué
 esperar."
 
-Referencia adicional: el paquete de implementación estándar toma entre 15 y
-20 días hábiles una vez aprobado el alcance.
+Referencia adicional, una vez aprobado el alcance, según el paquete:
+asistentes conversacionales Starter 10 a 15 días hábiles, Negocio 15 a 20 y Pro
+20 a 30; agentes de voz Starter 5 a 8, Recepción 10 a 15 y Comercial 20 a 30;
+sitios web de 5 a 20 según el plan. Los proyectos a medida se calculan en el
+diagnóstico.

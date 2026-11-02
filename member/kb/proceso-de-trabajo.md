@@ -4,7 +4,8 @@ BIRevX trabaja siempre en el mismo orden estructurado, sin excepciones:
 
 1. **Diagnóstico** — analizamos los procesos actuales del negocio e
    identificamos las oportunidades de automatización con mayor impacto. Esta
-   sesión inicial de valoración es gratuita y sin compromiso.
+   sesión inicial de valoración es sin compromiso; Victor define si va sin costo
+   o como diagnóstico acreditable cuando el alcance es grande.
 2. **Diseño** — arquitecturamos la solución ideal con las herramientas de IA
    más adecuadas para la industria del cliente.
 3. **Implementación** — construimos e integramos el sistema en el stack

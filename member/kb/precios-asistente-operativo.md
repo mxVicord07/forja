@@ -19,9 +19,9 @@ Es el mismo tipo de herramienta que BIRevX usa para operar su propio negocio.
 ## Automatización a la medida
 Flujos con n8n e IA para tareas repetitivas del negocio (pedidos, seguimiento,
 reportes, integraciones). Cada proyecto se cotiza según su alcance; el rango
-típico es de $17,500 a $70,000 MXN. El precio exacto sale del diagnóstico
-gratuito.
+típico es de $17,500 a $70,000 MXN. El precio exacto sale del diagnóstico.
 
 ## Consultoría y capacitación
-Diagnóstico inicial gratuito y sin compromiso. Después, proyectos por fases
+Sesión inicial sin compromiso; el diagnóstico completo, cuando el alcance es
+grande, es pagado y acreditable (desde $4,500). Después, proyectos por fases
 con pagos por avance. Para sesiones de consultoría por hora: $600 MXN más IVA.

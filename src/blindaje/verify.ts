@@ -81,10 +81,16 @@ export function esRespuestaSegura(texto: string | undefined | null): boolean {
 }
 
 /** Pasajes de la KB relacionados con la respuesta, con score mínimo; nunca lanza ni tarda más de `ms`. */
-async function pasajesDeLaRespuesta(env: Env, respuesta: string, ms = 2500): Promise<SearchKbResult[]> {
+async function pasajesDeLaRespuesta(
+  env: Env,
+  respuesta: string,
+  ms = 2500,
+  minScore = 0.5,
+  topK = 4,
+): Promise<SearchKbResult[]> {
   try {
-    const todos = await withTimeout(consultaKb(env, respuesta.slice(0, 400), 4), ms);
-    return todos.filter((p) => p.score >= 0.5 && p.content);
+    const todos = await withTimeout(consultaKb(env, respuesta.slice(0, 400), topK), ms);
+    return todos.filter((p) => p.score >= minScore && p.content);
   } catch {
     return [];
   }
@@ -249,6 +255,8 @@ export interface GuardOptions {
   extraSources?: string;
   /** El dueño le pasó la conversación al bot: el reemplazo no habla de "el equipo". */
   relevo?: boolean;
+  /** Consultas a la KB que se hacen siempre (documentos que el bot debe poder citar aunque no los haya buscado). */
+  consultasKb?: string[];
   conversationId: string | null;
   llm?: LlmOverrides;
   /** Solo para tests; default VERIFY_TIMEOUT_MS. */
@@ -283,8 +291,16 @@ export async function guardReply(env: Env, opts: GuardOptions): Promise<GuardRes
   // La KB se consulta también por la respuesta misma: el bot casi no usa searchKb por su cuenta (I-018) y
   // un dato correcto que sí está en la KB no debe frenarse solo porque no la buscó.
   const propios = await pasajesDeLaRespuesta(env, original);
-  const vistos = new Set(opts.kbPassages.map((p) => p.content));
-  const pasajes = [...opts.kbPassages, ...propios.filter((p) => !vistos.has(p.content))].slice(0, 10);
+  const dirigidos: SearchKbResult[] = [];
+  for (const q of opts.consultasKb ?? []) dirigidos.push(...(await pasajesDeLaRespuesta(env, q, 2500, 0.3, 2)));
+  const vistos = new Set<string>();
+  const pasajes: SearchKbResult[] = [];
+  for (const p of [...opts.kbPassages, ...dirigidos, ...propios]) {
+    if (vistos.has(p.content)) continue;
+    vistos.add(p.content);
+    pasajes.push(p);
+  }
+  pasajes.splice(10);
 
   try {
     verdict = await verifyReply(env, original, pasajes, opts.businessContext ?? "", {
@@ -303,6 +319,8 @@ export async function guardReply(env: Env, opts: GuardOptions): Promise<GuardRes
   if (verdict.supported) return { finalText: original, action: "sent-original" };
 
   const claim = (verdict.unsupported_claim ?? original).slice(0, 200);
+  const mejor = pasajes.reduce((m, p) => Math.max(m, p.score), 0);
+  const fuentes = `KB consultada: ${pasajes.length} pasaje${pasajes.length === 1 ? "" : "s"}${pasajes.length ? `, mejor ${mejor.toFixed(2)}` : ""}`;
 
   // Ticket + aviso al dueño con el mismo mecanismo del handoff (TicketsRepo +
   // ConversationsRepo.setOpenTicket + notifyOwner) — cero duplicación de la
@@ -313,7 +331,7 @@ export async function guardReply(env: Env, opts: GuardOptions): Promise<GuardRes
     const ticketId = await new TicketsRepo(db).create({
       conversationId: opts.conversationId,
       category: "other",
-      summary: `[dato sin respaldo] El bot iba a afirmar un dato que no está en tu información: "${claim}". Se le dijo al cliente que lo confirmas tú.`,
+      summary: `[dato sin respaldo] El bot iba a afirmar un dato que no está en tu información: "${claim}". Se le dijo al cliente que lo confirmas tú. (${fuentes})`,
       transcript: "",
     });
     if (opts.conversationId) {
