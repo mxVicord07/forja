@@ -73,6 +73,19 @@ describe("renderCrmBlock · propuesta vigente (I-023)", () => {
   });
 });
 
+describe("renderCrmBlock · varios contactos de una empresa", () => {
+  it("si escribe otro contacto de la empresa, lo dice y mantiene la misma propuesta", () => {
+    const txt = renderCrmBlock({ ...base, lead: { ...base.lead, contacto_que_escribe: "Florencio Castillo" } });
+    expect(txt).toContain("Quien te escribe ahora es Florencio Castillo, otro contacto de la misma empresa");
+    expect(txt).toContain("S00046");
+  });
+
+  it("si escribe el contacto principal o la ficha no lo trae, no agrega nada", () => {
+    expect(renderCrmBlock({ ...base, lead: { ...base.lead, contacto_que_escribe: "Hugo Loredo" } })).not.toContain("Quien te escribe ahora");
+    expect(renderCrmBlock(base)).not.toContain("Quien te escribe ahora");
+  });
+});
+
 describe("fetchCrmFicha", () => {
   const env = { CRM_FICHA_URL: URL_FICHA } as any;
 

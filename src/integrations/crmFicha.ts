@@ -21,6 +21,8 @@ export interface CrmFicha {
     etiquetas: string[];
     empresa: string | null;
     contacto: string | null;
+    /** Contacto de la empresa cuyo teléfono coincide con quien escribe (puede ser distinto del principal). Opcional: fichas anteriores al 3-nov-2026 no lo traen. */
+    contacto_que_escribe?: string | null;
     resumen_ultima_interaccion: string | null;
     ultimo_contacto: string | null;
     proxima_actividad: { fecha: string | null; resumen: string | null } | null;
@@ -121,6 +123,9 @@ export function renderCrmBlock(f: CrmFicha): string {
   const lineas: string[] = [];
   const quien = [l.contacto, l.empresa ? `(${l.empresa})` : null].filter(Boolean).join(" ");
   if (quien) lineas.push(`- Cliente: ${quien}`);
+  if (l.contacto_que_escribe && l.contacto_que_escribe !== l.contacto) {
+    lineas.push(`- Quien te escribe ahora es ${l.contacto_que_escribe}, otro contacto de la misma empresa: háblale por su nombre; la propuesta y el proyecto son los mismos`);
+  }
   lineas.push(`- Proyecto en conversación: ${l.titulo}`);
   if (l.etapa) lineas.push(`- Etapa: ${l.etapa}`);
   if (f.cotizacion) {
