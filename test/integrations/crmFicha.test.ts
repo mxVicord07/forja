@@ -24,6 +24,55 @@ const base: CrmFicha = {
 
 afterEach(() => vi.restoreAllMocks());
 
+describe("renderCrmBlock · propuesta vigente (I-023)", () => {
+  const detalle = {
+    referencia: "Propuesta v1.2 · 2026-10-28",
+    monto_total: 70180,
+    anticipo_pct: 30,
+    firmada: false,
+    lineas: [
+      { descripcion: "Sistema operativo clínico", subtotal: 60500 },
+      { descripcion: "Beneficio por primer proyecto", subtotal: -4000 },
+    ],
+    enlace: "https://odoo.birevx.com/my/orders/46?access_token=tok",
+  };
+
+  it("con la propuesta enviada trae versión, total, anticipo, qué incluye y el enlace", () => {
+    const txt = renderCrmBlock({ ...base, cotizacion: { ...base.cotizacion!, ...detalle } });
+    expect(txt).toContain("S00046 (Propuesta v1.2 · 2026-10-28)");
+    expect(txt).toContain("Total con IVA $70,180 MXN; anticipo de 30% = $21,054 MXN");
+    expect(txt).toContain("Sistema operativo clínico ($60,500 MXN); Beneficio por primer proyecto (-$4,000 MXN)");
+    expect(txt).toContain("https://odoo.birevx.com/my/orders/46?access_token=tok");
+    expect(txt).toContain("nunca otro enlace ni uno inventado");
+  });
+
+  it("sin enlace en la ficha no inventa uno", () => {
+    const txt = renderCrmBlock({ ...base, cotizacion: { ...base.cotizacion!, ...detalle, enlace: null } });
+    expect(txt).not.toContain("Enlace de la propuesta");
+    expect(txt).not.toContain("access_token");
+  });
+
+  it("si ya firmó no la ofrece otra vez ni da el enlace", () => {
+    const txt = renderCrmBlock({ ...base, cotizacion: { ...base.cotizacion!, estado: "confirmada", ...detalle, firmada: true, firmada_el: "2026-10-26" } });
+    expect(txt).toContain("ya aceptó y firmó esta propuesta el 2026-10-26");
+    expect(txt).not.toContain("access_token");
+  });
+
+  it("una propuesta en borrador no revela montos, líneas ni enlace aunque la ficha los traiga", () => {
+    const txt = renderCrmBlock({ ...base, cotizacion: { ...base.cotizacion!, estado: "borrador (aún no enviada)", ...detalle } });
+    expect(txt).toContain("todavía no se le ha enviado");
+    expect(txt).not.toContain("70,180");
+    expect(txt).not.toContain("Sistema operativo clínico");
+    expect(txt).not.toContain("access_token");
+  });
+
+  it("una ficha anterior, sin detalle, se ve como antes", () => {
+    const txt = renderCrmBlock(base);
+    expect(txt).toContain("Propuesta enviada: S00046 por $60,500 MXN + IVA, vigente hasta 2026-11-15");
+    expect(txt).not.toContain("anticipo");
+  });
+});
+
 describe("fetchCrmFicha", () => {
   const env = { CRM_FICHA_URL: URL_FICHA } as any;
 

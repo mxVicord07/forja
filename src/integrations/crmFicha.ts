@@ -27,7 +27,23 @@ export interface CrmFicha {
     /** Indicaciones que Victor escribe para el bot en la oportunidad (`x_brief_lia`). Opcional: fichas anteriores al 1-nov-2026 no lo traen. */
     brief?: string | null;
   };
-  cotizacion: { folio: string; estado: string; monto_sin_iva: number; vigencia: string | null } | null;
+  cotizacion: {
+    folio: string;
+    estado: string;
+    monto_sin_iva: number;
+    vigencia: string | null;
+    /** Detalle de la propuesta vigente (I-023). Opcional: la ficha anterior al 3-nov-2026 solo trae lo de arriba. */
+    referencia?: string | null;
+    monto_total?: number;
+    anticipo_pct?: number;
+    firmada?: boolean;
+    firmada_el?: string | null;
+    firmada_por?: string | null;
+    lineas?: { descripcion: string; subtotal: number }[];
+    tiene_pdf?: boolean;
+    /** Enlace del portal de Odoo (con su token): el que el cliente usa para ver y firmar. Solo existe si ya se generó. */
+    enlace?: string | null;
+  } | null;
   /** Semáforo de contacto de Odoo (BRX_Copiloto_Semaforo, 7:00): `codigo` es accion:razon y no cambia; `texto` es para leer. */
   semaforo?: { codigo: string; texto: string | null; siguiente_toque: string | null } | null;
   interacciones: {
@@ -111,9 +127,26 @@ export function renderCrmBlock(f: CrmFicha): string {
     const c = f.cotizacion;
     lineas.push(
       c.estado === "enviada" || c.estado === "confirmada"
-        ? `- Propuesta ${c.estado}: ${c.folio} por ${pesos(c.monto_sin_iva)} + IVA${c.vigencia ? `, vigente hasta ${c.vigencia}` : ""}`
+        ? `- Propuesta ${c.estado}: ${c.folio}${c.referencia ? ` (${c.referencia})` : ""} por ${pesos(c.monto_sin_iva)} + IVA${c.vigencia ? `, vigente hasta ${c.vigencia}` : ""}`
         : `- Hay una propuesta en preparación que todavía no se le ha enviado: no menciones montos ni la des por enviada`,
     );
+    if (c.estado === "enviada" || c.estado === "confirmada") {
+      if (c.monto_total != null && c.anticipo_pct != null) {
+        lineas.push(`- Total con IVA ${pesos(c.monto_total)}; anticipo de ${c.anticipo_pct}% = ${pesos((c.monto_total * c.anticipo_pct) / 100)}`);
+      }
+      if (c.lineas?.length) {
+        lineas.push(`- La propuesta incluye: ${c.lineas.map((x) => `${x.descripcion} (${x.subtotal < 0 ? "-" : ""}${pesos(Math.abs(x.subtotal))})`).join("; ")}`);
+      }
+      if (c.firmada) {
+        lineas.push(
+          `- El cliente ya aceptó y firmó esta propuesta${c.firmada_el ? ` el ${c.firmada_el}` : ""}: no se la vuelvas a ofrecer; lo que sigue es el anticipo, y para ese enlace o cualquier cambio avisa a Victor`,
+        );
+      } else if (c.estado === "enviada" && c.enlace) {
+        lineas.push(
+          `- Enlace de la propuesta: ${c.enlace} (es el de este cliente; si pide verla de nuevo o quiere aceptarla, es este, nunca otro enlace ni uno inventado)`,
+        );
+      }
+    }
   }
   if (l.resumen_ultima_interaccion) {
     lineas.push(`- Última conversación${l.ultimo_contacto ? ` (${l.ultimo_contacto})` : ""}: ${l.resumen_ultima_interaccion}`);
