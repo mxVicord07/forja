@@ -46,6 +46,20 @@ describe("renderCrmBlock · propuesta vigente (I-023)", () => {
     expect(txt).toContain("nunca otro enlace ni uno inventado");
   });
 
+  it("muestra los centavos cuando los hay y no redondea el total", () => {
+    const txt = renderCrmBlock({ ...base, cotizacion: { ...base.cotizacion!, monto_sin_iva: 18890, ...detalle, monto_total: 21912.4, anticipo_pct: 50, lineas: [{ descripcion: "Prueba", subtotal: 20 }] } });
+    expect(txt).toContain("Total con IVA $21,912.40 MXN; anticipo de 50% = $10,956.20 MXN");
+    expect(txt).toContain("por $18,890 MXN + IVA");
+  });
+
+  it("si ya firmó y pagó el anticipo lo dice y no habla de pagar otra vez", () => {
+    const txt = renderCrmBlock({ ...base, cotizacion: { ...base.cotizacion!, estado: "confirmada", ...detalle, firmada: true, firmada_el: "2026-11-03", anticipo_pagado: true } });
+    expect(txt).toContain("ya aceptó, firmó el 2026-11-03 y pagó el anticipo");
+    expect(txt).toContain("arranque del proyecto");
+    expect(txt).not.toContain("lo que sigue es el anticipo");
+    expect(txt).not.toContain("access_token");
+  });
+
   it("sin enlace en la ficha no inventa uno", () => {
     const txt = renderCrmBlock({ ...base, cotizacion: { ...base.cotizacion!, ...detalle, enlace: null } });
     expect(txt).not.toContain("Enlace de la propuesta");

@@ -39,6 +39,8 @@ export interface CrmFicha {
     monto_total?: number;
     anticipo_pct?: number;
     firmada?: boolean;
+    /** Hay un pago de anticipo recibido (transacción hecha o factura pagada). Opcional: fichas anteriores no lo traen. */
+    anticipo_pagado?: boolean;
     firmada_el?: string | null;
     firmada_por?: string | null;
     lineas?: { descripcion: string; subtotal: number }[];
@@ -110,7 +112,11 @@ export async function fetchCrmFicha(
   }
 }
 
-const pesos = (n: number) => `$${Math.round(n).toLocaleString("en-US")} MXN`;
+/** Pesos exactos: con centavos cuando los hay ($23.20, $21,912.40) y sin ellos cuando es entero ($60,500). */
+const pesos = (n: number) =>
+  Number.isInteger(n)
+    ? `$${n.toLocaleString("en-US")} MXN`
+    : `$${n.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} MXN`;
 
 /**
  * Bloque de sistema con la ficha. Da continuidad (no volver a preguntar lo
@@ -142,7 +148,11 @@ export function renderCrmBlock(f: CrmFicha): string {
       if (c.lineas?.length) {
         lineas.push(`- La propuesta incluye: ${c.lineas.map((x) => `${x.descripcion} (${x.subtotal < 0 ? "-" : ""}${pesos(Math.abs(x.subtotal))})`).join("; ")}`);
       }
-      if (c.firmada) {
+      if (c.firmada && c.anticipo_pagado) {
+        lineas.push(
+          `- El cliente ya aceptó, firmó${c.firmada_el ? ` el ${c.firmada_el}` : ""} y pagó el anticipo: no se la vuelvas a ofrecer ni le pidas pagar otra vez; lo que sigue es el arranque del proyecto, que coordina Victor. Para fechas, facturas o cualquier cambio avisa a Victor`,
+        );
+      } else if (c.firmada) {
         lineas.push(
           `- El cliente ya aceptó y firmó esta propuesta${c.firmada_el ? ` el ${c.firmada_el}` : ""}: no se la vuelvas a ofrecer; lo que sigue es el anticipo, y para ese enlace o cualquier cambio avisa a Victor`,
         );
