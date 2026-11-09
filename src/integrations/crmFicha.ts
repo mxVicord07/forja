@@ -39,6 +39,12 @@ export interface CrmFicha {
     monto_total?: number;
     anticipo_pct?: number;
     firmada?: boolean;
+    /** Moneda de la propuesta ("MXN" o "USD"); sin dato se asume MXN. Fichas anteriores al 9-nov-2026 no lo traen. */
+    moneda?: string;
+    /** La propuesta no lleva IVA (Get Smoked, en dólares). Sin dato se asume que sí lo lleva. */
+    sin_iva?: boolean;
+    /** La propuesta se firma y se cobra en línea; `false` = solo firma (los pagos se acuerdan aparte, sin anticipo). Sin dato se asume que sí. */
+    cobro_en_linea?: boolean;
     /** Hay un pago de anticipo recibido (transacción hecha o factura pagada). Opcional: fichas anteriores no lo traen. */
     anticipo_pagado?: boolean;
     firmada_el?: string | null;
@@ -118,13 +124,19 @@ const pesos = (n: number) =>
     ? `$${n.toLocaleString("en-US")} MXN`
     : `$${n.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} MXN`;
 
+/** Monto en la moneda de la propuesta: pesos como siempre ($21,912.40 MXN) y dólares como "USD 1,000.00". */
+export function dinero(n: number, moneda?: string): string {
+  if (!moneda || moneda === "MXN") return pesos(n);
+  return `${moneda} ${n.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+}
+
 /**
  * Bloque de sistema con la ficha. Da continuidad (no volver a preguntar lo
  * que ya se sabe, no contradecir la propuesta) sin convertir datos internos
  * en algo que el bot le diga al cliente: la próxima actividad, las etiquetas
  * y el monto estimado de la oportunidad se quedan fuera a propósito.
  */
-export function renderCrmBlock(f: CrmFicha): string {
+export function renderCrmBlock(f: CrmFicha, opts?: { bookingUrl?: string }): string {
   const l = f.lead;
   const lineas: string[] = [];
   const quien = [l.contacto, l.empresa ? `(${l.empresa})` : null].filter(Boolean).join(" ");
@@ -138,15 +150,18 @@ export function renderCrmBlock(f: CrmFicha): string {
     const c = f.cotizacion;
     lineas.push(
       c.estado === "enviada" || c.estado === "confirmada"
-        ? `- Propuesta ${c.estado}: ${c.folio}${c.referencia ? ` (${c.referencia})` : ""} por ${pesos(c.monto_sin_iva)} + IVA${c.vigencia ? `, vigente hasta ${c.vigencia}` : ""}`
+        ? `- Propuesta ${c.estado}: ${c.folio}${c.referencia ? ` (${c.referencia})` : ""} por ${dinero(c.monto_sin_iva, c.moneda)}${c.sin_iva ? " (sin IVA)" : " + IVA"}${c.vigencia ? `, vigente hasta ${c.vigencia}` : ""}`
         : `- Hay una propuesta en preparación que todavía no se le ha enviado: no menciones montos ni la des por enviada`,
     );
     if (c.estado === "enviada" || c.estado === "confirmada") {
-      if (c.monto_total != null && c.anticipo_pct != null) {
-        lineas.push(`- Total con IVA ${pesos(c.monto_total)}; anticipo de ${c.anticipo_pct}% = ${pesos((c.monto_total * c.anticipo_pct) / 100)}`);
+      if (c.cobro_en_linea === false) {
+        // Solo firma: no hay anticipo ni cobro en línea; los pagos se acuerdan con Victor aparte.
+        lineas.push(`- Importes en ${c.moneda && c.moneda !== "MXN" ? c.moneda : "pesos"}${c.sin_iva ? ", sin IVA añadido" : ""}. La propuesta se revisa y se firma en línea para aceptar el alcance; no hay cobro en línea ni anticipo en el enlace: los pagos se acuerdan con Victor aparte. No hables de anticipo ni de pagar en el enlace`);
+      } else if (c.monto_total != null && c.anticipo_pct != null) {
+        lineas.push(`- Total ${c.sin_iva ? "sin IVA" : "con IVA"} ${dinero(c.monto_total, c.moneda)}; anticipo de ${c.anticipo_pct}% = ${dinero((c.monto_total * c.anticipo_pct) / 100, c.moneda)}`);
       }
       if (c.lineas?.length) {
-        lineas.push(`- La propuesta incluye: ${c.lineas.map((x) => `${x.descripcion} (${x.subtotal < 0 ? "-" : ""}${pesos(Math.abs(x.subtotal))})`).join("; ")}`);
+        lineas.push(`- La propuesta incluye: ${c.lineas.map((x) => `${x.descripcion} (${x.subtotal < 0 ? "-" : ""}${dinero(Math.abs(x.subtotal), c.moneda)})`).join("; ")}`);
       }
       if (c.firmada && c.anticipo_pagado) {
         lineas.push(
@@ -178,6 +193,12 @@ export function renderCrmBlock(f: CrmFicha): string {
   if (llevaVictor(f)) {
     reglas.push(
       "Victor atiende personalmente a este cliente. Si pide descuento, cambio de precio, de alcance o de condiciones, o quiere cerrar o firmar, no negocies ni cambies la propuesta: dile que Victor lo revisa personalmente y le responde, y usa la herramienta handoffHuman. Solo puedes mencionar otro servicio del negocio si existe en tu base de conocimiento, a su precio de lista y aclarando que Victor lo arma; no inventes paquetes recortados.",
+    );
+  }
+  const enlaceReserva = opts?.bookingUrl?.trim();
+  if (enlaceReserva) {
+    reglas.push(
+      `Si el cliente quiere reunirse, tener una llamada o una videollamada con Victor y todavía no hay una reunión acordada (revisa las indicaciones y la conversación), no negocies horarios por mensaje: ofrécele este enlace para que elija el horario que le acomode, la reunión es por Teams y se agenda sola: ${enlaceReserva} . Si ya hay una reunión acordada con Victor, no agendes otra: confírmala, y si necesita moverla avisa a Victor.`,
     );
   }
 

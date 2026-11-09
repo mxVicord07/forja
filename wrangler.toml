@@ -63,6 +63,8 @@ CALCOM_EVENT_TYPE_ID = "5027054"
 # el booking falla con 400 pidiendo la dirección. El bot promete "100% remoto
 # por videoconferencia", así que forzamos la de video.
 CALCOM_LOCATION = '{"type":"integration","integration":"office365-video"}'
+# Enlace de reserva que Lía ofrece a un cliente del CRM que quiere reunirse con Victor (evento "Intercambio de Ideas", 50 min, Teams).
+CALCOM_BOOKING_URL = "https://cal.com/birevx/ideas-exchange"
 
 # Optional egress (ticket 7E5F40): Worker→Anthropic/Zernio 400 vacío.
 #   AGENT_LOCATION_HINT = "wnam"   # pin DOs near US (only on FIRST create)

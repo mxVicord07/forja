@@ -226,7 +226,7 @@ export async function runFollowups(
 
 Este cliente mostró interés y luego dejó de responder. ${REASON_HINT[cand.reason]}
 ${cand.display_name ? `Se llama ${cand.display_name}.` : ""}
-${businessContext ? `\nSobre el negocio (para que suenes tú, NO lo copies literal):\n${businessContext}\n` : ""}${ficha ? `\n${renderCrmBlock(ficha)}\n` : ""}
+${businessContext ? `\nSobre el negocio (para que suenes tú, NO lo copies literal):\n${businessContext}\n` : ""}${ficha ? `\n${renderCrmBlock(ficha, { bookingUrl: env.CALCOM_BOOKING_URL })}\n` : ""}
 Últimos mensajes:
 ${transcript}
 

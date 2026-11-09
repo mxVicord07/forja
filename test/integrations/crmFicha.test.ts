@@ -80,6 +80,24 @@ describe("renderCrmBlock · propuesta vigente (I-023)", () => {
     expect(txt).not.toContain("access_token");
   });
 
+  it("una propuesta en dólares, sin IVA y solo con firma se dice así: sin pesos, sin IVA y sin anticipo (Get Smoked)", () => {
+    const txt = renderCrmBlock({ ...base, cotizacion: { folio: "S00056", estado: "enviada", monto_sin_iva: 1000, vigencia: "2026-11-23", referencia: "Propuesta v1.0 · 2026-11-08",
+      monto_total: 1000, anticipo_pct: 100, firmada: false, moneda: "USD", sin_iva: true, cobro_en_linea: false,
+      lineas: [{ descripcion: "Creación del sitio web", subtotal: 1235.96 }, { descripcion: "Ajuste preferencial", subtotal: -235.96 }], enlace: "https://odoo.birevx.com/es/my/orders/56?access_token=tok" } });
+    expect(txt).toContain("S00056 (Propuesta v1.0 · 2026-11-08) por USD 1,000.00 (sin IVA), vigente hasta 2026-11-23");
+    expect(txt).toContain("Importes en USD, sin IVA añadido");
+    expect(txt).toContain("no hay cobro en línea ni anticipo");
+    expect(txt).toContain("Creación del sitio web (USD 1,235.96); Ajuste preferencial (-USD 235.96)");
+    expect(txt).not.toContain("MXN");
+    expect(txt).not.toContain("anticipo de 100%");
+  });
+
+  it("con moneda y cobro sin dato (ficha anterior al 9-nov-2026) se ve en pesos, con IVA y con anticipo, como antes", () => {
+    const txt = renderCrmBlock({ ...base, cotizacion: { ...base.cotizacion!, ...detalle } });
+    expect(txt).toContain("por $60,500 MXN + IVA");
+    expect(txt).toContain("anticipo de 30%");
+  });
+
   it("una ficha anterior, sin detalle, se ve como antes", () => {
     const txt = renderCrmBlock(base);
     expect(txt).toContain("Propuesta enviada: S00046 por $60,500 MXN + IVA, vigente hasta 2026-11-15");
@@ -183,6 +201,22 @@ describe("renderCrmBlock", () => {
   it("en etapa Nuevo no impone la regla de negociación", () => {
     const txt = renderCrmBlock({ ...base, lead: { ...base.lead, etapa_clave: "New", etapa: "Nuevo" }, cotizacion: null });
     expect(txt).not.toContain("handoffHuman");
+  });
+});
+
+describe("renderCrmBlock · enlace de reserva de Cal.com", () => {
+  it("con enlace configurado, le dice a Lía que lo ofrezca en vez de negociar horarios y que no agende otra reunión si ya hay una acordada", () => {
+    const txt = renderCrmBlock(base, { bookingUrl: "https://cal.com/birevx/ideas-exchange" });
+    expect(txt).toContain("quiere reunirse, tener una llamada o una videollamada con Victor");
+    expect(txt).toContain("https://cal.com/birevx/ideas-exchange");
+    expect(txt).toContain("no negocies horarios por mensaje");
+    expect(txt).toContain("Si ya hay una reunión acordada con Victor, no agendes otra");
+  });
+
+  it("sin enlace configurado (o vacío) no agrega la regla", () => {
+    expect(renderCrmBlock(base)).not.toContain("cal.com");
+    expect(renderCrmBlock(base, { bookingUrl: "  " })).not.toContain("videollamada");
+    expect(renderCrmBlock(base, {})).not.toContain("videollamada");
   });
 });
 

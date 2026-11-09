@@ -16,6 +16,7 @@ export interface SystemPromptInput {
   brandVoice?: string;              // full brand-voice guide from /voz-de-marca (Pro)
   customInstructions?: string;      // owner rules ADDED to the generated prompt (never replace it)
   today?: string;                   // fecha/hora actual en la zona del negocio
+  calendar?: string;                // próximos días con su día de la semana (el modelo lo lee, no lo calcula)
   buttonsEnabled?: boolean;         // opt-in: enseña el marcador [[botones: …]] (skill /botones)
 }
 
@@ -268,7 +269,11 @@ Usa SIEMPRE esta fecha real para hablar de "hoy" o "mañana" con el cliente.
 Cuando llames una tool de citas/horarios con una fecha relativa ("el viernes",
 "el próximo martes", "mañana"), pasa las PALABRAS del cliente, no un YYYY-MM-DD
 que hayas calculado tú. El sistema resuelve la fecha exacta y el día de la semana.
-Solo manda YYYY-MM-DD si el cliente dio una fecha de calendario (día y mes).
+Solo manda YYYY-MM-DD si el cliente dio una fecha de calendario (día y mes).${input.calendar ? `
+Calendario real de los próximos días. Cuando hables de "la próxima semana", "el viernes" o de qué día cae una fecha, LEE este
+calendario: nunca cuentes ni calcules el día de la semana por tu cuenta. La semana empieza el lunes; la "próxima semana" empieza
+en el primer lunes de la lista:
+${input.calendar}` : ""}
 </contexto_temporal>`
     : "";
 
@@ -345,6 +350,25 @@ export function currentDateLine(timeZone: string): string {
   return `${legible} (fecha ISO: ${iso}, zona horaria: ${timeZone})`;
 }
 
+/**
+ * Los próximos `days` días con su día de la semana, en la zona del negocio. El modelo calcula mal "la próxima semana empieza el lunes":
+ * el 4-nov-2026 (miércoles) le dijo a un cliente que empezaba el lunes 10 y el viernes 15, siendo el 9 y el 13. Con este calendario
+ * lo lee en vez de contarlo. Se arma con fechas civiles (no sumando 24 h) para que un cambio de horario no repita ni salte un día.
+ */
+export function upcomingCalendar(timeZone: string, days = 21, now: Date = new Date()): string {
+  const [y, m, d] = new Intl.DateTimeFormat("en-CA", { timeZone, year: "numeric", month: "2-digit", day: "2-digit" })
+    .format(now).split("-").map(Number);
+  const fmt = new Intl.DateTimeFormat("es-MX", { timeZone: "UTC", weekday: "long", day: "numeric", month: "long" });
+  const lines: string[] = [];
+  for (let i = 0; i < days; i++) {
+    const date = new Date(Date.UTC(y, m - 1, d + i, 12));
+    const label = i === 0 ? "hoy " : i === 1 ? "mañana " : "";
+    const monday = date.getUTCDay() === 1 && i > 0 ? " (aquí empieza una semana nueva)" : "";
+    lines.push(`- ${label}${fmt.format(date)}${monday}`);
+  }
+  return lines.join("\n");
+}
+
 export function systemPromptFromEnv(
   env: Env,
   toolNames: string[],
@@ -366,6 +390,7 @@ export function systemPromptFromEnv(
     brandVoice: overrides?.brandVoice,
     customInstructions: overrides?.customInstructions,
     today: currentDateLine(businessTimeZone(env)),
+    calendar: upcomingCalendar(businessTimeZone(env)),
     buttonsEnabled: overrides?.buttonsEnabled,
   });
 }

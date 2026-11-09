@@ -4,6 +4,7 @@ import {
   renderInternalSystemPrompt,
   renderSystemPrompt,
   systemPromptFromEnv,
+  upcomingCalendar,
   type SystemPromptInput,
 } from "../src/system-prompt";
 
@@ -204,6 +205,43 @@ describe("currentDateLine", () => {
     expect(line).toContain("2026-08-27");
     expect(line.toLowerCase()).toContain("jueves");
     expect(line).toContain("Europe/Madrid");
+  });
+});
+
+describe("upcomingCalendar", () => {
+  afterEach(() => vi.useRealTimers());
+
+  it("el 4-nov-2026 (miércoles) la próxima semana empieza el lunes 9 y el viernes es 13, no 10 y 15", () => {
+    const cal = upcomingCalendar("America/Mexico_City", 21, new Date("2026-11-04T15:10:00.000Z"));
+    const lineas = cal.split("\n");
+    expect(lineas).toHaveLength(21);
+    expect(lineas[0]).toBe("- hoy miércoles, 4 de noviembre");
+    expect(lineas[1]).toBe("- mañana jueves, 5 de noviembre");
+    expect(cal).toContain("- lunes, 9 de noviembre (aquí empieza una semana nueva)");
+    expect(cal).toContain("- viernes, 13 de noviembre");
+    expect(cal).not.toContain("lunes, 10 de noviembre");
+  });
+
+  it("usa la fecha de la zona del negocio: a las 2am UTC del 5 sigue siendo 4 en México", () => {
+    const cal = upcomingCalendar("America/Mexico_City", 2, new Date("2026-11-05T02:00:00.000Z"));
+    expect(cal.split("\n")[0]).toBe("- hoy miércoles, 4 de noviembre");
+  });
+
+  it("un cambio de horario no repite ni salta días", () => {
+    const cal = upcomingCalendar("Europe/Madrid", 10, new Date("2026-10-22T10:00:00.000Z"));
+    expect(cal.split("\n").map((l) => l.replace(/^- (hoy |mañana )?/, ""))).toEqual([
+      "jueves, 22 de octubre", "viernes, 23 de octubre", "sábado, 24 de octubre", "domingo, 25 de octubre",
+      "lunes, 26 de octubre (aquí empieza una semana nueva)", "martes, 27 de octubre", "miércoles, 28 de octubre",
+      "jueves, 29 de octubre", "viernes, 30 de octubre", "sábado, 31 de octubre",
+    ]);
+  });
+
+  it("el prompt incluye el calendario y la regla de leerlo en vez de calcularlo", () => {
+    const env = { BOT_NAME: "Bot", BUSINESS_NAME: "Acme", BOT_LANGUAGE: "es", CALCOM_TIMEZONE: "America/Mexico_City" } as any;
+    const prompt = systemPromptFromEnv(env, ["scheduleAppointment"], "ctx");
+    expect(prompt).toContain("Calendario real de los próximos días");
+    expect(prompt).toContain("nunca cuentes ni calcules el día de la semana");
+    expect(prompt).toContain("aquí empieza una semana nueva");
   });
 });
 

@@ -652,7 +652,7 @@ export class SupportAgent extends Agent<Env, SupportAgentState> {
             });
             this.setState({ ...this.state, crmFicha: ficha, crmFichaAt: now });
           }
-          if (ficha) system.push({ role: "system", content: renderCrmBlock(ficha) });
+          if (ficha) system.push({ role: "system", content: renderCrmBlock(ficha, { bookingUrl: this.env.CALCOM_BOOKING_URL }) });
           // Sin datos del cliente: solo id de Odoo y etapa, para poder auditar
           // en `wrangler tail` qué contexto del CRM llevó cada respuesta.
           console.log(
@@ -776,7 +776,7 @@ export class SupportAgent extends Agent<Env, SupportAgentState> {
             ? history.filter((m) => m.role === "owner").slice(-6).map((m) => m.content.slice(0, 800)).join("\n")
             : "";
           const extraSources = [
-            fichaTurno ? renderCrmBlock(fichaTurno) : "",
+            fichaTurno ? renderCrmBlock(fichaTurno, { bookingUrl: this.env.CALCOM_BOOKING_URL }) : "",
             delDueno ? `Lo que escribió el dueño a este cliente:\n${delDueno}` : "",
           ]
             .filter(Boolean)
