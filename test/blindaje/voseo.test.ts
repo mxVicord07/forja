@@ -14,6 +14,13 @@ describe("voseo: el bot habla en español de México", () => {
     expect(hay("Dejame explicarte")).toBe(true);
   });
 
+  it("atrapa el voseo escrito sin acento (caso del 10-nov: «pensas enviar»)", () => {
+    expect(hay("¿Cuántos mensajes pensas enviar al mes?")).toBe(true);
+    expect(hay("si queres, podes mandarlo")).toBe(true);
+    expect(hay("¿Tenes WhatsApp Business?")).toBe(true);
+    expect(hay("¿Venis seguido? ¿Decis que sí?")).toBe(true);
+  });
+
   it("no toca el español de México", () => {
     expect(hay("sin molestar a quien ya está contigo")).toBe(false);
     expect(hay("¿Qué tienes que hacer?")).toBe(false);
@@ -21,5 +28,6 @@ describe("voseo: el bot habla en español de México", () => {
     expect(hay("Déjame explicarte, mira qué sencillo")).toBe(false);
     expect(hay("Con tu ticket de $400 estás en el rango")).toBe(false);
     expect(hay("El servicio sostiene la operación")).toBe(false);
+    expect(hay("¿Cuántos mensajes piensas enviar? Si quieres, puedes mandarlo; tienes opciones y vienes seguido")).toBe(false);
   });
 });

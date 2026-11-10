@@ -10,6 +10,8 @@ export const FRASES_VOSEO = [
   solo("vos|sos"),
   // formas verbales con acento obligatorio: sin él son español neutro (tienes, sabes, mira)
   solo("tenés|querés|podés|sabés|pensás|venís|decís|hacés|podés|estás vos"),
+  // voseo escrito sin acento: no existen en español de México ("piensas", "quieres", "tienes", "puedes", "vienes", "dices")
+  solo("pensas|queres|tenes|podes|venis|decis"),
   solo("mirá|escuchá|pensá|andá|tené|decí|vení|hacé|fijate"),
   // con pronombre pegado: "dejame", "decime"… no existen sin acento en español de México
   solo("dejame|decime|contame|avisame|mandame|pasame"),
