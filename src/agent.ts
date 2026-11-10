@@ -21,7 +21,7 @@ import { runLlmTurn } from "./llm/runTurn";
 import { costOfUsage } from "./pricing";
 import type { ChannelId } from "./channels/shared";
 import { guardReply, esRespuestaSegura } from "./blindaje/verify";
-import { FRASES_VOSEO } from "./blindaje/voseo";
+import { FRASES_VOSEO, corregirVoseoSinAcento } from "./blindaje/voseo";
 import type { DocumentRow } from "./db/documents";
 import { signedFileUrl } from "./files/share";
 import type { SearchKbResult } from "./tools/searchKb";
@@ -823,6 +823,7 @@ export class SupportAgent extends Agent<Env, SupportAgentState> {
             conversationId: convId,
             llm: cfg.llm,
           });
+          if ((this.env.BOT_LANGUAGE ?? "").toLowerCase().startsWith("es")) assistantText = corregirVoseoSinAcento(assistantText);
           let guard = await guardReply(this.env, opcionesGuard(assistantText, true));
 
           // Corrección guiada: el verificador rechazó el borrador. En vez de soltar el "lo confirma el equipo", el

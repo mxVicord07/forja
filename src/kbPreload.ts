@@ -18,7 +18,8 @@ export const KB_PRELOAD_MIN_SCORE = 0.65;
 export const KB_PRELOAD_TOP_K = 4;
 export const KB_PRELOAD_MAX_PASSAGES = 3;
 export const KB_PRELOAD_TIMEOUT_MS = 2500;
-export const KB_PRELOAD_MAX_CHARS = 900;
+/** Los documentos de precios miden cerca de 2,000 caracteres: si se recortan, el modelo rellena lo que falta (10-nov: inventó «hasta 2 canales y 40 temas» para Negocio). */
+export const KB_PRELOAD_MAX_CHARS = 3000;
 
 const SOLO_CORTESIA = /^(hola|buen[oa]s?( d[ií]as| tardes| noches)?|gracias|ok(ay)?|va|vale|sí|si|no|perfecto|entendido|listo|hey|hi|hello|thanks?)[\s!.¡?¿,]*$/i;
 
@@ -55,7 +56,7 @@ export function renderKbBlock(pasajes: SearchKbResult[]): string {
   const cuerpo = pasajes.map((p) => `${p.title ? `[${p.title}]\n` : ""}${corto(p.content)}`).join("\n\n");
   return [
     "<conocimiento>",
-    "Esto es lo que dice tu información sobre lo que el cliente acaba de preguntar. Es tu fuente: si contradice lo que crees saber, mandan estos pasajes. Contesta con ellos en tus palabras, sin decir «según mi base de conocimiento» ni citar el título. Si lo que pregunta no está aquí ni lo sabes con certeza, no lo inventes: usa searchKb para afinar o escala.",
+    "Esto es lo que dice tu información sobre lo que el cliente acaba de preguntar. Es tu fuente: si contradice lo que crees saber, mandan estos pasajes. Contesta con ellos en tus palabras, sin decir «según mi base de conocimiento» ni citar el título. Cifras, paquetes, canales, horas, plazos y condiciones: usa solo las que aparecen aquí, tal cual, y no agregues detalles que no estén escritos. Si lo que pregunta no está aquí ni lo sabes con certeza, no lo inventes: usa searchKb para afinar o escala.",
     "",
     cuerpo,
     "</conocimiento>",

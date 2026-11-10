@@ -42,10 +42,16 @@ describe("renderKbBlock", () => {
     expect(b).toMatch(/sin decir «según mi base de conocimiento»/);
   });
   it("recorta pasajes muy largos sin partir palabras", () => {
-    const largo = "palabra ".repeat(400);
+    const largo = "palabra ".repeat(800);
     const b = renderKbBlock([p("Largo", 0.9, largo)]);
     expect(b.length).toBeLessThan(largo.length);
     expect(b).toContain("…");
+  });
+  it("deja pasar completo un documento de precios de unos 2,000 caracteres (caso P05)", () => {
+    const precios = "Negocio — $29,000 de implementación + $5,500 al mes. Hasta 3 canales, conocimiento completo y envío de PDFs. ".repeat(18);
+    expect(precios.length).toBeGreaterThan(1900);
+    const b = renderKbBlock([p("Precios", 0.78, precios)]);
+    expect(b).toContain(precios.trim());
   });
 });
 

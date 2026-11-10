@@ -16,3 +16,22 @@ export const FRASES_VOSEO = [
   // con pronombre pegado: "dejame", "decime"… no existen sin acento en español de México
   solo("dejame|decime|contame|avisame|mandame|pasame"),
 ];
+
+/** Formas de voseo escritas sin acento y su tuteo. Solo las que no existen en español de México. */
+const CORRECCIONES_SIN_ACENTO: Array<[RegExp, string]> = [
+  [new RegExp(solo("pensas"), "gi"), "piensas"],
+  [new RegExp(solo("queres"), "gi"), "quieres"],
+  [new RegExp(solo("tenes"), "gi"), "tienes"],
+  [new RegExp(solo("podes"), "gi"), "puedes"],
+  [new RegExp(solo("venis"), "gi"), "vienes"],
+  [new RegExp(solo("decis"), "gi"), "dices"],
+];
+
+/** Corrige el voseo sin acento antes del guardia (el 10-nov «pensas» escaló un turno sano por no corregirse en el reintento). Conserva mayúscula inicial. */
+export function corregirVoseoSinAcento(texto: string): string {
+  let out = texto;
+  for (const [re, tuteo] of CORRECCIONES_SIN_ACENTO) {
+    out = out.replace(re, (m) => (m[0] === m[0].toUpperCase() ? tuteo[0].toUpperCase() + tuteo.slice(1) : tuteo));
+  }
+  return out;
+}
