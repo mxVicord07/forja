@@ -30,6 +30,7 @@ import { renderBusinessContext } from "./businessContext";
 import { maskTelegramToken, unmaskTelegramToken } from "./telegramFiles";
 import { mapMessageToAiTurn } from "./history";
 import { fetchCrmFicha, renderCrmBlock, type CrmFicha } from "./integrations/crmFicha";
+import { precargarKb, renderKbBlock } from "./kbPreload";
 import { esRelevo, relevoActivo, renderRelevoBlock, BACKLOG_MAX_MS, BACKLOG_TOPE, RELEVO_CONSULTA_KB, RELEVO_FRASES_VETADAS, RELEVO_RAFAGA_MS } from "./relevo";
 
 /** Último mensaje de una persona o del bot; las notas internas y las herramientas no cuentan. */
@@ -665,6 +666,18 @@ export class SupportAgent extends Agent<Env, SupportAgentState> {
           );
         } catch (e) {
           console.warn("[SupportAgent] crm ficha lookup failed:", e);
+        }
+      }
+
+      // Precarga de la base de conocimiento (I-018): la búsqueda no depende de que el
+      // modelo decida llamar searchKb. Los pasajes que coinciden con lo que acaba de
+      // escribir el cliente entran como un bloque más y quedan como fuente del Blindaje.
+      if (!isInternal) {
+        const pasajes = await precargarKb(this.env, combined);
+        if (pasajes.length) {
+          system.push({ role: "system", content: renderKbBlock(pasajes) });
+          turnKbPassages = [...turnKbPassages, ...pasajes].slice(-10);
+          console.log("[kb] precarga:", JSON.stringify(pasajes.map((p) => ({ t: p.title.slice(0, 40), s: Number(p.score.toFixed(2)) }))));
         }
       }
 

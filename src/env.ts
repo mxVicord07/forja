@@ -110,6 +110,8 @@ export interface Env {
   // Ficha de solo lectura del cliente en Odoo (n8n BRX_Forja_Ficha_Cliente).
   // Ausente = el bot no ve el CRM (comportamiento anterior al 30-oct-2026).
   CRM_FICHA_URL?: string;
+  /** "off" apaga la precarga de la base de conocimiento antes de cada turno (I-018). */
+  KB_PRELOAD?: string;
   // Frases (coma) con las que el dueño suelta la conversación al bot desde la
   // app ("te dejo con Lía"). Ausente = lista por defecto de src/relevo.ts.
   RELEVO_FRASES?: string;

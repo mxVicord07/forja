@@ -1,0 +1,71 @@
+{
+  "version": "1.0",
+  "fecha": "2026-11-10",
+  "descripcion": "Las 10 preguntas fijas de prospecto (I-018) para probar a Lía antes y después de un cambio en su prompt, su información o su base de conocimiento. Los hechos salen de BIRevX_Base_de_Conocimiento_Comercial.md (v1.5) y de los cinco documentos de coexistencia. Se prueba a mano o con el evaluador en vivo; un cambio pasa si ninguna respuesta contiene una frase prohibida y todas llevan sus hechos.",
+  "preguntas": [
+    {
+      "id": "P01",
+      "pregunta": "¿Puedo seguir usando mi WhatsApp Business y mi mismo número con el asistente?",
+      "debe_decir": ["sí, según el caso", "tu mismo número", "sigues escribiendo desde tu app", "se pausa una hora"],
+      "nunca_digas": ["tienes que cambiar de número", "no puedes usar tu app", "sin ninguna limitación"]
+    },
+    {
+      "id": "P02",
+      "pregunta": "¿Qué pasa con mis grupos y mis listas de difusión?",
+      "debe_decir": ["los grupos no se conectan", "las listas de difusión se desactivan", "las llamadas dejan de funcionar", "los chats uno a uno siguen normal"],
+      "nunca_digas": ["los grupos funcionan igual", "ves tus grupos en el panel", "no pierdes nada"]
+    },
+    {
+      "id": "P03",
+      "pregunta": "¿Tengo que abrir mi app de WhatsApp Business cada cierto tiempo?",
+      "debe_decir": ["al menos una vez cada dos semanas", "si no se abre, la conexión se corta", "WhatsApp Business, no el normal"],
+      "nunca_digas": ["no hace falta abrir la app", "no tienes que abrirla"]
+    },
+    {
+      "id": "P04",
+      "pregunta": "¿Cuánto cuesta WhatsApp si yo escribo desde mi app y si escribe el asistente?",
+      "debe_decir": ["lo que tú escribes desde tu app no tiene costo", "los cobra Meta, no BIRevX", "cifras aproximadas", "1,000 respuestas gratis al mes cuando el cliente escribe primero"],
+      "nunca_digas": ["todo es gratis", "BIRevX cobra los mensajes de Meta con comisión"]
+    },
+    {
+      "id": "P05",
+      "pregunta": "¿Cuánto cuesta el asistente para atender a mis clientes por WhatsApp?",
+      "debe_decir": ["Starter desde $17,500 de implementación y $3,500 al mes", "Negocio desde $29,000 y $5,500 al mes", "Pro desde $45,000 y $8,500 al mes", "precios de lista, sin IVA"],
+      "nunca_digas": ["precios distintos a los de lista", "descuento", "gratis"]
+    },
+    {
+      "id": "P06",
+      "pregunta": "¿Qué incluye la mensualidad?",
+      "debe_decir": ["operación, monitoreo, horas de ajustes y reportes", "el consumo de WhatsApp, IA y minutos va aparte, a costo"],
+      "nunca_digas": ["todo está incluido", "ilimitado"]
+    },
+    {
+      "id": "P07",
+      "pregunta": "¿Cuánto tiempo toma tenerlo funcionando?",
+      "debe_decir": ["entre 5 y 30 días hábiles según el paquete", "desde que tenemos los accesos", "el diagnóstico va primero"],
+      "nunca_digas": ["mañana mismo", "en una hora", "en 2 días"]
+    },
+    {
+      "id": "P08",
+      "pregunta": "¿Qué pasa si el asistente no sabe algo que le preguntan mis clientes?",
+      "debe_decir": ["avisa a una persona", "no inventa datos"],
+      "nunca_digas": ["siempre sabe todo", "responde lo más probable"]
+    },
+    {
+      "id": "P09",
+      "pregunta": "Está muy caro para arrancar, ¿puedo empezar con algo más pequeño?",
+      "debe_decir": ["el paquete Starter", "crecer después", "el dueño arma el plan de pago si lo necesita"],
+      "nunca_digas": ["se paga solo", "ROI garantizado", "versión básica inventada", "descuento"]
+    },
+    {
+      "id": "P10",
+      "pregunta": "¿Hay permanencia o contrato forzoso?",
+      "debe_decir": ["los servicios mensuales piden un mínimo", "se aclara en la propuesta"],
+      "nunca_digas": ["no hay ninguna permanencia", "puedes cancelar cuando quieras sin condiciones"]
+    }
+  ],
+  "ademas_en_cada_respuesta": {
+    "nunca_digas": ["según mi base de conocimiento", "la base de conocimiento no tiene", "tenés", "querés", "dejame"],
+    "formato": "español de México, tuteo, mensajes cortos, sin viñetas largas"
+  }
+}
