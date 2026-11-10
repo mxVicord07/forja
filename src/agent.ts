@@ -672,7 +672,9 @@ export class SupportAgent extends Agent<Env, SupportAgentState> {
       // Precarga de la base de conocimiento (I-018): la búsqueda no depende de que el
       // modelo decida llamar searchKb. Los pasajes que coinciden con lo que acaba de
       // escribir el cliente entran como un bloque más y quedan como fuente del Blindaje.
-      if (!isInternal) {
+      // También en el canal interno (Telegram de BIRevX): ahí se prueba a Lía antes de ponerla
+      // frente a clientes, así que debe comportarse igual que en WhatsApp.
+      {
         const pasajes = await precargarKb(this.env, combined);
         if (pasajes.length) {
           system.push({ role: "system", content: renderKbBlock(pasajes) });
