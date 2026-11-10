@@ -26,6 +26,11 @@ export interface CrmFicha {
     resumen_ultima_interaccion: string | null;
     ultimo_contacto: string | null;
     proxima_actividad: { fecha: string | null; resumen: string | null } | null;
+    /**
+     * Próxima reunión ya agendada con Víctor (cita de Odoo o reserva de Cal.com), en hora de México. `cuando` ya viene escrito
+     * ("miércoles 11/11 a las 09:00"). Opcional: fichas anteriores al 9-nov-2026 no lo traen.
+     */
+    proxima_reunion?: { cuando: string; duracion_min?: number | null; titulo?: string | null; lugar?: string | null; origen?: string | null; enlace?: string | null } | null;
     /** Indicaciones que Victor escribe para el bot en la oportunidad (`x_brief_lia`). Opcional: fichas anteriores al 1-nov-2026 no lo traen. */
     brief?: string | null;
   };
@@ -146,6 +151,13 @@ export function renderCrmBlock(f: CrmFicha, opts?: { bookingUrl?: string }): str
   }
   lineas.push(`- Proyecto en conversación: ${l.titulo}`);
   if (l.etapa) lineas.push(`- Etapa: ${l.etapa}`);
+  const reunion = l.proxima_reunion;
+  if (reunion?.cuando) {
+    const donde = reunion.lugar ? `, en ${reunion.lugar}` : reunion.origen === "cal.com" ? ", por Teams" : "";
+    lineas.push(
+      `- Reunión ya agendada con Victor: ${reunion.cuando}${reunion.duracion_min ? ` (${reunion.duracion_min} min)` : ""}${donde}. Ya está acordada: no propongas ni negocies otro horario; si preguntan, confírmala, y si necesita moverla o cancelarla avisa a Victor`,
+    );
+  }
   if (f.cotizacion) {
     const c = f.cotizacion;
     lineas.push(

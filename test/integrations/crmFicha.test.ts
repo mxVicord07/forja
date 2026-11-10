@@ -204,6 +204,33 @@ describe("renderCrmBlock", () => {
   });
 });
 
+describe("renderCrmBlock · reunión ya agendada (I-050)", () => {
+  const conReunion = (r: NonNullable<CrmFicha["lead"]["proxima_reunion"]>): CrmFicha => ({ ...base, lead: { ...base.lead, proxima_reunion: r } });
+
+  it("con una reunión acordada dice cuándo y dónde, y prohíbe negociar otro horario", () => {
+    const txt = renderCrmBlock(conReunion({ cuando: "miércoles 11/11 a las 09:00", duracion_min: 60, lugar: "Oficinas de SASU", origen: "odoo" }));
+    expect(txt).toContain("Reunión ya agendada con Victor: miércoles 11/11 a las 09:00 (60 min), en Oficinas de SASU");
+    expect(txt).toContain("no propongas ni negocies otro horario");
+    expect(txt).toContain("avisa a Victor");
+  });
+
+  it("una reserva de Cal.com sin lugar dice que es por Teams", () => {
+    const txt = renderCrmBlock(conReunion({ cuando: "sábado 14/11 a las 11:00", duracion_min: 50, origen: "cal.com" }));
+    expect(txt).toContain("sábado 14/11 a las 11:00 (50 min), por Teams");
+  });
+
+  it("sin reunión (o ficha anterior) no agrega la línea", () => {
+    expect(renderCrmBlock(base)).not.toContain("Reunión ya agendada");
+    expect(renderCrmBlock({ ...base, lead: { ...base.lead, proxima_reunion: null } })).not.toContain("Reunión ya agendada");
+  });
+
+  it("la reunión acordada convive con la regla del enlace de reserva: no se ofrece otro horario", () => {
+    const txt = renderCrmBlock(conReunion({ cuando: "lunes 16/11 a las 10:00", origen: "odoo" }), { bookingUrl: "https://cal.com/birevx/ideas-exchange" });
+    expect(txt).toContain("Reunión ya agendada con Victor: lunes 16/11 a las 10:00");
+    expect(txt).toContain("Si ya hay una reunión acordada con Victor, no agendes otra");
+  });
+});
+
 describe("renderCrmBlock · enlace de reserva de Cal.com", () => {
   it("con enlace configurado, le dice a Lía que lo ofrezca en vez de negociar horarios y que no agende otra reunión si ya hay una acordada", () => {
     const txt = renderCrmBlock(base, { bookingUrl: "https://cal.com/birevx/ideas-exchange" });
