@@ -90,9 +90,34 @@ export function matchDocument(query: string, docs: DocumentRow[]): DocumentRow |
   for (const w of [...words]) if (w.length <= 2) words.delete(w);
   if (words.size === 0) return null;
 
-  const byWord = docs.find((d) => {
+  // Palabras de relleno o de intención («cuánto cuesta», «quiero una»): no dicen DE QUÉ documento se habla. Con ellas el primer
+  // documento que repetía «cuánto cuesta» ganaba cualquier consulta (10-nov: «cuánto cuesta el asistente» mandaba el PDF de sitios
+  // web). Se puntúa por palabras de CONTENIDO; si la consulta trae contenido y ningún documento lo tiene, no se manda nada.
+  const contenido = [...words].filter((w) => !PALABRAS_GENERICAS.has(w));
+  if (contenido.length === 0) {
+    // Solo palabras genéricas («cotización», «precios»): comportamiento de siempre, el primero que las traiga.
+    return docs.find((d) => {
+      const tokens = tokenize(haystack(d));
+      return [...words].some((w) => tokens.has(w));
+    }) ?? null;
+  }
+  let mejor: DocumentRow | null = null;
+  let mejorPuntos = 0;
+  for (const d of docs) {
     const tokens = tokenize(haystack(d));
-    return [...words].some((w) => tokens.has(w));
-  });
-  return byWord ?? null;
+    const puntos = contenido.filter((w) => tokens.has(w)).length;
+    if (puntos > mejorPuntos) { mejor = d; mejorPuntos = puntos; }
+  }
+  return mejor;
 }
+
+const PALABRAS_GENERICAS = new Set([
+  // artículos, preposiciones y pronombres
+  "una", "uno", "unos", "unas", "del", "los", "las", "con", "para", "por", "que", "como", "cual", "cuales", "cuanto", "cuanta", "cuesta", "cuestan",
+  "esta", "este", "esto", "esos", "esas", "mas", "mis", "sus", "tus", "tengo", "tienes", "tiene", "hay", "pero", "sobre", "entre", "desde", "hasta",
+  // intención
+  "quiero", "quisiera", "necesito", "dame", "damela", "pasame", "mandame", "enviame", "muestrame", "puedes", "podrias", "favor", "ver", "saber", "tener",
+  "hazme", "dime", "informacion", "info", "algo", "todo", "nada",
+  // inglés
+  "the", "and", "for", "you", "your", "what", "does", "can", "could", "please", "send", "give", "show", "want", "need", "how", "much", "with", "have",
+]);

@@ -97,6 +97,27 @@ describe("matchDocument", () => {
     expect(matchDocument("cotización", docs)?.id).toBe("web");
   });
 
+  it("puntúa por palabras de contenido: «cuánto cuesta el asistente» no manda el PDF de sitios web (10-nov)", () => {
+    const todos = [
+      doc({ id: "tarjeta", title: "Tarjeta de contacto", description: "tarjeta, datos de contacto, como te contacto, tu whatsapp, tu instagram, qr" }),
+      doc({ id: "resumen", title: "Resumen de BIRevX", description: "que hacen, a que se dedican, informacion de la empresa, quienes son, que ofrecen" }),
+      doc({ id: "web", title: "Paquetes de sitios web", description: "precios de paginas web, paquetes, cotizacion, cuanto cuesta un sitio web, cuanto cuesta una pagina web, quiero una pagina web" }),
+      doc({ id: "sistemas", title: "Sistemas comerciales", description: "CRM, POS, punto de venta, inventario, ERP, cotizacion de sistema comercial" }),
+    ];
+    expect(matchDocument("cuanto cuesta el asistente", todos)).toBeNull();
+    expect(matchDocument("¿cuánto cuesta una página web?", todos)?.id).toBe("web");
+    expect(matchDocument("quiero una pagina web", todos)?.id).toBe("web");
+    expect(matchDocument("necesito una pagina", todos)?.id).toBe("web");
+    expect(matchDocument("pásame tu tarjeta", todos)?.id).toBe("tarjeta");
+    expect(matchDocument("cómo te contacto", todos)?.id).toBe("tarjeta");
+    expect(matchDocument("a qué se dedican", todos)?.id).toBe("resumen");
+    expect(matchDocument("quiero un CRM", todos)?.id).toBe("sistemas");
+    // solo palabras genéricas: comportamiento de siempre
+    expect(matchDocument("cotización", todos)?.id).toBe("web");
+    // gana el que más palabras de contenido comparte
+    expect(matchDocument("punto de venta e inventario", todos)?.id).toBe("sistemas");
+  });
+
   it("no empareja con query vacío o sin ninguna palabra en común", () => {
     expect(matchDocument("", docs)).toBeNull();
     expect(matchDocument("xyzabc123", docs)).toBeNull();
