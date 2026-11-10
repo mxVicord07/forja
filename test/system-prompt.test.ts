@@ -30,6 +30,12 @@ describe("renderSystemPrompt", () => {
     expect(prompt).toContain("<anti_patterns>");
   });
 
+  it("prohíbe prometer recordatorios o mensajes para otra fecha que el bot no puede programar (caso Jocelyn, 9-nov-2026)", () => {
+    const prompt = renderSystemPrompt(input);
+    expect(prompt).toContain("Prometer un recordatorio, una llamada o un mensaje para otra fecha");
+    expect(prompt).toContain("se lo pasas al dueño");
+  });
+
   it("replaces every placeholder (none left)", () => {
     const prompt = renderSystemPrompt(input);
     expect(prompt).not.toContain("{{");

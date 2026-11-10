@@ -21,6 +21,22 @@ describe("esRelevo — el dueño le pasa la conversación al bot con una frase n
     expect(esRelevo("Te dejo en manos de Lía.")).toBe(true);
   });
 
+  it("tolera los typos de quien escribe rápido desde el teléfono (caso real: «mis asistente», 9-nov-2026)", () => {
+    expect(esRelevo("Raquel te dejo con mis asistente LÍA ella te puede atender")).toBe(true);
+    expect(esRelevo("Raquel te dejo con mi asistente Lía, ella te puede atender")).toBe(true);
+    expect(esRelevo("Te dejo con nuestra asistente virtual Lía")).toBe(true);
+    expect(esRelevo("te dejo con mis asistente")).toBe(true);
+    expect(esRelevo("Aquí te presento a Lía, ella te ayuda con lo que necesites")).toBe(true);
+    expect(esRelevo("Lía, mi asistente, te va a ayudar con eso")).toBe(true);
+  });
+
+  it("las variantes tampoco se disparan con negaciones, con otra cosa o si el dueño definió sus propias frases", () => {
+    expect(esRelevo("No te dejo con mis asistente Lía: esto lo veo yo")).toBe(false);
+    expect(esRelevo("te dejo con mis colegas de contabilidad")).toBe(false);
+    expect(esRelevo("Lía es mi asistente y trabaja de lunes a viernes")).toBe(false);
+    expect(esRelevo("te dejo con mis asistente lia", "te paso con ana")).toBe(false);
+  });
+
   it("no se dispara con una negación ni a media conversación", () => {
     expect(esRelevo("No, no te dejo con Lía: yo te atiendo personalmente.")).toBe(false);
     expect(esRelevo("Lía te ayuda a agendar después, pero antes cuéntame: ¿cuántos empleados tienen hoy en la clínica y quién lleva la agenda? " + "Me interesa entender bien cómo trabajan para ajustar la propuesta. ".repeat(4) + "¿Te parece?")).toBe(false);

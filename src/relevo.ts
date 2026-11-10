@@ -88,13 +88,36 @@ export function esRelevo(texto: string | undefined, frasesEnv?: string): boolean
   const propias = (frasesEnv ?? "").split(",").map(normaliza).filter(Boolean);
   const frases = propias.length ? propias : FRASES_RELEVO_DEFAULT;
   const t = ` ${normaliza(texto).slice(-COLA_RELEVO)} `;
-  return frases.some((f) => {
+  const noNegada = (i: number) => !/(^| )no$/.test(t.slice(0, i).trimEnd());
+  const exacta = frases.some((f) => {
     for (let i = t.indexOf(` ${f} `); i >= 0; i = t.indexOf(` ${f} `, i + 1)) {
-      if (!/(^| )no$/.test(t.slice(0, i).trimEnd())) return true;
+      if (noNegada(i)) return true;
     }
     return false;
   });
+  if (exacta) return true;
+  // Solo con la lista por defecto: si el dueño definió sus frases (RELEVO_FRASES), mandan esas y nada más.
+  if (propias.length) return false;
+  return PATRONES_RELEVO_DEFAULT.some((re) => {
+    const g = new RegExp(re.source, "g");
+    for (let m = g.exec(t); m; m = g.exec(t)) if (noNegada(m.index)) return true;
+    return false;
+  });
 }
+
+/**
+ * Variantes que la lista exacta no alcanza: el dueño escribe rápido desde el teléfono («te dejo con mis asistente LÍA, ella te puede
+ * atender» dejó a Lía en pausa con Raquel el 9-nov-2026 por el «mis»). Se aplican al texto ya normalizado y solo en su cola.
+ */
+const PATRONES_RELEVO_DEFAULT: RegExp[] = [
+  // «te dejo con mi/mis/nuestra asistente (virtual) (Lía)», «te dejo en manos de Lía»
+  / te dejo (?:con|en manos de) (?:(?:mi|mis|mí|nuestra|nuestro|la|el) )?(?:asistentes? )?(?:virtual )?(?:ia )?lia /,
+  / te dejo (?:con|en manos de) (?:mi|mis|mí|nuestra|la) asistentes? /,
+  // «Lía, ella te puede atender», «Lía te va a ayudar», «Lía ya te acompaña»
+  / lia(?: [a-z]+){0,3} te (?:ya )?(?:puede |podra |va a |puede ir a )?(?:atender|atiende|ayudar|ayuda|acompanar|acompana) /,
+  // «te presento a Lía»
+  / te presento a lia /,
+];
 
 /**
  * El modo relevo aplica si el dueño soltó la conversación hace menos de 14 días
