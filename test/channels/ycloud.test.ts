@@ -348,6 +348,46 @@ describe("ycloudAdapter.sendReply", () => {
   });
 });
 
+describe("ycloudAdapter.sendDocument", () => {
+  const sendEnv = { YCLOUD_API_KEY: "key", YCLOUD_WA_FROM: "+524444237875" } as any;
+  afterEach(() => vi.restoreAllMocks());
+
+  it("un PDF sale como documento con su nombre de archivo y el título como caption", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response("{}", { status: 200 }));
+    await ycloudAdapter.sendDocument!(
+      { channel: "whatsapp", channelUserId: "525512345678", url: "https://x/f", filename: "paquetes.pdf", mimeType: "application/pdf", caption: "Paquetes" },
+      sendEnv,
+    );
+    const body = JSON.parse((fetchMock.mock.calls[0] as any)[1].body);
+    expect(body).toEqual({ from: "+524444237875", to: "+525512345678", type: "document", document: { link: "https://x/f", filename: "paquetes.pdf", caption: "Paquetes" } });
+  });
+
+  it("una imagen PNG o JPG sale como imagen de WhatsApp (rollo de la cámara y QR), sin nombre de archivo", async () => {
+    for (const mimeType of ["image/png", "image/jpeg"]) {
+      const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response("{}", { status: 200 }));
+      await ycloudAdapter.sendDocument!(
+        { channel: "whatsapp", channelUserId: "525512345678", url: "https://x/f", filename: "tarjeta", mimeType, caption: "Tarjeta de contacto" },
+        sendEnv,
+      );
+      const body = JSON.parse((fetchMock.mock.calls[0] as any)[1].body);
+      expect(body).toEqual({ from: "+524444237875", to: "+525512345678", type: "image", image: { link: "https://x/f", caption: "Tarjeta de contacto" } });
+      fetchMock.mockRestore();
+    }
+  });
+
+  it("sin caption no manda el campo, y sin credenciales no hace nada", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response("{}", { status: 200 }));
+    await ycloudAdapter.sendDocument!(
+      { channel: "whatsapp", channelUserId: "525512345678", url: "https://x/f", filename: "t.png", mimeType: "image/png" },
+      sendEnv,
+    );
+    expect(JSON.parse((fetchMock.mock.calls[0] as any)[1].body).image).toEqual({ link: "https://x/f" });
+    fetchMock.mockClear();
+    await ycloudAdapter.sendDocument!({ channel: "whatsapp", channelUserId: "1", url: "u", filename: "f", mimeType: "image/png" }, {} as any);
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+});
+
 describe("ycloudAdapter.showTyping", () => {
   it("pega al endpoint de typing del mensaje entrante con X-API-Key", async () => {
     const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response("{}", { status: 200 }));

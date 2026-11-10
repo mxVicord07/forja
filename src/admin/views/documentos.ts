@@ -98,8 +98,8 @@ export async function renderDocumentosList(
       </div>
 
       <div style="display:flex;flex-direction:column;gap:6px">
-        <label for="file" class="font-display font-semibold text-[12.5px] text-cream">Archivo (PDF, máx. 15 MB)</label>
-        <input type="file" id="file" name="file" required accept="application/pdf"
+        <label for="file" class="font-display font-semibold text-[12.5px] text-cream">Archivo (PDF, o imagen PNG/JPG, máx. 15 MB)</label>
+        <input type="file" id="file" name="file" required accept="application/pdf,image/png,image/jpeg"
                style="background:var(--bg);border:1px solid var(--line);color:var(--muted);padding:10px 12px;font-size:12.5px;outline:none">
       </div>
 

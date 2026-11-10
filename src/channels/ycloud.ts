@@ -386,12 +386,19 @@ export const ycloudAdapter: ChannelAdapter = {
       body: JSON.stringify({
         from,
         to,
-        type: "document",
-        document: {
-          link: doc.url,
-          filename: doc.filename,
-          ...(doc.caption ? { caption: doc.caption } : {}),
-        },
+        // Una imagen (la tarjeta de contacto, un one pager en PNG) viaja como IMAGEN de WhatsApp, no como archivo
+        // adjunto: así se guarda en el rollo de la cámara del cliente y sus QR se pueden escanear o mantener
+        // presionados. Todo lo demás (PDF) sigue como documento.
+        ...(/^image\/(png|jpe?g)$/i.test(doc.mimeType || "")
+          ? { type: "image", image: { link: doc.url, ...(doc.caption ? { caption: doc.caption } : {}) } }
+          : {
+              type: "document",
+              document: {
+                link: doc.url,
+                filename: doc.filename,
+                ...(doc.caption ? { caption: doc.caption } : {}),
+              },
+            }),
       }),
     });
     if (!res.ok) {

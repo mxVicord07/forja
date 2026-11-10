@@ -15,7 +15,7 @@ import { DocumentsRepo, matchDocument, type DocumentRow } from "../db/documents"
 export function shareDocumentTool(env: Env, onShare?: (doc: DocumentRow) => void) {
   return tool({
     description:
-      "Comparte un documento comercial (PDF, brochure, tabla de precios) con el cliente cuando pida ver precios, paquetes, catálogo o cotización por escrito. Se manda como archivo adjunto, además de tu respuesta en texto.",
+      "Comparte un documento o imagen comercial (PDF, brochure, tabla de precios, tarjeta de contacto, resumen de lo que hace la empresa) con el cliente cuando pida ver precios, paquetes, catálogo o cotización por escrito, cómo contactarte o qué hace la empresa. Se manda además de tu respuesta en texto. Solo a quien ya te escribió: nunca para abrir una conversación.",
     inputSchema: z.object({
       query: z
         .string()
