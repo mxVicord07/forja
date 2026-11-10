@@ -121,6 +121,21 @@ describe("guardReply — veredictos", () => {
     expect(prompt).toContain(original);
   });
 
+  it("un pasaje largo (documento de precios de ~2,000 caracteres) llega completo al verificador", async () => {
+    generateTextMock.mockResolvedValue(verdict(true));
+    const largo = "Starter: 1 hora de ajustes al mes. ".repeat(60) + "Pro: 4 horas de ajustes al mes. FIN-DEL-DOCUMENTO";
+    expect(largo.length).toBeGreaterThan(1500);
+    await guardReply(env, {
+      replyText: "El Pro incluye 4 horas de ajustes al mes.",
+      turnUsedKb: true,
+      kbPassages: [{ title: "Precios", content: largo, score: 0.8 }],
+      businessContext: "",
+      conversationId: convId,
+    });
+    const prompt = (generateTextMock.mock.calls[0][0] as { prompt: string }).prompt;
+    expect(prompt).toContain("FIN-DEL-DOCUMENTO");
+  });
+
   it("el system prompt (persona) cuenta como fuente oficial en el prompt del verificador", async () => {
     generateTextMock.mockResolvedValue(verdict(true));
     await guardReply(env, {

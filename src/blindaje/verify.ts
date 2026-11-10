@@ -28,6 +28,9 @@ import { notifyOwner } from "../tools/handoffHuman";
 /** Tope duro del verificador: si el modelo no contesta a tiempo, fail-open. */
 export const VERIFY_TIMEOUT_MS = 4000;
 
+/** Tope de texto por pasaje en el prompt del verificador. Con 1,500 se cortaba el documento de precios (cerca de 2,000) y el Pro, al final, «no estaba en las fuentes» (10-nov). */
+export const PASAJE_MAX_CHARS = 4000;
+
 export interface VerifyVerdict {
   supported: boolean;
   unsupported_claim?: string;
@@ -168,7 +171,7 @@ export async function verifyReply(
   const passagesBlock =
     kbPassages.length > 0
       ? kbPassages
-          .map((p, i) => `[${i + 1}] ${p.title ? `${p.title} — ` : ""}${p.content.slice(0, 1500)}`)
+          .map((p, i) => `[${i + 1}] ${p.title ? `${p.title} — ` : ""}${p.content.slice(0, PASAJE_MAX_CHARS)}`)
           .join("\n")
       : "(no se consultó la base de conocimiento este turno)";
 
