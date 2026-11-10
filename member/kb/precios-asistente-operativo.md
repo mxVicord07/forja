@@ -1,15 +1,15 @@
 # Precios: asistente operativo y automatización a la medida
 
 ## Asistente operativo para el dueño o el equipo
-Un asistente en Telegram o WhatsApp para uso INTERNO del negocio: resumen del
+Un asistente en Telegram o WhatsApp para uso INTERNO del negocio (no es el asistente que atiende a clientes; sus paquetes, horas de ajustes y precios son distintos a los del asistente conversacional): resumen del
 día, pendientes, registrar notas, audios y capturas como seguimientos (con
 confirmación), consultas ("¿cómo va este cliente?") y recordatorios. Todos los
 precios son MXN más IVA.
 
-- **Starter — $32,000 de implementación + $2,900 al mes.** Se conecta a la hoja
+- **Asistente operativo Starter — $32,000 de implementación + $2,900 al mes.** Se conecta a la hoja
   de cálculo o al CRM que el negocio ya usa. NO incluye CRM. 1 hora de ajustes
   al mes.
-- **Pro — $45,000 de implementación + $5,500 al mes.** Incluye CRM (Odoo, con un
+- **Asistente operativo Pro — $45,000 de implementación + $5,500 al mes.** Incluye CRM (Odoo, con un
   embudo y hasta 3 usuarios, hospedado por BIRevX) o integración profunda con
   el que ya tengan, cotizaciones y anticipos con enlace de pago y reporte
   semanal de ventas. 3 horas de ajustes al mes.
