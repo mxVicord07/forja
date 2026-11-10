@@ -25,6 +25,7 @@ import { createModel } from "../llm/provider";
 import { loadLlmOverrides } from "../settings-loader";
 import { maybeAlertRisk } from "./alerts";
 import { pushConversationSummary } from "../tools/leadExport";
+import { hoyParaPrompt, normalizarRecordatorio } from "./recordatorio";
 
 /** A conversation counts as "closed" after this much silence. */
 export const IDLE_MS = 3 * 60 * 60 * 1000; // 3h
@@ -42,6 +43,7 @@ const insightSchema = z.object({
   missed_kb: z.string().nullable().default(null),
   sale_opportunity: z.boolean().default(false),
   customer_facts: z.array(z.string()).max(8).default([]),
+  reminder: z.object({ date: z.string(), reason: z.string().default("") }).nullable().default(null),
 });
 
 export interface AnalyzeOptions {
@@ -126,7 +128,7 @@ function buildTranscript(msgs: { role: string; content: string }[]): string {
     .join("\n");
 }
 
-function gradingPrompt(env: Env, transcript: string, hasOpenTicket: boolean): string {
+function gradingPrompt(env: Env, transcript: string, hasOpenTicket: boolean, ultimoMensajeMs: number): string {
   return `Eres un auditor de calidad del chatbot de atención a clientes de ${env.BUSINESS_NAME}.
 Analiza la conversación completa y responde SOLO con un objeto JSON válido, sin markdown ni explicación:
 
@@ -138,7 +140,8 @@ Analiza la conversación completa y responde SOLO con un objeto JSON válido, si
   "summary": "...",
   "missed_kb": "..." | null,
   "sale_opportunity": true | false,
-  "customer_facts": ["hecho1", "hecho2"]
+  "customer_facts": ["hecho1", "hecho2"],
+  "reminder": { "date": "AAAA-MM-DD", "reason": "..." } | null
 }
 
 Criterios:
@@ -151,7 +154,11 @@ Criterios:
 - sale_opportunity: true SOLO si el cliente mostró intención real de contratar/comprar algo de PAGO y quedó sin cerrar. NO cuentes como oportunidad: registros a eventos gratuitos, saludos, dudas informativas, ni interés vago sin un negocio o necesidad de pago detrás.
 - customer_facts: 0 a 5 datos del CLIENTE útiles para recordarlo en futuras conversaciones (nombre, preferencias, qué compró, qué le molestó). En español, cortos. NUNCA datos sensibles (tarjetas, passwords, direcciones exactas). Lista vacía si no hay nada memorable.
 
+- reminder: SOLO si el CLIENTE pidió explícitamente que le escriban, le llamen o le recuerden algo en una fecha concreta o relativa («escríbeme el 15», «hablamos el lunes», «en dos semanas me avisas»). date es la fecha en AAAA-MM-DD resuelta con el día en que terminó la conversación (abajo); reason, en pocas palabras, qué pidió. Si no pidió nada de eso, si la fecha es ambigua o si el que propone la fecha es el bot, null. NO cuentes una cita ya agendada ni «lo pienso» sin fecha.
+
 Dato: la conversación ${hasOpenTicket ? "SÍ" : "NO"} tiene ticket abierto.
+
+La conversación terminó el ${hoyParaPrompt(ultimoMensajeMs)} (hora de Ciudad de México): resuelve «mañana», «el lunes» o «el 15» desde ese día.
 
 Conversación:
 ${transcript}`;
@@ -199,7 +206,7 @@ export async function analyzeConversations(
 
       const result = await generateText({
         model,
-        prompt: gradingPrompt(env, transcript, conv.open_tickets > 0),
+        prompt: gradingPrompt(env, transcript, conv.open_tickets > 0, conv.last_message_at),
       });
 
       const insight = parseInsightJson(result.text);
@@ -237,6 +244,7 @@ export async function analyzeConversations(
           topics: insight.topics,
           saleOpportunity: insight.sale_opportunity,
           lastMessageAt: conv.last_message_at,
+          reminder: normalizarRecordatorio(insight.reminder, now),
         });
       }
 

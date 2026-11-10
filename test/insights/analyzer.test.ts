@@ -117,6 +117,43 @@ describe("analyzeConversations", () => {
     fetchSpy.mockRestore();
   });
 
+  it("I-052: si el cliente pidió un recordatorio, el resumen lo lleva como recordatorio {fecha, motivo}", async () => {
+    const conv = await convs.getOrCreate("whatsapp", "524441796793");
+    const old = Date.now() - IDLE_MS - 60_000;
+    await msgs.append(conv.id, "user", "Escríbeme el 15 para ver la propuesta", { createdAt: old - 2000 });
+    await msgs.append(conv.id, "assistant", "Va, le aviso al equipo.", { createdAt: old - 1000 });
+    await convs.touchLastMessage(conv.id, old);
+    const futuro = new Date(Date.now() + 5 * 86_400_000).toLocaleDateString("en-CA", { timeZone: "America/Mexico_City" });
+    generateTextMock.mockResolvedValue({ text: JSON.stringify({ ...GRADE, reminder: { date: futuro, reason: "ver la propuesta" } }) });
+    const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response(JSON.stringify({ ok: true })));
+
+    await analyzeConversations({ ...env, LEAD_EXPORT_WEBHOOK_URL: "https://n8n.example/upsert" } as Env, { limit: 10 });
+
+    const body = JSON.parse((fetchSpy.mock.calls[0][1] as RequestInit).body as string);
+    expect(body.recordatorio).toEqual({ fecha: futuro, motivo: "ver la propuesta" });
+    // el prompt le da al modelo el día en que terminó la conversación
+    const prompt = (generateTextMock.mock.calls[0][0] as { prompt: string }).prompt;
+    expect(prompt).toMatch(/La conversación terminó el \w+ \d{4}-\d{2}-\d{2}/);
+    expect(prompt).toContain("reminder");
+    fetchSpy.mockRestore();
+  });
+
+  it("I-052: un recordatorio con fecha pasada o inválida no viaja en el resumen", async () => {
+    const conv = await convs.getOrCreate("whatsapp", "524441796793");
+    const old = Date.now() - IDLE_MS - 60_000;
+    await msgs.append(conv.id, "user", "Escríbeme el 3", { createdAt: old - 2000 });
+    await msgs.append(conv.id, "assistant", "Va.", { createdAt: old - 1000 });
+    await convs.touchLastMessage(conv.id, old);
+    generateTextMock.mockResolvedValue({ text: JSON.stringify({ ...GRADE, reminder: { date: "2020-01-03", reason: "x" } }) });
+    const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response(JSON.stringify({ ok: true })));
+
+    await analyzeConversations({ ...env, LEAD_EXPORT_WEBHOOK_URL: "https://n8n.example/upsert" } as Env, { limit: 10 });
+
+    const body = JSON.parse((fetchSpy.mock.calls[0][1] as RequestInit).body as string);
+    expect(body).not.toHaveProperty("recordatorio");
+    fetchSpy.mockRestore();
+  });
+
   it("skips conversations that are still active (not idle)", async () => {
     const conv = await convs.getOrCreate("telegram", "u2");
     await msgs.append(conv.id, "user", "Hola");

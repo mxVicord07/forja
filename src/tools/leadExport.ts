@@ -122,6 +122,8 @@ export interface ConversationSummaryInput {
   topics: string[];
   saleOpportunity: boolean;
   lastMessageAt: number;
+  /** Recordatorio que pidió el cliente (I-052), ya validado por `normalizarRecordatorio`. */
+  reminder?: { fecha: string; motivo: string } | null;
 }
 
 /**
@@ -147,6 +149,7 @@ export async function pushConversationSummary(env: Env, s: ConversationSummaryIn
         topics: s.topics,
         saleOpportunity: s.saleOpportunity,
         lastMessageAt: new Date(s.lastMessageAt).toISOString(),
+        ...(s.reminder ? { recordatorio: { fecha: s.reminder.fecha, motivo: s.reminder.motivo } } : {}),
       }),
       signal: AbortSignal.timeout(3000),
     });
