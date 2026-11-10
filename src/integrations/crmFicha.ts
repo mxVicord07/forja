@@ -79,8 +79,8 @@ const TIMEOUT_MS = 2500;
  * un renombrado no apague el candado en silencio.
  */
 const ETAPAS_DE_VICTOR = new Set([
-  "Qualified", "Proposition", "Won",
-  "Calificado", "Pre-Calificados", "Propuesta", "Ganado",
+  "Qualified", "Proposition", "Signing", "Won",
+  "Calificado", "Calificados", "Pre-Calificados", "Propuesta", "Por firmar", "Ganado",
 ]);
 
 /** true si la oportunidad está en una etapa cuya relación lleva Victor en persona. */

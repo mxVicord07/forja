@@ -253,6 +253,8 @@ describe("llevaVictor y noTocar", () => {
 
   it("llevaVictor entiende la clave técnica y también los nombres en español que Victor puso en Odoo", () => {
     for (const e of ["Qualified", "Proposition", "Won", "Calificado", "Pre-Calificados", "Propuesta", "Ganado"]) expect(llevaVictor(conEtapa(e))).toBe(true);
+    // La etapa «Por firmar» (clave Signing) y el nombre «Calificados» no apagan el candado: Lía no negocia ahí.
+    for (const e of ["Signing", "Por firmar", "Calificados"]) expect(llevaVictor(conEtapa(e))).toBe(true);
     for (const e of ["New", "Seguimiento", "Nuevos Leads", null]) expect(llevaVictor(conEtapa(e))).toBe(false);
   });
 
