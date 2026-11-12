@@ -1,5 +1,5 @@
 import type { Env } from "../env";
-import { isPro } from "../config";
+import { isPro, agendaDisponible } from "../config";
 import { searchKbTool, type SearchKbResult } from "./searchKb";
 import { shareDocumentTool } from "./shareDocument";
 import type { DocumentRow } from "../db/documents";
@@ -45,19 +45,20 @@ export function buildTools(ctx: ToolContext) {
     shareDocument: shareDocumentTool(ctx.env, ctx.onShareDocument),
   };
 
-  // Pro tier additions
-  if (isPro(ctx.env)) {
-    // NOTA (merge upstream 2026-09-10): upstream movió scheduleAppointment al tier
-    // free con una tool combinada (consulta + reserva, sin persistencia). Acá se
-    // conserva la suite de 4 tools: agendar escribe en `appointments` (D1) y
-    // reagendar/cancelar dependen de esa fila + los tickets de aprobación. Un bot
-    // free con reserva pero sin consulta de horarios no tendría sentido, así que
-    // las 4 siguen juntas en Pro. Lo que SÍ se adoptó del cambio de upstream es
-    // la resolución de fechas relativas en el servidor (src/time/resolveDate).
+  // Agenda: las 4 tools van juntas (agendar escribe en `appointments` y
+  // reagendar/cancelar dependen de esa fila + los tickets de aprobación).
+  // Pro siempre; Starter solo con FEATURE_AGENDA="1" (agenda básica: un tipo de
+  // cita, ver resolveEventTypeId). Nota del merge upstream 2026-09-10: se
+  // conserva esta suite en vez de la tool combinada sin persistencia de upstream.
+  if (agendaDisponible(ctx.env)) {
     tools.checkAvailability = checkAvailabilityTool(ctx.env);
     tools.scheduleAppointment = scheduleAppointmentTool(ctx.env, ctx.getConversationId);
     tools.rescheduleAppointment = rescheduleAppointmentTool(ctx.env, ctx.getConversationId);
     tools.cancelAppointment = cancelAppointmentTool(ctx.env, ctx.getConversationId);
+  }
+
+  // Pro tier additions
+  if (isPro(ctx.env)) {
     tools.catalogQuery = catalogQueryTool(ctx.env);
     // Cobros por WhatsApp (skill /cobros): registrada solo si el dueño conectó
     // su propia llave de Stripe — sin ella la tool no tiene nada que hacer.

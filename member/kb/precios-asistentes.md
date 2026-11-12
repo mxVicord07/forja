@@ -12,19 +12,23 @@ implementación y una mensualidad que cubre la operación y los ajustes.
   (precios, servicios, políticas), bandeja única para ver las conversaciones,
   pausar el bot y contestar tú, y aviso al dueño.
 - Verificación para que el asistente no invente datos.
-- No incluye agenda ni recordatorios de citas (eso es del paquete Negocio).
+- Agenda básica: una agenda y un solo tipo de cita. El asistente consulta
+  horarios y agenda; mover o cancelar pasa por la aprobación del dueño. La
+  confirmación llega por correo. No incluye varios tipos de cita ni
+  recordatorios: eso es del paquete Negocio.
 - 1 hora de ajustes al mes. Reporte semanal. Entrega en 10 a 15 días hábiles.
 
 ## Asistente conversacional Negocio — $29,000 de implementación + $5,500 al mes (el recomendado)
 - Para negocios con varios canales y citas (clínica, escuela, gimnasio).
 - Hasta 3 canales, conocimiento completo y envío de PDFs, agenda con
-  recordatorios, botones de respuesta, leads enviados al CRM, reporte diario.
+  recordatorios (varios tipos de cita, cada uno con su duración), botones de
+  respuesta, leads enviados al CRM, reporte diario.
 - 2 horas de ajustes al mes. Entrega en 15 a 20 días hábiles.
 
 ## Asistente conversacional Pro — desde $45,000 de implementación + $8,500 al mes
 - Para equipos con CRM, pedidos o cobros (distribuidora, inmobiliaria).
 - Todos los canales, lectura y escritura en su CRM o ERP, cobro por chat,
-  reagendar y cancelar con aprobación, encuestas y reseñas, reactivación de
+  agenda con reglas a la medida, encuestas y reseñas, reactivación de
   clientes fríos, varios idiomas y panel con la marca del cliente.
 - 4 horas de ajustes al mes. Entrega en 20 a 30 días hábiles. "Desde" porque
   depende del alcance de las integraciones.

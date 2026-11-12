@@ -202,3 +202,13 @@ describe("/admin/citas con Cal.com: avisos y canceladas", () => {
     expect(html).not.toContain('href="https://teams.example/abc"');
   });
 });
+
+describe("nombreVisible", () => {
+  it("usa el título cuando el nombre del contacto es un correo", async () => {
+    const { nombreVisible } = await import("../../src/admin/views/citas");
+    const base = { uid: "u", inicio: "2026-11-10T18:00:00Z", duracionMin: 60, estado: "confirmada", origen: "odoo", lugar: null, enlace: null, conversacion: null } as any;
+    expect(nombreVisible({ ...base, titulo: "Ex-Change // Dr. Eduardo", persona: { nombre: "hospitalcmv@hotmail.com", correo: "hospitalcmv@hotmail.com", telefono: null } })).toBe("Ex-Change // Dr. Eduardo");
+    expect(nombreVisible({ ...base, titulo: "SASU", persona: { nombre: "Elena Sánchez", correo: "e@x.mx", telefono: null } })).toBe("Elena Sánchez");
+    expect(nombreVisible({ ...base, titulo: "", persona: { nombre: "", correo: "z@x.mx", telefono: null } })).toBe("z@x.mx");
+  });
+});

@@ -108,3 +108,25 @@ describe("buildTools", () => {
     expect(onSearchKb.mock.calls[0][0][0].title).toBe("T");
   });
 });
+
+describe("agenda básica del Starter (FEATURE_AGENDA)", () => {
+  const ctx = (tier: "free" | "pro", over: Record<string, unknown> = {}) => {
+    const c = makeCtx(tier);
+    Object.assign(c.env, over);
+    return c;
+  };
+  it("un Starter con FEATURE_AGENDA=1 tiene las 4 tools de agenda y nada más de Pro", () => {
+    const tools = buildTools(ctx("free", { FEATURE_AGENDA: "1", STRIPE_SECRET_KEY: "sk_test_x" }));
+    for (const t of ["checkAvailability", "scheduleAppointment", "rescheduleAppointment", "cancelAppointment"]) expect(tools[t]).toBeDefined();
+    expect(tools.catalogQuery).toBeUndefined();
+    expect(tools.sendPaymentLink).toBeUndefined();
+  });
+  it("sin la bandera, el Starter sigue sin agenda", () => {
+    expect(buildTools(ctx("free", { FEATURE_AGENDA: "0" })).scheduleAppointment).toBeUndefined();
+  });
+  it("Pro no cambia", () => {
+    const tools = buildTools(ctx("pro"));
+    expect(tools.scheduleAppointment).toBeDefined();
+    expect(tools.catalogQuery).toBeDefined();
+  });
+});

@@ -15,5 +15,6 @@ arrancar. Hoy no hay una política escrita de crédito ni de descuento al cambia
   handoffHuman.
 
 Referencia de paquetes (más IVA): Starter $17,500 de implementación más
-$3,500 al mes; Negocio $29,000 más $5,500 al mes. El Starter no incluye agenda;
-el Negocio sí.
+$3,500 al mes; Negocio $29,000 más $5,500 al mes. El Starter trae agenda
+básica (una agenda y un tipo de cita); el Negocio trae la agenda completa
+(varios tipos de cita y recordatorios).

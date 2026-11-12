@@ -24,6 +24,13 @@ const ETIQUETA_ESTADO: Record<EstadoCita, { texto: string; color: string }> = {
 
 const ETIQUETA_ORIGEN = { lia: "Asistente", reserva: "Enlace de reserva", odoo: "Calendario" } as const;
 const mayuscula = (t: string) => (t ? t.charAt(0).toUpperCase() + t.slice(1) : t);
+
+/** Nombre para mostrar: si el contacto no tiene nombre o su «nombre» es un correo (pasa en Odoo), se usa el título de la cita. */
+export function nombreVisible(c: CitaPanel): string {
+  const n = c.persona.nombre.trim();
+  if (n && !n.includes("@")) return n;
+  return c.titulo.trim() || n || c.persona.correo || "Sin nombre";
+}
 const DIAS_CORTOS = ["Lun", "Mar", "Mié", "Jue", "Vie", "Sáb", "Dom"];
 const MAX_EN_CELDA_MES = 3;
 
@@ -174,7 +181,7 @@ function rejilla(
           const est = ETIQUETA_ESTADO[x.estado];
           const tachado = x.estado === "cancelada" ? "text-decoration:line-through;opacity:.65;" : "";
           const url = x.estado === "cancelada" ? null : hrefSeguro(x.enlace);
-          const nombre = esc(x.privado ? "Ocupado" : x.persona.nombre || x.titulo || "Sin nombre");
+          const nombre = esc(x.privado ? "Ocupado" : nombreVisible(x));
           const etiqueta = `<span style="color:${est.color};font-weight:600">${esc(fmtHora(x.inicio))}</span> ${nombre}`;
           const titulo = esc(`${est.texto} · ${ETIQUETA_ORIGEN[x.origen]}${x.titulo ? " · " + x.titulo : ""}`);
           const opp = x.oportunidad ? hrefSeguro(x.oportunidad.url) : null;
@@ -228,7 +235,7 @@ function renglon(c: CitaPanel, fmtHora: (iso: string) => string): string {
       <div class="text-dim text-[11px]">${esc(dur)}</div>
     </div>
     <div style="flex:1;min-width:0">
-      <div class="text-cream text-[13px] font-semibold truncate">${esc(c.persona.nombre || "Sin nombre")}</div>
+      <div class="text-cream text-[13px] font-semibold truncate">${esc(nombreVisible(c))}</div>
       ${c.titulo ? `<div class="text-muted text-[12px]">${esc(c.titulo)}</div>` : ""}
       <div class="text-dim text-[11.5px]">${contacto}${c.lugar ? ` · ${esc(c.lugar)}` : ""}</div>
       ${acciones ? `<div style="margin-top:6px">${acciones}</div>` : ""}

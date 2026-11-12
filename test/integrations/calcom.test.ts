@@ -387,3 +387,16 @@ describe("listBookings", () => {
     expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 });
+
+describe("resolveEventTypeId en la agenda básica del Starter", () => {
+  it("usa solo el tipo de cita por omisión e ignora el mapa de servicios", () => {
+    const e = env({ BOT_TIER: "free", FEATURE_AGENDA: "1", CALCOM_EVENT_TYPE_ID: "77", CALCOM_EVENT_TYPES: '{"corte":10,"barba":20}' });
+    expect(resolveEventTypeId(e, "barba")).toBe(77);
+  });
+  it("sin tipo por omisión no adivina con el mapa", () => {
+    expect(resolveEventTypeId(env({ BOT_TIER: "free", FEATURE_AGENDA: "1", CALCOM_EVENT_TYPES: '{"corte":10}' }), "corte")).toBeNull();
+  });
+  it("en Pro el mapa sigue mandando", () => {
+    expect(resolveEventTypeId(env({ BOT_TIER: "pro", FEATURE_AGENDA: "1", CALCOM_EVENT_TYPE_ID: "77", CALCOM_EVENT_TYPES: '{"barba":20}' }), "barba")).toBe(20);
+  });
+});

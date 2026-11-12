@@ -1,5 +1,6 @@
 import type { Env } from "../env";
 import { businessTimeZone, DEFAULT_TZ, todayInTz } from "../time/resolveDate";
+import { agendaBasica } from "../config";
 
 // Cliente de Cal.com API v2 para los nichos de cita. Dos capacidades:
 //  - getAvailableSlots: horarios reales libres de un event type en un día.
@@ -59,6 +60,11 @@ export function calcomTimeZone(env: Env): string {
  * busca por coincidencia de palabra (case-insensitive); si no, usa el default.
  */
 export function resolveEventTypeId(env: Env, servicio?: string): number | null {
+  // Agenda básica (Starter): UN solo tipo de cita. Se ignora el mapa de servicios aunque exista.
+  if (agendaBasica(env)) {
+    const unico = Number(env.CALCOM_EVENT_TYPE_ID);
+    return Number.isFinite(unico) && unico > 0 ? unico : null;
+  }
   const map = parseEventTypes(env.CALCOM_EVENT_TYPES);
   if (map && servicio) {
     const s = servicio.toLowerCase();

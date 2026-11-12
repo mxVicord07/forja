@@ -141,6 +141,8 @@ export interface Env {
   CRM_AGENDA_URL?: string;
   // Respaldo semanal de la base a R2 (src/crons/respaldoSemanal.ts). "1" lo enciende; requiere el bucket MEDIA.
   FEATURE_RESPALDO_SEMANAL?: string;
+  // Agenda básica para un bot que no es Pro (Starter): "1" la enciende. Un solo tipo de cita (CALCOM_EVENT_TYPE_ID). Ver src/config.ts.
+  FEATURE_AGENDA?: string;
   // Marca del panel por cliente (ver src/admin/brand.ts). Ausentes = marca de BIRevX.
   PANEL_BRAND_LOGO_URL?: string;
   PANEL_BRAND_NAME?: string;

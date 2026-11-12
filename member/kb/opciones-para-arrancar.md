@@ -20,5 +20,7 @@ dice que la inversión inicial le pesa. Todos los precios son MXN más IVA.
   quien le pesa el desembolso inicial; a quien le pesa la mensualidad, no.
 
 ## Qué incluye cada paquete (para no prometer de más)
-- El Starter no incluye agenda ni recordatorios de citas. Las citas y los
-  recordatorios llegan con el paquete Negocio.
+- El Starter trae solo agenda básica: una agenda y un tipo de cita, sin
+  recordatorios. Varios tipos de cita y los recordatorios llegan con el
+  paquete Negocio.
+- La opción de entrada (la de alta baja) no trae agenda.

@@ -24,7 +24,24 @@ export const PRO_ONLY_TABS = ["insights", "stats", "costs", "mejoras", "campanas
 
 export function isToolAvailable(env: Env, toolName: string): boolean {
   if (!PRO_ONLY_TOOLS.includes(toolName as (typeof PRO_ONLY_TOOLS)[number])) return true;
+  if (toolName === "scheduleAppointment") return agendaDisponible(env);
   return isPro(env);
+}
+
+/**
+ * Agenda del asistente (consultar, agendar, mover y cancelar con Cal.com).
+ * Pro la trae siempre. Un bot no Pro (Starter) la recibe con FEATURE_AGENDA="1"
+ * como «agenda básica»: una sola cuenta de Cal.com y UN solo tipo de cita
+ * (ver resolveEventTypeId), sin abrir ninguna pestaña ni herramienta Pro.
+ * Decisión de Víctor, 12-nov-2026 (mapa §3.3).
+ */
+export function agendaDisponible(env: Env): boolean {
+  return isPro(env) || env.FEATURE_AGENDA === "1";
+}
+
+/** Agenda básica del Starter: encendida por bandera en un bot que NO es Pro. */
+export function agendaBasica(env: Env): boolean {
+  return !isPro(env) && env.FEATURE_AGENDA === "1";
 }
 
 /** ¿Está encendido el panel de citas (/admin/citas)? Apagado por omisión. */
