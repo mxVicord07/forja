@@ -11,7 +11,7 @@
 import type { Appointment } from "../db/appointments";
 
 export type EstadoCita = "confirmada" | "por_confirmar" | "cambio_pendiente" | "cancelada";
-export type OrigenCita = "lia" | "reserva";
+export type OrigenCita = "lia" | "reserva" | "odoo";
 
 export interface CitaPanel {
   uid: string;
@@ -20,13 +20,17 @@ export interface CitaPanel {
   inicio: string;
   duracionMin: number | null;
   estado: EstadoCita;
-  /** `lia`: la agendó el asistente (hay fila propia); `reserva`: llegó por el enlace de reserva u otra vía. */
+  /** `lia`: la agendó el asistente (hay fila propia); `reserva`: llegó por el enlace de reserva; `odoo`: calendario de Odoo (Outlook, Copiloto o Cal.com). */
   origen: OrigenCita;
   persona: { nombre: string; correo: string; telefono: string | null };
   lugar: string | null;
   enlace: string | null;
   /** id de conversación de Forja (p. ej. `whatsapp:521…`) o null. */
   conversacion: string | null;
+  /** Oportunidad de Odoo ligada (solo con la fuente Odoo). */
+  oportunidad?: { id: number; nombre: string; url: string } | null;
+  /** Evento sin invitados externos: se muestra como «Ocupado», sin datos. */
+  privado?: boolean;
 }
 
 const ESTADO_CAL: Record<string, EstadoCita> = {

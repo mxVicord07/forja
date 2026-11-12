@@ -137,6 +137,8 @@ export interface Env {
   CALCOM_BOOKING_URL?: string;
   // Panel de citas (/admin/citas). "1" lo enciende; ausente = no hay ruta ni entrada de menú.
   FEATURE_CITAS_PANEL?: string;
+  // Secret: URL del flujo de n8n BRX_Forja_Agenda (calendario de Odoo, solo lectura). Con ella el panel de citas lee Odoo; sin ella, Cal.com.
+  CRM_AGENDA_URL?: string;
   // Marca del panel por cliente (ver src/admin/brand.ts). Ausentes = marca de BIRevX.
   PANEL_BRAND_LOGO_URL?: string;
   PANEL_BRAND_NAME?: string;

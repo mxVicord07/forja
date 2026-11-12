@@ -114,7 +114,7 @@ describe("/admin/citas en calendario (semana y mes)", () => {
   it("mes: muestra hasta 3 por día y «+N más»", async () => {
     stubCal([1, 2, 3, 4, 5].map((n) => reserva({ uid: `m${n}`, start: `2026-11-18T${String(15 + n).padStart(2, "0")}:00:00.000Z`, attendees: [{ name: `P${n}`, email: `p${n}@x.com` }] })));
     const html = await renderCitas(env, { vista: "mes" }, jueves);
-    expect(html).toContain("noviembre de 2026");
+    expect(html).toContain("Noviembre de 2026");
     expect(html).toContain("+2 más");
     expect(html).toContain("P1");
     expect(html).not.toContain(">P5<");
@@ -155,5 +155,50 @@ describe("/admin/citas en calendario (semana y mes)", () => {
     stubCal([reserva({ uid: "u1", start: "2026-11-13T16:00:00.000Z" })]);
     const html = await renderCitas(env, { vista: "semana" }, jueves);
     expect(html).toContain("/admin/conversations?c=whatsapp%3A521444");
+  });
+});
+
+describe("/admin/citas con la fuente Odoo", () => {
+  beforeEach(() => { env.FEATURE_CITAS_PANEL = "1"; env.CRM_AGENDA_URL = "https://n8n.x/webhook/forja-agenda-1"; });
+  const jueves = new Date("2026-11-12T15:00:00Z");
+  const stubOdoo = (citas: unknown[]) =>
+    vi.stubGlobal("fetch", vi.fn(async () => new Response(JSON.stringify({ ok: true, citas }), { status: 200 })));
+
+  it("muestra la oportunidad, la fuente y cómo mover", async () => {
+    stubOdoo([{ uid: "odoo:151", titulo: "SASU // Reunión", inicio: "2026-11-13T15:00:00Z", duracionMin: 60,
+      persona: { nombre: "Marcos", correo: "m@sasu.mx" }, oportunidad: { id: 92, nombre: "SASU", url: "https://odoo.birevx.com/web#id=92&model=crm.lead&view_type=form" } }]);
+    const html = await renderCitas(env, { rango: "30d" }, jueves);
+    expect(html).toContain("Oportunidad: SASU");
+    expect(html).toContain("Fuente: calendario de Odoo");
+    expect(html).toContain("/agenda");
+    expect(html).toContain("Calendario");
+  });
+
+  it("un evento privado sale como «Ocupado» sin datos", async () => {
+    stubOdoo([{ uid: "odoo:9", titulo: "Ocupado", inicio: "2026-11-13T15:00:00Z", privado: true, persona: { nombre: "", correo: "" } }]);
+    const lista = await renderCitas(env, { rango: "30d" }, jueves);
+    expect(lista).toContain("Ocupado");
+    const semana = await renderCitas(env, { vista: "semana" }, jueves);
+    expect(semana).toContain("Ocupado");
+  });
+
+  it("el título del calendario solo lleva mayúscula inicial", async () => {
+    stubOdoo([]);
+    const html = await renderCitas(env, { vista: "mes" }, jueves);
+    expect(html).toContain(">Noviembre de 2026<");
+    expect(html).not.toContain("text-transform:capitalize");
+  });
+});
+
+describe("/admin/citas con Cal.com: avisos y canceladas", () => {
+  beforeEach(() => { env.FEATURE_CITAS_PANEL = "1"; });
+  it("dice que faltan las reuniones de Outlook si Odoo no está conectado", async () => {
+    stubCal([]);
+    expect(await renderCitas(env, {}, new Date("2026-11-12T15:00:00Z"))).toContain("no aparecen hasta conectar Odoo");
+  });
+  it("una cita cancelada no muestra el enlace a la reunión", async () => {
+    stubCal([reserva({ status: "cancelled" })]);
+    const html = await renderCitas(env, { rango: "30d" }, new Date("2026-11-16T15:00:00Z"));
+    expect(html).not.toContain('href="https://teams.example/abc"');
   });
 });

@@ -52,3 +52,28 @@ describe("cargarCitas", () => {
     expect(f).not.toHaveBeenCalled();
   });
 });
+
+describe("cargarCitas con Odoo", () => {
+  it("con CRM_AGENDA_URL manda Odoo y no consulta Cal.com", async () => {
+    const f = vi.fn(async (url: any) => {
+      if (String(url).includes("forja-agenda")) {
+        return new Response(JSON.stringify({ ok: true, citas: [{ uid: "odoo:1", titulo: "SASU", inicio: "2026-11-17T16:00:00Z", persona: { nombre: "Ana", correo: "ana@x.com" } }] }), { status: 200 });
+      }
+      throw new Error("no debía llamar a Cal.com");
+    });
+    vi.stubGlobal("fetch", f);
+    const r = await cargarCitas({ ...env, CRM_AGENDA_URL: "https://n8n.x/webhook/forja-agenda-1" }, rango);
+    expect(r.fuente).toBe("odoo");
+    expect(r.citas[0].conversacion).toBe("whatsapp:521444"); // misma persona y minuto que la fila propia
+  });
+
+  it("si Odoo falla cae a Cal.com y lo dice", async () => {
+    vi.stubGlobal("fetch", vi.fn(async (url: any) =>
+      String(url).includes("forja-agenda")
+        ? new Response("x", { status: 502 })
+        : new Response(JSON.stringify({ data: [], pagination: { hasMore: false, nextCursor: null } }), { status: 200 })));
+    const r = await cargarCitas({ ...env, CRM_AGENDA_URL: "https://n8n.x/webhook/forja-agenda-1" }, rango);
+    expect(r.fuente).toBe("calcom");
+    expect(r.aviso).toContain("calendario de Odoo");
+  });
+});

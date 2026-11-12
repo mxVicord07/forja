@@ -22,7 +22,8 @@ const ETIQUETA_ESTADO: Record<EstadoCita, { texto: string; color: string }> = {
   cancelada: { texto: "Cancelada", color: "var(--muted)" },
 };
 
-const ETIQUETA_ORIGEN = { lia: "Asistente", reserva: "Enlace de reserva" } as const;
+const ETIQUETA_ORIGEN = { lia: "Asistente", reserva: "Enlace de reserva", odoo: "Calendario" } as const;
+const mayuscula = (t: string) => (t ? t.charAt(0).toUpperCase() + t.slice(1) : t);
 const DIAS_CORTOS = ["Lun", "Mar", "Mié", "Jue", "Vie", "Sáb", "Dom"];
 const MAX_EN_CELDA_MES = 3;
 
@@ -98,14 +99,20 @@ export async function renderCitas(env: Env, f: FiltrosCitas = {}, ahora: Date = 
     <button class="bigbtn font-display font-bold text-[11.5px] cursor-pointer" style="background:var(--panel2);border:1px solid var(--line);color:var(--cream);padding:7px 14px">Buscar</button>
   </form>`;
 
+  const hora = `${esc(fmtHora(ahora.toISOString()))} (${esc(tz)})`;
   const fuente =
-    cargadas.fuente === "calcom"
-      ? `Fuente: Cal.com · ${esc(fmtHora(ahora.toISOString()))} (${esc(tz)})`
-      : `Fuente: citas del asistente`;
+    cargadas.fuente === "odoo"
+      ? `Fuente: calendario de Odoo (Outlook, Copiloto y Cal.com) · ${hora}`
+      : cargadas.fuente === "calcom"
+        ? `Fuente: solo reservas de Cal.com · ${hora}${env.CRM_AGENDA_URL ? "" : ". Las reuniones creadas en Outlook o con el Copiloto no aparecen hasta conectar Odoo"}`
+        : `Fuente: citas del asistente`;
   const aviso = cargadas.aviso
     ? `<p class="text-[11.5px]" style="color:var(--bad);margin:0 0 12px">${esc(cargadas.aviso)}</p>`
     : "";
-  const pie = `<p class="text-dim text-[11px]" style="margin:0 0 16px">${fuente}. Para mover o cancelar una cita, usa Tickets.</p>`;
+  const comoMover = cargadas.fuente === "odoo"
+    ? "Para mover o cancelar, usa el Copiloto (/agenda) u Outlook; si la agendó el asistente, Tickets."
+    : "Para mover o cancelar una cita, usa Tickets.";
+  const pie = `<p class="text-dim text-[11px]" style="margin:0 0 16px">${fuente}. ${comoMover}</p>`;
 
   const pildoras = RANGOS.map((r) => {
     const activo = r === rango.clave;
@@ -122,7 +129,7 @@ export async function renderCitas(env: Env, f: FiltrosCitas = {}, ahora: Date = 
       ${navLink(-1, "← Anterior")}
       <a href="${href({ ref: "" })}" style="padding:5px 12px;font-size:12px;border:1px solid var(--line);color:var(--muted);text-decoration:none">Hoy</a>
       ${navLink(1, "Siguiente →")}
-      <span class="font-display font-semibold text-[14px] text-cream" style="margin-left:6px;text-transform:capitalize">${esc(cal.titulo)}</span>
+      <span class="font-display font-semibold text-[14px] text-cream" style="margin-left:6px">${esc(mayuscula(cal.titulo))}</span>
     </div>`;
     contenido = nav + rejilla(vista as VistaCalendario, cal.celdas, grupos, hoyClave, fmtHora);
   } else if (citas.length === 0) {
@@ -166,13 +173,18 @@ function rejilla(
         .map((x) => {
           const est = ETIQUETA_ESTADO[x.estado];
           const tachado = x.estado === "cancelada" ? "text-decoration:line-through;opacity:.65;" : "";
-          const url = hrefSeguro(x.enlace);
-          const nombre = esc(x.persona.nombre || x.titulo || "Sin nombre");
+          const url = x.estado === "cancelada" ? null : hrefSeguro(x.enlace);
+          const nombre = esc(x.privado ? "Ocupado" : x.persona.nombre || x.titulo || "Sin nombre");
           const etiqueta = `<span style="color:${est.color};font-weight:600">${esc(fmtHora(x.inicio))}</span> ${nombre}`;
           const titulo = esc(`${est.texto} · ${ETIQUETA_ORIGEN[x.origen]}${x.titulo ? " · " + x.titulo : ""}`);
-          const inner = x.conversacion
+          const opp = x.oportunidad ? hrefSeguro(x.oportunidad.url) : null;
+          const inner = x.privado
+            ? `<span title="Ocupado">${etiqueta}</span>`
+            : x.conversacion
             ? `<a href="/admin/conversations?c=${encodeURIComponent(x.conversacion)}" title="${titulo}" style="color:inherit;text-decoration:none">${etiqueta}</a>`
-            : url
+            : opp
+              ? `<a href="${opp}" target="_blank" rel="noopener noreferrer" title="${titulo}" style="color:inherit;text-decoration:none">${etiqueta}</a>`
+              : url
               ? `<a href="${url}" target="_blank" rel="noopener noreferrer" title="${titulo}" style="color:inherit;text-decoration:none">${etiqueta}</a>`
               : `<span title="${titulo}">${etiqueta}</span>`;
           return `<div class="text-[11.5px] text-cream" style="padding:2px 0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;${tachado}">${inner}</div>`;
@@ -192,12 +204,21 @@ function rejilla(
 }
 
 function renglon(c: CitaPanel, fmtHora: (iso: string) => string): string {
+  if (c.privado) {
+    return `<div class="bg-panel border border-line" style="padding:12px 16px;margin-bottom:8px;display:flex;gap:16px;align-items:center">
+    <div style="flex:none;min-width:84px"><div class="font-display font-semibold text-[15px] text-cream">${esc(fmtHora(c.inicio))}</div>
+      <div class="text-dim text-[11px]">${c.duracionMin ? `${c.duracionMin} min` : ""}</div></div>
+    <div class="text-dim text-[13px]">Ocupado</div>
+  </div>`;
+  }
   const est = ETIQUETA_ESTADO[c.estado];
   const dur = c.duracionMin ? `${c.duracionMin} min` : "";
   const contacto = [c.persona.correo, c.persona.telefono].filter(Boolean).map((x) => esc(x as string)).join(" · ");
-  const url = hrefSeguro(c.enlace);
+  const url = c.estado === "cancelada" ? null : hrefSeguro(c.enlace);
+  const opp = c.oportunidad ? hrefSeguro(c.oportunidad.url) : null;
   const acciones = [
     c.conversacion ? `<a href="/admin/conversations?c=${encodeURIComponent(c.conversacion)}" style="color:var(--accent);font-size:11.5px">Conversación</a>` : "",
+    opp ? `<a href="${opp}" target="_blank" rel="noopener noreferrer" style="color:var(--accent);font-size:11.5px">Oportunidad: ${esc(c.oportunidad!.nombre)}</a>` : "",
     url ? `<a href="${url}" target="_blank" rel="noopener noreferrer" style="color:var(--accent);font-size:11.5px">Reunión</a>` : "",
   ].filter(Boolean).join(" · ");
   const tachado = c.estado === "cancelada" ? "text-decoration:line-through;opacity:.7;" : "";
