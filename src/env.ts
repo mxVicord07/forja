@@ -139,6 +139,8 @@ export interface Env {
   FEATURE_CITAS_PANEL?: string;
   // Secret: URL del flujo de n8n BRX_Forja_Agenda (calendario de Odoo, solo lectura). Con ella el panel de citas lee Odoo; sin ella, Cal.com.
   CRM_AGENDA_URL?: string;
+  // Respaldo semanal de la base a R2 (src/crons/respaldoSemanal.ts). "1" lo enciende; requiere el bucket MEDIA.
+  FEATURE_RESPALDO_SEMANAL?: string;
   // Marca del panel por cliente (ver src/admin/brand.ts). Ausentes = marca de BIRevX.
   PANEL_BRAND_LOGO_URL?: string;
   PANEL_BRAND_NAME?: string;

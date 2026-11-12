@@ -420,6 +420,13 @@ export default {
     // leads calientes y clientes molestos.
     const { sendDailyReport } = await import("./owner/dailyReport");
     await sendDailyReport(env).catch((e) => console.error("dailyReport:", e));
+    // Respaldo semanal a R2 (domingos, opt-in con FEATURE_RESPALDO_SEMANAL). Nunca tumba lo demás.
+    const { respaldoSemanal, tocaRespaldo } = await import("./crons/respaldoSemanal");
+    if (tocaRespaldo(new Date())) {
+      await respaldoSemanal(env)
+        .then((r) => console.log("respaldo semanal:", JSON.stringify({ hecho: r.hecho, motivo: r.motivo, clave: r.clave, truncadas: r.truncadas })))
+        .catch((e) => console.error("respaldoSemanal:", e));
+    }
     // Flywheel (F5): detecta huecos de KB y lecciones de takeovers → propone
     // mejoras en /admin/mejoras. Corre DESPUÉS del analizador (usa su output).
     const { runFlywheel } = await import("./flywheel/detect");
