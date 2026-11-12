@@ -86,3 +86,74 @@ describe("/admin/citas con FEATURE_CITAS_PANEL=1", () => {
     expect((await adminApp.request("/citas?rango=hoy", { headers: auth }, env)).status).toBe(200);
   });
 });
+
+describe("/admin/citas en calendario (semana y mes)", () => {
+  beforeEach(() => { env.FEATURE_CITAS_PANEL = "1"; });
+  const jueves = new Date("2026-11-12T15:00:00Z"); // jueves 12-nov, 09:00 en Ciudad de México
+
+  it("semana: pone la cita en su día, escapa el nombre y marca hoy", async () => {
+    stubCal([reserva({ uid: "s1", start: "2026-11-13T16:00:00.000Z", attendees: [{ name: "<i>Ana</i>", email: "a@x.com" }] })]);
+    const html = await renderCitas(env, { vista: "semana" }, jueves);
+    expect(html).toContain("9 de noviembre al 15 de noviembre de 2026");
+    expect(html).toContain("&lt;i&gt;Ana&lt;/i&gt;");
+    expect(html).not.toContain("<i>Ana</i>");
+    expect(html).toContain("10:00");
+    expect(html).toContain("Lun");
+    expect(html).toContain("Dom");
+  });
+
+  it("semana: Cal.com recibe el rango de lunes a lunes en UTC", async () => {
+    const f = vi.fn(async () => new Response(JSON.stringify({ data: [], pagination: { hasMore: false, nextCursor: null } }), { status: 200 }));
+    vi.stubGlobal("fetch", f);
+    await renderCitas(env, { vista: "semana" }, jueves);
+    const url = String((f.mock.calls[0] as any[])[0]);
+    expect(url).toContain("afterStart=2026-11-09T06%3A00%3A00.000Z");
+    expect(url).toContain("beforeEnd=2026-11-16T06%3A00%3A00.000Z");
+  });
+
+  it("mes: muestra hasta 3 por día y «+N más»", async () => {
+    stubCal([1, 2, 3, 4, 5].map((n) => reserva({ uid: `m${n}`, start: `2026-11-18T${String(15 + n).padStart(2, "0")}:00:00.000Z`, attendees: [{ name: `P${n}`, email: `p${n}@x.com` }] })));
+    const html = await renderCitas(env, { vista: "mes" }, jueves);
+    expect(html).toContain("noviembre de 2026");
+    expect(html).toContain("+2 más");
+    expect(html).toContain("P1");
+    expect(html).not.toContain(">P5<");
+  });
+
+  it("navegación: anterior y siguiente conservan vista, estado y búsqueda", async () => {
+    stubCal([]);
+    const html = await renderCitas(env, { vista: "mes", estado: "confirmada", q: "ana" }, jueves);
+    expect(html).toContain("vista=mes");
+    expect(html).toContain("ref=2026-12-01");
+    expect(html).toContain("ref=2026-10-01");
+    expect(html).toContain("estado=confirmada");
+    expect(html).toContain("q=ana");
+  });
+
+  it("una referencia inválida cae en hoy y no rompe la página", async () => {
+    stubCal([]);
+    const html = await renderCitas(env, { vista: "semana", ref: "2026-13-45<script>" }, jueves);
+    expect(html).toContain("9 de noviembre al 15 de noviembre de 2026");
+    expect(html).not.toContain("2026-13-45");
+  });
+
+  it("las pestañas Lista, Semana y Mes están siempre", async () => {
+    stubCal([]);
+    const html = await renderCitas(env, {}, jueves);
+    expect(html).toContain("vista=semana");
+    expect(html).toContain("vista=mes");
+    expect(html).toContain("Lista");
+  });
+
+  it("una cita con conversación enlaza a la conversación en el calendario", async () => {
+    const { AppointmentsRepo } = await import("../../src/db/appointments");
+    const { Db } = await import("../../src/db/client");
+    await new AppointmentsRepo(new Db(env.DB)).create({
+      conversationId: "whatsapp:521444", calcomUid: "u1", eventTypeId: 1,
+      start: "2026-11-13T16:00:00Z", attendeeName: "Ana", attendeeEmail: "ana@x.com",
+    });
+    stubCal([reserva({ uid: "u1", start: "2026-11-13T16:00:00.000Z" })]);
+    const html = await renderCitas(env, { vista: "semana" }, jueves);
+    expect(html).toContain("/admin/conversations?c=whatsapp%3A521444");
+  });
+});

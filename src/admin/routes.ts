@@ -537,7 +537,7 @@ adminApp.get("/leads", async (c) => c.html(await renderLeads(c.env)));
 // Panel de citas (solo lectura). Sin FEATURE_CITAS_PANEL="1" la ruta no existe.
 adminApp.get("/citas", async (c) => {
   if (!citasPanelEnabled(c.env)) return c.text("Not found", 404);
-  return c.html(await renderCitas(c.env, { rango: c.req.query("rango"), estado: c.req.query("estado"), q: c.req.query("q") }));
+  return c.html(await renderCitas(c.env, { vista: c.req.query("vista"), ref: c.req.query("ref"), rango: c.req.query("rango"), estado: c.req.query("estado"), q: c.req.query("q") }));
 });
 
 adminApp.get("/tickets", async (c) => c.html(await renderTickets(c.env, c.req.query("failed"))));
