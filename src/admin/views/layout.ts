@@ -13,6 +13,7 @@ import { isPro, PRO_ONLY_TABS, citasPanelEnabled } from "../../config";
 import { getNiche } from "../../niches";
 import type { NichePack } from "../../niches";
 import { BRAND_LOGO_DATA_URI } from "../assets/brand-logo";
+import { panelBrand, type PanelBrand } from "../brand";
 
 const UPGRADE_URL = "/admin/upgrade";
 
@@ -282,7 +283,12 @@ function applyNiche(item: Item, niche: NichePack | null): Item {
   return { ...item, label: niche.navLabel, icon: niche.navIcon };
 }
 
-function sidebar(activeTab: string, pro: boolean, niche: NichePack | null, showCitas = false): string {
+const escAttr = (s: string) =>
+  s.replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]!));
+
+const DEFAULT_BRAND: PanelBrand = { logo: BRAND_LOGO_DATA_URI, name: "BIRevX", byline: "by BIRevX" };
+
+function sidebar(activeTab: string, pro: boolean, niche: NichePack | null, showCitas = false, brand: PanelBrand = DEFAULT_BRAND): string {
   const locked = (id: string) => !pro && (PRO_ONLY_TABS as readonly string[]).includes(id);
   const sections = NAV.map((sec) => {
     const hasActive = sec.items.some((i) => i.id === activeTab);
@@ -300,10 +306,10 @@ function sidebar(activeTab: string, pro: boolean, niche: NichePack | null, showC
   return `<aside class="sb">
     <div class="sb-brand" style="padding:20px 18px 16px;border-bottom:1px solid var(--line)">
       <div style="display:flex;align-items:center;gap:10px">
-        <img src="${BRAND_LOGO_DATA_URI}" alt="BIRevX" width="34" height="34" style="flex:none;border-radius:8px">
+        <img src="${escAttr(brand.logo)}" alt="${escAttr(brand.name)}" width="34" height="34" style="flex:none;border-radius:8px;object-fit:contain">
         <div style="line-height:1.05">
           <div style="font-family:'Space Grotesk';font-weight:700;font-size:15px;letter-spacing:-.02em">Forja</div>
-          <div style="font-size:9px;letter-spacing:.18em;color:var(--dim);text-transform:uppercase">by BIRevX · ${pro ? "Pro" : "Free"}</div>
+          <div style="font-size:9px;letter-spacing:.18em;color:var(--dim);text-transform:uppercase">${escAttr(brand.byline)} · ${pro ? "Pro" : "Free"}</div>
         </div>
       </div>
     </div>
@@ -341,7 +347,7 @@ export function layout(opts: { title: string; activeTab: string; body: string; e
 </head>
 <body>
   <div class="shell">
-    ${sidebar(opts.activeTab, pro, niche, opts.env ? citasPanelEnabled(opts.env) : false)}
+    ${sidebar(opts.activeTab, pro, niche, opts.env ? citasPanelEnabled(opts.env) : false, opts.env ? panelBrand(opts.env) : DEFAULT_BRAND)}
     <div style="display:flex;flex-direction:column;min-width:0">
       <header style="position:sticky;top:0;z-index:30;background:rgba(255,255,255,.85);backdrop-filter:blur(8px);border-bottom:1px solid var(--line);padding:14px 26px;display:flex;align-items:center;gap:20px">
         <div style="min-width:0">

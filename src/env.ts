@@ -137,6 +137,10 @@ export interface Env {
   CALCOM_BOOKING_URL?: string;
   // Panel de citas (/admin/citas). "1" lo enciende; ausente = no hay ruta ni entrada de menú.
   FEATURE_CITAS_PANEL?: string;
+  // Marca del panel por cliente (ver src/admin/brand.ts). Ausentes = marca de BIRevX.
+  PANEL_BRAND_LOGO_URL?: string;
+  PANEL_BRAND_NAME?: string;
+  PANEL_BRAND_BYLINE?: string;
   GOOGLE_SERVICE_ACCOUNT_JSON?: string;  // base64-encoded JSON
   OWNER_EMAIL: string;  // for handoff notifications (email)
   OWNER_TELEGRAM_CHAT_ID?: string;  // for handoff notifications (default channel)
