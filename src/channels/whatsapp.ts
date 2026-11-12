@@ -14,6 +14,7 @@
 import type { ChannelAdapter, IncomingMessage, OutgoingReply, OutgoingDocument, TypingContext } from "./shared";
 import { hmacHex, timingSafeEqual, normalizePhone, toWhatsAppMarkdown } from "./shared";
 import type { Env } from "../env";
+import { extractAdReferral } from "../ads/origin";
 import { egressFetch } from "../http/egress";
 
 const GRAPH_VERSION = "v21.0";
@@ -27,6 +28,8 @@ interface WaMessage {
   text?: { body?: string };
   image?: { id?: string; caption?: string; mime_type?: string };
   audio?: { id?: string; voice?: boolean; mime_type?: string };
+  // Origen de un anuncio con clic a WhatsApp (Cloud API: source_url, source_id, source_type, headline, ctwa_clid…).
+  referral?: Record<string, unknown>;
   // Tap de botón/lista interactiva (type === "interactive").
   interactive?: {
     type?: string;
@@ -129,6 +132,7 @@ export async function parseWhatsAppEvents(
           isOwnerMessage: false,
           receivedAt: Date.now(),
           rawPayload: m,
+          adReferral: extractAdReferral(m.referral) ?? undefined,
         });
       }
     }

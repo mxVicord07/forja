@@ -1,4 +1,5 @@
 import { Hono } from "hono";
+import { recordAdOrigin } from "./ads/origin";
 import type { Env } from "./env";
 import type { ChannelAdapter } from "./channels/shared";
 import { telegramAdapter } from "./channels/telegram";
@@ -197,6 +198,7 @@ app.post("/webhooks/whatsapp", async (c) => {
       // tipo no soportado: 200 igual, o YCloud reintenta.
       const msg = await parseYCloudEvent(body, c.env, origin);
       if (msg) {
+        await recordAdOrigin(c.env.DB, `${msg.channel}:${msg.channelUserId}`, msg.channel, msg.adReferral);
         await getAgentStub(c.env, `${msg.channel}:${msg.channelUserId}`).ingest(msg);
       }
       return c.text("EVENT_RECEIVED", 200);
@@ -214,6 +216,7 @@ app.post("/webhooks/whatsapp", async (c) => {
       return c.text("bad json", 400);
     }
     for (const msg of await parseWhatsAppEvents(body as any, c.env, origin)) {
+      await recordAdOrigin(c.env.DB, `${msg.channel}:${msg.channelUserId}`, msg.channel, msg.adReferral);
       await getAgentStub(c.env, `${msg.channel}:${msg.channelUserId}`).ingest(msg);
     }
     return c.text("EVENT_RECEIVED", 200);

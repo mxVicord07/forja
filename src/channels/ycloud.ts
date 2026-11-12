@@ -18,6 +18,7 @@
 //    habría sido falso).
 import type { ChannelAdapter, IncomingMessage, OutgoingReply, OutgoingDocument, TypingContext } from "./shared";
 import { hmacHex, timingSafeEqual, normalizePhone, toWhatsAppMarkdown } from "./shared";
+import { extractAdReferral } from "../ads/origin";
 import type { Env } from "../env";
 
 // Re-exportado por compatibilidad: este módulo definía `normalizePhone`
@@ -47,6 +48,8 @@ interface YCloudInboundMessage {
   type?: string;
   customerProfile?: { name?: string };
   text?: { body?: string };
+  // Origen de anuncio con clic a WhatsApp. Forma SIN verificar con tráfico real de YCloud: ver src/ads/origin.ts.
+  referral?: Record<string, unknown>;
   image?: { link?: string; caption?: string; id?: string };
   audio?: { link?: string; id?: string };
   // Tap de botón/lista interactiva (type === "interactive"). YCloud dice
@@ -158,6 +161,7 @@ export async function parseYCloudEvent(
     isOwnerMessage: false,
     receivedAt: Date.now(),
     rawPayload: event,
+    adReferral: extractAdReferral(m.referral) ?? undefined,
   };
 }
 

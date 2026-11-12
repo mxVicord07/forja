@@ -63,6 +63,8 @@ export interface LeadExportInput {
   intent: string;
   notes?: string;
   channel: string;
+  /** Origen publicitario de la conversación (primer toque), si llegó desde un anuncio. */
+  adOrigin?: { ctwaClid: string | null; sourceId: string | null; sourceType: string | null; headline: string | null } | null;
 }
 
 export interface LeadExportResult {
@@ -98,6 +100,8 @@ export async function exportLeadToOdoo(env: Env, lead: LeadExportInput): Promise
         intent: lead.intent,
         notes: lead.notes,
         channel: lead.channel,
+        // Campo nuevo y opcional: el flujo de n8n lo ignora hasta que se mapee a Odoo (campaña / origen).
+        ...(lead.adOrigin ? { adOrigin: lead.adOrigin } : {}),
       }),
       signal: AbortSignal.timeout(3000),
     });

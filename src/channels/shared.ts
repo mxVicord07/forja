@@ -68,6 +68,8 @@ export interface IncomingMessage {
   isOwnerMessage?: boolean;
   receivedAt: number;
   rawPayload: unknown;
+  /** Origen publicitario (clic a WhatsApp desde un anuncio) del mensaje, si lo trae. Ver src/ads/origin.ts. */
+  adReferral?: import("../ads/origin").AdReferral;
 }
 
 // Adjunto de un reply — porteado del paquete Forja+ v1.0.76 (superpoder

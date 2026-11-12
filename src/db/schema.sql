@@ -365,3 +365,17 @@ CREATE TABLE IF NOT EXISTS payment_intents (
 );
 CREATE INDEX IF NOT EXISTS idx_payment_intents_status ON payment_intents(status);
 CREATE INDEX IF NOT EXISTS idx_payment_intents_provider ON payment_intents(provider_id);
+
+-- Origen publicitario de una conversación (clic a WhatsApp desde un anuncio).
+-- Primer toque gana. src/ads/origin.ts también la crea al primer uso, así que
+-- un bot que no corre `db:apply` no se rompe.
+CREATE TABLE IF NOT EXISTS ad_origins (
+  conversation_id TEXT PRIMARY KEY,
+  channel         TEXT NOT NULL,
+  ctwa_clid       TEXT,
+  source_id       TEXT,
+  source_type     TEXT,
+  source_url      TEXT,
+  headline        TEXT,
+  first_seen_at   INTEGER NOT NULL
+);

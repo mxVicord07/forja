@@ -4,6 +4,7 @@ import type { Env } from "../env";
 import { Db } from "../db/client";
 import { LeadsRepo } from "../db/leads";
 import { exportLeadToOdoo } from "./leadExport";
+import { AdOriginsRepo } from "../ads/origin";
 
 export function captureLeadTool(
   env: Env,
@@ -34,6 +35,8 @@ export function captureLeadTool(
       // Export opcional a Odoo (vía workflow n8n BIRevX_Forja_Lead_to_Odoo).
       // Fail-soft: exportLeadToOdoo nunca truena, así que esto nunca bloquea
       // ni rompe la respuesta al usuario — el lead ya quedó a salvo en D1.
+      // Origen publicitario (si la conversación empezó en un anuncio). Best-effort: nunca bloquea la captura.
+      const origen = convId ? await new AdOriginsRepo(new Db(env.DB)).get(convId).catch(() => null) : null;
       const { exported, externalId } = await exportLeadToOdoo(env, {
         leadId,
         conversationId: convId,
@@ -42,6 +45,7 @@ export function captureLeadTool(
         intent,
         notes,
         channel: getChannel() ?? env.BOT_NAME,
+        adOrigin: origen ? { ctwaClid: origen.ctwaClid, sourceId: origen.sourceId, sourceType: origen.sourceType, headline: origen.headline } : null,
       });
       // try/catch propio: si setExported falla (D1), NO debe propagarse — un
       // throw aquí tumba la generación, dispara el failover de agent.ts, y el
