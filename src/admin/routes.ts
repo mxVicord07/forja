@@ -21,7 +21,7 @@ import { probeMessagesEndpoint } from "../http/egress";
 import type { Env } from "../env";
 import { adminAuth, ADMIN_USERNAME } from "./auth";
 import { layout, renderUpgrade } from "./views/layout";
-import { isPro } from "../config";
+import { isPro, citasPanelEnabled } from "../config";
 import { renderOverview } from "./views/overview";
 import { renderStats } from "./views/stats";
 import { renderCosts } from "./views/costs";
@@ -50,6 +50,7 @@ import { runFlywheel, getLessons, saveLessons } from "../flywheel/detect";
 import { applySuggestion, dismissSuggestion } from "../flywheel/apply";
 import { renderLeads, exportLeadsCsv } from "./views/leads";
 import { renderTickets } from "./views/tickets";
+import { renderCitas } from "./views/citas";
 import { renderConfig } from "./views/config";
 import { renderConexiones } from "./views/conexiones";
 import { renderCampanas } from "./views/campanas";
@@ -532,6 +533,12 @@ adminApp.post("/agente/tools/:name/toggle", async (c) => {
 });
 
 adminApp.get("/leads", async (c) => c.html(await renderLeads(c.env)));
+
+// Panel de citas (solo lectura). Sin FEATURE_CITAS_PANEL="1" la ruta no existe.
+adminApp.get("/citas", async (c) => {
+  if (!citasPanelEnabled(c.env)) return c.text("Not found", 404);
+  return c.html(await renderCitas(c.env, { rango: c.req.query("rango"), estado: c.req.query("estado"), q: c.req.query("q") }));
+});
 
 adminApp.get("/tickets", async (c) => c.html(await renderTickets(c.env, c.req.query("failed"))));
 

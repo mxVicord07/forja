@@ -10,6 +10,8 @@ import { businessTimeZone, DEFAULT_TZ, todayInTz } from "../time/resolveDate";
 const CALCOM_API = "https://api.cal.com/v2";
 const SLOTS_VERSION = "2024-09-04";
 const BOOKINGS_VERSION = "2026-02-25";
+// GET /v2/bookings (lista) se documenta con otra versión; se fija por ruta, igual que el resto.
+const BOOKINGS_LIST_VERSION = "2026-05-01";
 
 /** Espera entre el intento fallido y el reintento. Fija, sin backoff exponencial. */
 const RETRY_DELAY_MS = 400;
@@ -260,6 +262,42 @@ export async function cancelBooking(
     });
     if (!res.ok) return { ok: false, reason: `http_${res.status}` };
     return { ok: true };
+  } catch (e: any) {
+    return { ok: false, reason: `transient:${String(e?.message ?? e)}` };
+  }
+}
+
+/**
+ * Lista reservas de Cal.com entre dos instantes (solo lectura, la usa el panel
+ * de citas). Pagina con `cursor`; tope de 5 páginas de 100 para que un panel
+ * nunca se quede esperando. Devuelve las reservas crudas: las normaliza
+ * `agenda/source.ts`.
+ */
+export async function listBookings(
+  env: Env,
+  range: { afterStart: string; beforeEnd: string },
+): Promise<{ ok: true; bookings: unknown[] } | { ok: false; reason: string }> {
+  if (!env.CALCOM_API_KEY) return { ok: false, reason: "not_configured" };
+  const out: unknown[] = [];
+  let cursor: string | null = null;
+  try {
+    for (let page = 0; page < 5; page++) {
+      const qs = new URLSearchParams({ afterStart: range.afterStart, beforeEnd: range.beforeEnd, limit: "100" });
+      if (cursor) qs.set("cursor", cursor);
+      const res = await fetchCalcom(`${CALCOM_API}/bookings?${qs}`, {
+        headers: { Authorization: `Bearer ${env.CALCOM_API_KEY}`, "cal-api-version": BOOKINGS_LIST_VERSION },
+      });
+      if (!res.ok) {
+        // Solo el status: el body puede traer nombres y correos de clientes.
+        console.warn(`[calcom] list bookings http_${res.status}`);
+        return { ok: false, reason: `http_${res.status}` };
+      }
+      const body = (await res.json()) as { data?: unknown[]; pagination?: { hasMore?: boolean; nextCursor?: string | null } };
+      out.push(...(Array.isArray(body.data) ? body.data : []));
+      if (!body.pagination?.hasMore || !body.pagination.nextCursor) break;
+      cursor = body.pagination.nextCursor;
+    }
+    return { ok: true, bookings: out };
   } catch (e: any) {
     return { ok: false, reason: `transient:${String(e?.message ?? e)}` };
   }

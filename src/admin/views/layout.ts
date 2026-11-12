@@ -9,7 +9,7 @@
 // breadcrumb and page title are derived here.
 
 import type { Env } from "../../env";
-import { isPro, PRO_ONLY_TABS } from "../../config";
+import { isPro, PRO_ONLY_TABS, citasPanelEnabled } from "../../config";
 import { getNiche } from "../../niches";
 import type { NichePack } from "../../niches";
 import { BRAND_LOGO_DATA_URI } from "../assets/brand-logo";
@@ -41,6 +41,8 @@ const NAV: Section[] = [
       { id: "conversations", label: "Conversaciones", href: "/admin/conversations", icon: "messages-square" },
       { id: "leads", label: "Leads", href: "/admin/leads", icon: "user-plus" },
       { id: "tickets", label: "Tickets", href: "/admin/tickets", icon: "life-buoy" },
+      // Solo con FEATURE_CITAS_PANEL="1" (ver sidebar): apagado no hay entrada ni ruta.
+      { id: "citas", label: "Citas", href: "/admin/citas", icon: "calendar-days" },
       { id: "boveda", label: "Bóveda", href: "/admin/boveda", icon: "vault" },
       { id: "cobros", label: "Cobros", href: "/admin/cobros", icon: "wallet" },
       { id: "campanas", label: "Campañas", href: "/admin/campanas", icon: "megaphone" },
@@ -280,12 +282,13 @@ function applyNiche(item: Item, niche: NichePack | null): Item {
   return { ...item, label: niche.navLabel, icon: niche.navIcon };
 }
 
-function sidebar(activeTab: string, pro: boolean, niche: NichePack | null): string {
+function sidebar(activeTab: string, pro: boolean, niche: NichePack | null, showCitas = false): string {
   const locked = (id: string) => !pro && (PRO_ONLY_TABS as readonly string[]).includes(id);
   const sections = NAV.map((sec) => {
     const hasActive = sec.items.some((i) => i.id === activeTab);
     const labelColor = hasActive ? "var(--accent)" : "var(--dim)";
     const items = sec.items
+      .filter((i) => i.id !== "citas" || showCitas)
       .map((raw) => {
         const i = applyNiche(raw, niche);
         return locked(i.id) ? navItemLocked(i) : navItem(i, i.id === activeTab);
@@ -338,7 +341,7 @@ export function layout(opts: { title: string; activeTab: string; body: string; e
 </head>
 <body>
   <div class="shell">
-    ${sidebar(opts.activeTab, pro, niche)}
+    ${sidebar(opts.activeTab, pro, niche, opts.env ? citasPanelEnabled(opts.env) : false)}
     <div style="display:flex;flex-direction:column;min-width:0">
       <header style="position:sticky;top:0;z-index:30;background:rgba(255,255,255,.85);backdrop-filter:blur(8px);border-bottom:1px solid var(--line);padding:14px 26px;display:flex;align-items:center;gap:20px">
         <div style="min-width:0">

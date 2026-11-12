@@ -7,6 +7,7 @@ import {
   createBooking,
   rescheduleBooking,
   cancelBooking,
+  listBookings,
   formatForCustomer,
   DEFAULT_TZ,
 } from "../../src/integrations/calcom";
@@ -334,5 +335,55 @@ describe("formatForCustomer", () => {
 
   it("respeta otra zona horaria distinta", () => {
     expect(formatForCustomer("2026-01-05T09:05:00Z", "UTC")).toBe("5 de enero a las 9:05 a.m.");
+  });
+});
+
+describe("listBookings", () => {
+  const rango = { afterStart: "2026-11-16T06:00:00.000Z", beforeEnd: "2026-11-30T06:00:00.000Z" };
+
+  it("hace GET con la versión 2026-05-01, el rango y sin escribir nada", async () => {
+    const fetchMock = vi.fn(async (_u: any, _i: any) =>
+      new Response(JSON.stringify({ status: "success", data: [{ uid: "a" }], pagination: { hasMore: false, nextCursor: null } }), { status: 200 }));
+    vi.stubGlobal("fetch", fetchMock);
+    const r = await listBookings(env({ CALCOM_API_KEY: "cal_x" }), rango);
+    expect(r).toEqual({ ok: true, bookings: [{ uid: "a" }] });
+    const [url, init] = fetchMock.mock.calls[0];
+    expect(String(url)).toContain("/v2/bookings?");
+    expect(String(url)).toContain("afterStart=2026-11-16T06%3A00%3A00.000Z");
+    expect((init as any).method).toBeUndefined();
+    expect((init as any).headers["cal-api-version"]).toBe("2026-05-01");
+  });
+
+  it("sigue el cursor hasta que no hay más páginas", async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(new Response(JSON.stringify({ data: [{ uid: "a" }], pagination: { hasMore: true, nextCursor: "c2" } }), { status: 200 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ data: [{ uid: "b" }], pagination: { hasMore: false, nextCursor: null } }), { status: 200 }));
+    vi.stubGlobal("fetch", fetchMock);
+    const r = await listBookings(env({ CALCOM_API_KEY: "cal_x" }), rango);
+    expect(r.ok && r.bookings).toEqual([{ uid: "a" }, { uid: "b" }]);
+    expect(String(fetchMock.mock.calls[1][0])).toContain("cursor=c2");
+  });
+
+  it("corta a las 5 páginas aunque Cal.com siga diciendo que hay más", async () => {
+    const fetchMock = vi.fn(async () =>
+      new Response(JSON.stringify({ data: [{ uid: "x" }], pagination: { hasMore: true, nextCursor: "n" } }), { status: 200 }));
+    vi.stubGlobal("fetch", fetchMock);
+    await listBookings(env({ CALCOM_API_KEY: "cal_x" }), rango);
+    expect(fetchMock).toHaveBeenCalledTimes(5);
+  });
+
+  it("not_configured sin API key y no llama a la red", async () => {
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+    expect(await listBookings(env(), rango)).toEqual({ ok: false, reason: "not_configured" });
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("un 4xx devuelve el status sin reintentar", async () => {
+    const fetchMock = vi.fn(async () => new Response("{}", { status: 401 }));
+    vi.stubGlobal("fetch", fetchMock);
+    expect(await listBookings(env({ CALCOM_API_KEY: "cal_x" }), rango)).toEqual({ ok: false, reason: "http_401" });
+    expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 });

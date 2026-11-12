@@ -75,4 +75,13 @@ describe("AppointmentsRepo", () => {
     await repo.create({ ...base, calcomUid: "nueva", start: "2026-08-01T10:00:00Z" });
     expect((await repo.findActive("telegram:1"))?.calcom_uid).toBe("nueva");
   });
+
+  it("listBetween trae las citas del rango, ordenadas, en cualquier formato de fecha", async () => {
+    await repo.create({ ...base, calcomUid: "dentro-1", start: "2026-11-17T10:00:00Z" });
+    await repo.create({ ...base, calcomUid: "dentro-2", start: "2026-11-16T16:00:00.000Z" });
+    await repo.create({ ...base, calcomUid: "antes", start: "2026-11-15T23:59:59Z" });
+    await repo.create({ ...base, calcomUid: "despues", start: "2026-11-30T06:00:00.000Z" });
+    const r = await repo.listBetween("2026-11-16T06:00:00.000Z", "2026-11-30T06:00:00.000Z");
+    expect(r.map((a) => a.calcom_uid)).toEqual(["dentro-2", "dentro-1"]);
+  });
 });

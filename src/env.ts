@@ -135,6 +135,8 @@ export interface Env {
   // Enlace público de reserva de Cal.com (https://cal.com/<usuario>/<evento>). Con él, a un cliente que ya está en el CRM y quiere
   // reunirse se le ofrece elegir horario solo, en vez de negociarlo por mensaje. Ausente = sin esa regla.
   CALCOM_BOOKING_URL?: string;
+  // Panel de citas (/admin/citas). "1" lo enciende; ausente = no hay ruta ni entrada de menú.
+  FEATURE_CITAS_PANEL?: string;
   GOOGLE_SERVICE_ACCOUNT_JSON?: string;  // base64-encoded JSON
   OWNER_EMAIL: string;  // for handoff notifications (email)
   OWNER_TELEGRAM_CHAT_ID?: string;  // for handoff notifications (default channel)

@@ -26,3 +26,8 @@ export function isToolAvailable(env: Env, toolName: string): boolean {
   if (!PRO_ONLY_TOOLS.includes(toolName as (typeof PRO_ONLY_TOOLS)[number])) return true;
   return isPro(env);
 }
+
+/** ¿Está encendido el panel de citas (/admin/citas)? Apagado por omisión. */
+export function citasPanelEnabled(env: Env): boolean {
+  return env.FEATURE_CITAS_PANEL === "1";
+}

@@ -107,4 +107,18 @@ export class AppointmentsRepo {
       [Date.now(), id],
     );
   }
+
+  /**
+   * Citas cuyo inicio cae en [desdeIso, hastaIso). Compara solo los primeros 19
+   * caracteres (YYYY-MM-DDTHH:MM:SS) porque unas filas guardan "…:00Z" y otras
+   * "…:00.000Z" y la comparación de texto completa se descuadra en la frontera.
+   */
+  async listBetween(desdeIso: string, hastaIso: string): Promise<Appointment[]> {
+    return this.db.all<Appointment>(
+      `SELECT * FROM appointments
+       WHERE substr(start, 1, 19) >= ? AND substr(start, 1, 19) < ?
+       ORDER BY start ASC LIMIT 500`,
+      [desdeIso.slice(0, 19), hastaIso.slice(0, 19)],
+    );
+  }
 }
