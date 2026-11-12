@@ -15,6 +15,7 @@ import { purgeOldSettingsHistory } from "./crons/purgeOldSettingsHistory";
 import { reconcileExportedLeads } from "./crons/reconcileExportedLeads";
 import { DAILY_CRON, isNightlyTick } from "./crons/schedule";
 import { reindexKb } from "./kb/reindex";
+import { listarMaterial } from "./material/api";
 import { analyzeConversations } from "./insights/analyzer";
 import { Db } from "./db/client";
 import { SettingsRepo, SETTING_KEYS } from "./db/settings";
@@ -242,6 +243,10 @@ app.get("/webhooks/whatsapp/media", (c) =>
 app.get("/files/:id", (c) =>
   serveDocument(c.req.param("id"), c.req.query("exp") ?? null, c.req.query("sig") ?? null, c.env),
 );
+
+// Lista de piezas comerciales con enlace firmado para el Copiloto de Víctor (Telegram).
+// Guardada por MATERIAL_TOKEN en la cabecera X-Material-Token (ver src/material/api.ts).
+app.get("/material", (c) => listarMaterial(c.req.header("X-Material-Token") ?? "", c.env, new URL(c.req.url).origin));
 
 // Universal webhook LEARN endpoint. When learn mode is ON for `:channel`, this
 // captures a real payload (classified by media kind) so the bot can later infer

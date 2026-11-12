@@ -158,6 +158,9 @@ export interface Env {
   // despliegue existente. Define esta var aparte solo si quieres rotarla
   // independiente del reindex de KB.
   FILES_SIGNING_SECRET?: string;
+  // Token de GET /material: lo usa el Copiloto de Víctor (Telegram) para pedir la lista de piezas con enlaces
+  // firmados. Set via `wrangler secret put MATERIAL_TOKEN`. Sin él, /material responde 401 siempre.
+  MATERIAL_TOKEN?: string;
 
   // Gate global de learn-mode: "1" | "true" (insensible a mayúsculas, con
   // trim) prende; cualquier otra cosa, incluida la ausencia, apaga (default
