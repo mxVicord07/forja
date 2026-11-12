@@ -143,6 +143,11 @@ export interface Env {
   FEATURE_RESPALDO_SEMANAL?: string;
   // Agenda básica para un bot que no es Pro (Starter): "1" la enciende. Un solo tipo de cita (CALCOM_EVENT_TYPE_ID). Ver src/config.ts.
   FEATURE_AGENDA?: string;
+  // Recordatorio de cita por el canal del cliente (src/followup/citaRecordatorio.ts). "1" lo enciende; no corre con CRM_AGENDA_URL.
+  FEATURE_RECORDATORIO_CITA?: string;
+  // Plantilla aprobada por Meta para recordar fuera de la ventana de 24 h ({{1}} nombre, {{2}} día, {{3}} hora) y su idioma (por omisión es_MX).
+  CITA_RECORDATORIO_PLANTILLA?: string;
+  CITA_RECORDATORIO_IDIOMA?: string;
   // Marca del panel por cliente (ver src/admin/brand.ts). Ausentes = marca de BIRevX.
   PANEL_BRAND_LOGO_URL?: string;
   PANEL_BRAND_NAME?: string;

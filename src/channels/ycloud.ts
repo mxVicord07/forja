@@ -410,3 +410,40 @@ export const ycloudAdapter: ChannelAdapter = {
     }
   },
 };
+
+/**
+ * Manda una plantilla aprobada por Meta (sirve FUERA de la ventana de 24 h).
+ * Misma forma que usa en producción el Copiloto de BIRevX
+ * (Arquitectura Digital BIRevX/copiloto/src/envio.js): cuerpo con parámetros
+ * de texto, idioma con política determinista. Devuelve { ok } y nunca lanza.
+ * Primera pieza de I-034 (plantillas por YCloud dentro de Forja).
+ */
+export async function sendYCloudTemplate(
+  env: Env,
+  args: { to: string; name: string; language: string; bodyParams: string[] },
+): Promise<{ ok: true; id: string } | { ok: false; reason: string }> {
+  const apiKey = env.YCLOUD_API_KEY;
+  const from = env.YCLOUD_WA_FROM;
+  if (!apiKey || !from) return { ok: false, reason: "not_configured" };
+  try {
+    const res = await fetch(SEND_URL, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "X-API-Key": apiKey },
+      body: JSON.stringify({
+        from,
+        to: `+${normalizePhone(args.to)}`,
+        type: "template",
+        template: {
+          name: args.name,
+          language: { code: args.language, policy: "deterministic" },
+          components: [{ type: "body", parameters: args.bodyParams.map((text) => ({ type: "text", text })) }],
+        },
+      }),
+    });
+    if (!res.ok) return { ok: false, reason: `http_${res.status}` };
+    const data = (await res.json().catch(() => ({}))) as { id?: string };
+    return data.id ? { ok: true, id: data.id } : { ok: false, reason: "sin_id" };
+  } catch {
+    return { ok: false, reason: "transient" };
+  }
+}

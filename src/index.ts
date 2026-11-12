@@ -380,6 +380,10 @@ export default {
     const { runReengage } = await import("./followup/reengage");
     await runReengage(env).catch((e) => console.error("reengage:", e));
 
+    // Recordatorio de cita (opt-in, I-034): un aviso por cita entre 2 y 24 h antes.
+    const { runCitaRecordatorios } = await import("./followup/citaRecordatorio");
+    await runCitaRecordatorios(env).catch((e) => console.error("citaRecordatorio:", e));
+
     // Watchdog: si el bot está fallando en cadena (3+ "Algo falló" en 30 min),
     // avisa al dueño por su canal de handoff. Throttle 6h. Lo ÚNICO que debe
     // despertarlo en la noche.
