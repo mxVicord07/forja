@@ -4,6 +4,7 @@ import { LeadsRepo, leadMetadata, type Lead } from "../../db/leads";
 import { getNiche } from "../../niches";
 import { layout } from "./layout";
 import { fmtDate, fmtDateTime } from "../format";
+import { renderSeguimientoBlock } from "./seguimiento";
 
 // Escapa texto del LLM/cliente antes de meterlo en HTML (el intent y las notas
 // pueden traer <, &, links pegados por el cliente, etc.).
@@ -86,6 +87,7 @@ export async function renderLeads(env: Env): Promise<string> {
             <div style="display:flex;align-items:center;gap:18px;flex-wrap:wrap;padding-top:2px">
               ${convLink}
               <span class="text-dim" style="font-size:11.5px;display:inline-flex;align-items:center;gap:6px"><i data-lucide="clock" width="12" height="12"></i>${fullDate}</span>
+              ${env.LEAD_EXPORT_WEBHOOK_URL ? `<span style="font-size:11.5px;color:${l.external_id ? "var(--muted)" : "var(--bad)"}">${l.external_id ? `En Odoo: #${esc(l.external_id)}` : "Aún no llega a Odoo (se reintenta cada hora)"}</span>` : ""}
             </div>
           </div>
         </div>
@@ -98,9 +100,10 @@ export async function renderLeads(env: Env): Promise<string> {
     .map((c) => `<span>${esc(c.h)}</span>`)
     .join("");
 
-  const body = `
+  const seguimiento = await renderSeguimientoBlock(env).catch(() => "");
+  const body = `${seguimiento}
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">
-      <h2 class="font-display font-semibold text-[15px] text-cream">${esc(niche.recordPlural)}</h2>
+      <h2 class="font-display font-semibold text-[15px] text-cream">${seguimiento ? "Capturados por el asistente" : esc(niche.recordPlural)}</h2>
       <a href="/admin/leads/export.csv" class="ghostbtn" style="display:flex;align-items:center;gap:8px;background:var(--panel);border:1px solid var(--line);color:var(--muted);padding:9px 14px;font-size:12.5px;transition:all .12s ease">
         <i data-lucide="download" width="14" height="14"></i> Exportar CSV
       </a>

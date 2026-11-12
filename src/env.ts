@@ -139,6 +139,8 @@ export interface Env {
   FEATURE_CITAS_PANEL?: string;
   // Secret: URL del flujo de n8n BRX_Forja_Agenda (calendario de Odoo, solo lectura). Con ella el panel de citas lee Odoo; sin ella, Cal.com.
   CRM_AGENDA_URL?: string;
+  // Secret: URL del flujo de n8n BRX_Forja_Seguimiento (prospectos y oportunidades de Odoo, solo lectura). Con ella, Leads muestra el seguimiento en vivo.
+  CRM_SEGUIMIENTO_URL?: string;
   // Respaldo semanal de la base a R2 (src/crons/respaldoSemanal.ts). "1" lo enciende; requiere el bucket MEDIA.
   FEATURE_RESPALDO_SEMANAL?: string;
   // Agenda básica para un bot que no es Pro (Starter): "1" la enciende. Un solo tipo de cita (CALCOM_EVENT_TYPE_ID). Ver src/config.ts.
