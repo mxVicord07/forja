@@ -54,7 +54,7 @@ describe("/admin/citas con FEATURE_CITAS_PANEL=1", () => {
   it("no vuelve href una ubicación que no sea http(s)", async () => {
     stubCal([reserva({ location: "javascript:alert(1)" })]);
     const html = await renderCitas(env, { rango: "30d" }, new Date("2026-11-16T15:00:00Z"));
-    expect(html).not.toContain("javascript:alert(1)\"");
+    expect(html).not.toContain('href="javascript');
   });
 
   it("filtra por estado y por búsqueda", async () => {
