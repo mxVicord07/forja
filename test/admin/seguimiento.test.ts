@@ -30,6 +30,7 @@ describe("normalizeSeguimiento", () => {
     expect(d.filas[2].waPropio).toBeNull();
     expect(d.filas[2].url).toBeNull();
     expect(d.resumen.tocarHoy).toBe(2);
+    expect(d.sinRegistro).toBeNull();
   });
   it("rechaza respuestas sin ok o sin filas", () => {
     expect(normalizeSeguimiento({ ok: false })).toBeNull();
@@ -87,5 +88,52 @@ describe("renderLeads con y sin CRM", () => {
     stub(respuesta());
     const html = await renderLeads({ ...e, CRM_SEGUIMIENTO_URL: "https://n8n.x/webhook/forja-seguimiento-1" });
     expect(html.indexOf("Seguimiento en Odoo")).toBeLessThan(html.indexOf("Capturados por el asistente"));
+  });
+});
+
+describe("paraHoy y contactos sin registrar", () => {
+  it("ordena: sugerido, actividad vencida más vieja, sin siguiente paso; excluye esperas y bajas; tope de 10", async () => {
+    const { paraHoy } = await import("../../src/admin/views/seguimiento");
+    const f = (id: number, o: Record<string, unknown> = {}) => ({ id, tipo: "oportunidad", titulo: "t", quien: "q" + id, etapa: "x", monto: 0, semaforo: null, codigo: null, siguienteToque: null, proximaCita: null, ultimoContacto: null, canal: null, actividad: null, conversacion: null, url: null, waPropio: null, sugerido: null, ...o }) as any;
+    const filas = [
+      f(1, { actividad: { fecha: "2026-11-20", resumen: "futura" } }),
+      f(2),
+      f(3, { actividad: { fecha: "2026-11-01", resumen: "vencida" } }),
+      f(4, { actividad: { fecha: "2026-10-20", resumen: "más vieja" } }),
+      f(5, { sugerido: { texto: "Hola", waUrl: null, permitido: true, motivo: null } }),
+      f(6, { codigo: "esperar:pausa" }),
+      f(7, { codigo: "no_tocar:baja", actividad: { fecha: "2026-10-01", resumen: "x" } }),
+      f(8, { tipo: "prospecto" }),
+    ];
+    expect(paraHoy(filas, "2026-11-12").map((x: any) => x.id)).toEqual([5, 4, 3, 2]);
+    expect(paraHoy(Array.from({ length: 30 }, (_, i) => f(100 + i)), "2026-11-12")).toHaveLength(10);
+  });
+
+  it("lista los contactos atendidos desde la app que Odoo no conoce, con botón para registrarlos", async () => {
+    const mf = await createTestMiniflare();
+    const d1 = await mf.getD1Database("DB");
+    const now = Date.parse("2026-11-12T23:00:00Z");
+    for (const [id, tel, nombre] of [["whatsapp:5214441112233", "5214441112233", "Lourdes <b>Medina</b>"], ["whatsapp:5214449990000", "5214449990000", "David Mora"]] as const) {
+      await d1.prepare("INSERT INTO conversations (id, channel, channel_user_id, display_name, started_at, last_message_at) VALUES (?, 'whatsapp', ?, ?, ?, ?)").bind(id, tel, nombre, now, now).run();
+      await d1.prepare("INSERT INTO messages (id, conversation_id, role, content, created_at) VALUES (?, ?, 'owner', '¿Tendrías 15 minutos esta semana?', ?)").bind(crypto.randomUUID(), id, now - 3_600_000).run();
+    }
+    const f = vi.fn(async (_u: any, init: any) => {
+      expect(JSON.parse(init.body).telefonos.sort()).toEqual(["+5214441112233", "+5214449990000"]);
+      return new Response(JSON.stringify(respuesta({ sin_registro: ["+5214441112233"] })), { status: 200 });
+    });
+    vi.stubGlobal("fetch", f);
+    const html = await renderSeguimientoBlock(env({ DB: d1, COPILOTO_TELEGRAM_BOT: "birevx_copiloto_bot" }), new Date(now));
+    expect(html).toContain("Contactos de tu WhatsApp sin registrar en Odoo (1)");
+    expect(html).toContain("Lourdes &lt;b&gt;Medina&lt;/b&gt;");
+    expect(html).toContain("https://t.me/birevx_copiloto_bot?text=");
+    expect(html).not.toContain("David Mora ·"); // ya está en Odoo
+    expect(html).toContain("A quién atender hoy");
+    expect(html).toContain("<details open");
+  });
+
+  it("si Odoo no dice quién falta, no muestra el bloque de contactos", async () => {
+    stub(respuesta());
+    const html = await renderSeguimientoBlock(env(), new Date("2026-11-12T15:00:00Z"));
+    expect(html).not.toContain("sin registrar en Odoo");
   });
 });

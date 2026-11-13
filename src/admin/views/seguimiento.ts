@@ -6,23 +6,50 @@
 import type { Env } from "../../env";
 import { fetchSeguimiento, type FilaSeguimiento, type Seguimiento } from "../../crm/seguimiento";
 import { calcomTimeZone } from "../../integrations/calcom";
+import { Db } from "../../db/client";
+import { contactosCoexistencia, type ContactoCoexistencia } from "../../crm/coexistencia";
 
 const esc = (s: string) =>
   s.replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]!));
 const pesos = (n: number) => "$" + Math.round(n).toLocaleString("en-US");
 const MAX_FILAS = 60;
+const TOP_HOY = 10;
+
+/**
+ * A quién atender hoy, en orden: (0) mensaje sugerido por el semáforo, (1) actividad vencida (la más vieja primero),
+ * (2) oportunidad sin siguiente paso. Fuera: quien está en espera o pausa y quien pidió no ser contactado.
+ */
+export function paraHoy(filas: FilaSeguimiento[], hoy: string): FilaSeguimiento[] {
+  const rango = (f: FilaSeguimiento): number | null => {
+    const cod = f.codigo ?? "";
+    if (cod.startsWith("no_tocar:") || cod.startsWith("esperar:")) return null;
+    if (f.sugerido) return 0;
+    if (f.actividad && f.actividad.fecha < hoy) return 1;
+    if (f.tipo === "oportunidad" && !f.actividad) return 2;
+    return null;
+  };
+  return filas
+    .map((f) => ({ f, r: rango(f) }))
+    .filter((x): x is { f: FilaSeguimiento; r: number } => x.r !== null)
+    .sort((a, b) => a.r - b.r || (a.f.actividad?.fecha ?? "9").localeCompare(b.f.actividad?.fecha ?? "9") || b.f.monto - a.f.monto)
+    .slice(0, TOP_HOY)
+    .map((x) => x.f);
+}
 
 export async function renderSeguimientoBlock(env: Env, ahora: Date = new Date()): Promise<string> {
   if (!env.CRM_SEGUIMIENTO_URL) return "";
-  const r = await fetchSeguimiento(env);
+  // Contactos que el dueño atendió desde su app (coexistencia): se pregunta a Odoo cuáles no conoce.
+  const coex = env.DB ? await contactosCoexistencia(new Db(env.DB), ahora.getTime()).catch(() => []) : [];
+  const r = await fetchSeguimiento(env, coex.map((c) => c.telefono));
   if (!r.ok) {
     return `<div class="bg-panel border border-line" style="padding:14px 18px;margin-bottom:22px">
       <span class="text-[12px]" style="color:var(--bad)">No se pudo leer el seguimiento de Odoo (${esc(r.reason)}). Los datos de abajo son solo los del asistente.</span></div>`;
   }
-  return bloque(r.data, calcomTimeZone(env), ahora);
+  const faltan = r.data.sinRegistro ? coex.filter((c) => r.data.sinRegistro!.includes(c.telefono)) : null;
+  return bloque(r.data, calcomTimeZone(env), ahora, faltan, (env.COPILOTO_TELEGRAM_BOT ?? "").replace(/[^A-Za-z0-9_]/g, ""));
 }
 
-function bloque(d: Seguimiento, tz: string, ahora: Date): string {
+function bloque(d: Seguimiento, tz: string, ahora: Date, faltan: ContactoCoexistencia[] | null, botCopiloto: string): string {
   const hoy = new Intl.DateTimeFormat("en-CA", { timeZone: tz, year: "numeric", month: "2-digit", day: "2-digit" }).format(ahora);
   const hora = new Intl.DateTimeFormat("es-MX", { timeZone: tz, hour: "2-digit", minute: "2-digit", hour12: false }).format(ahora);
   const fechaCorta = (iso: string | null) => {
@@ -36,7 +63,7 @@ function bloque(d: Seguimiento, tz: string, ahora: Date): string {
   const etapas = d.resumen.etapas.map((e) => chip(e.etapa, `${e.cuenta}${e.monto ? " · " + pesos(e.monto) : ""}`)).join("");
   const alertas = [
     chip("Prospectos", String(d.resumen.prospectos)),
-    chip("Escribir hoy", String(d.resumen.tocarHoy), d.resumen.tocarHoy ? "var(--accent)" : "var(--cream)"),
+    chip("Atender hoy", String(paraHoy(d.filas, hoy).length), "var(--accent)"),
     chip("Sin siguiente paso", String(d.resumen.sinActividad), d.resumen.sinActividad ? "var(--bad)" : "var(--cream)"),
     chip("Actividades vencidas", String(d.resumen.actividadVencida), d.resumen.actividadVencida ? "var(--bad)" : "var(--cream)"),
   ].join("");
@@ -44,19 +71,41 @@ function bloque(d: Seguimiento, tz: string, ahora: Date): string {
   const boton = (href: string, texto: string, primario = false) =>
     `<a href="${esc(href)}" target="_blank" rel="noopener noreferrer" style="font-size:11.5px;padding:5px 10px;border:1px solid ${primario ? "var(--accent)" : "var(--line)"};background:${primario ? "var(--accent)" : "transparent"};color:${primario ? "#ffffff" : "var(--muted)"};text-decoration:none;white-space:nowrap">${texto}</a>`;
 
-  const paraHoy = d.filas.filter((f) => f.sugerido).map((f) => {
-    const s = f.sugerido!;
-    const accion = s.permitido && s.waUrl
-      ? boton(s.waUrl, "Enviar desde mi WhatsApp", true)
-      : `<span class="text-[11.5px]" style="color:var(--bad)">${esc(s.motivo ?? "Sin permiso para escribirle por WhatsApp")}</span>`;
+  const tarjetasHoy = paraHoy(d.filas, hoy).map((f) => {
+    const s = f.sugerido;
+    const vencida = f.actividad && f.actividad.fecha < hoy;
+    const accion = s
+      ? s.permitido && s.waUrl
+        ? boton(s.waUrl, "Enviar desde mi WhatsApp", true)
+        : `<span class="text-[11.5px]" style="color:var(--bad)">${esc(s.motivo ?? "Sin permiso para escribirle por WhatsApp")}</span>`
+      : f.waPropio ? boton(f.waPropio, "Abrir mi WhatsApp", true) : "";
+    const chat = f.conversacion ? `<a href="/admin/conversations?c=${encodeURIComponent(f.conversacion)}" style="font-size:11.5px;padding:5px 10px;border:1px solid var(--line);color:var(--muted);text-decoration:none">Chat</a>` : "";
+    const retomar = f.actividad
+      ? `<div class="text-[12px]" style="margin-top:4px;color:${vencida ? "var(--bad)" : "var(--muted)"}">Punto a retomar (${esc(fechaCorta(f.actividad.fecha))}): ${esc(f.actividad.resumen ?? "actividad sin descripción")}</div>`
+      : `<div class="text-[12px]" style="margin-top:4px;color:var(--bad)">Sin siguiente paso en Odoo</div>`;
     return `<div class="border border-line" style="padding:12px 14px;margin-bottom:8px">
       <div style="display:flex;justify-content:space-between;gap:12px;align-items:flex-start;flex-wrap:wrap">
-        <div class="text-cream text-[13px] font-semibold">${esc(f.quien || f.titulo)} <span class="text-dim" style="font-weight:400">· ${esc(f.etapa ?? f.tipo)}</span></div>
-        <div style="display:flex;gap:6px;flex-wrap:wrap">${accion}${f.url ? boton(f.url, "Odoo") : ""}</div>
+        <div style="min-width:0"><div class="text-cream text-[13px] font-semibold">${esc(f.quien || f.titulo)} <span class="text-dim" style="font-weight:400">· ${esc(f.etapa ?? "Prospecto")}${f.monto ? " · " + pesos(f.monto) : ""}</span></div>
+          <div class="text-dim text-[11.5px]">${esc(f.titulo)}</div></div>
+        <div style="display:flex;gap:6px;flex-wrap:wrap">${accion}${chat}${f.url ? boton(f.url, "Odoo") : ""}</div>
       </div>
-      <div class="text-muted text-[12.5px]" style="margin-top:6px;white-space:pre-wrap;line-height:1.5">${esc(s.texto)}</div>
+      ${f.semaforo ? `<div class="text-muted text-[12px]" style="margin-top:6px">${esc(f.semaforo)}</div>` : ""}
+      ${retomar}
+      ${s ? `<div class="text-cream text-[12.5px]" style="margin-top:8px;padding:8px 10px;background:var(--panel2);white-space:pre-wrap;line-height:1.5">${esc(s.texto)}</div>` : ""}
     </div>`;
-  }).join("");
+  });
+
+  const fmtCuando = (ms: number) => new Intl.DateTimeFormat("es-MX", { timeZone: tz, day: "numeric", month: "short", hour: "2-digit", minute: "2-digit", hour12: false }).format(new Date(ms));
+  const sinRegistrar = (faltan ?? []).map((c) => {
+    const quien = c.nombre ?? c.telefono;
+    const borrador = `Contacto nuevo: ${c.nombre ?? ""}, teléfono ${c.telefono}. Negocio: . Lo conocí en: . Platicamos de: `;
+    const registrar = botCopiloto ? boton(`https://t.me/${botCopiloto}?text=${encodeURIComponent(borrador)}`, "Registrar con el Copiloto", true) : "";
+    return `<div class="border border-line" style="padding:10px 14px;margin-bottom:6px;display:flex;justify-content:space-between;gap:12px;align-items:center;flex-wrap:wrap">
+      <div style="min-width:0;flex:1"><div class="text-cream text-[13px]">${esc(quien)} <span class="text-dim text-[11.5px]">· ${esc(fmtCuando(c.ultimoDelDueno))} · ${c.mensajesDelDueno} mensaje(s) tuyos${c.respondio ? " · respondió" : ""}</span></div>
+        ${c.ultimoTexto ? `<div class="text-dim text-[11.5px] truncate">${esc(c.ultimoTexto)}</div>` : ""}</div>
+      <div style="display:flex;gap:6px">${registrar}<a href="/admin/conversations?c=${encodeURIComponent(c.conversationId)}" style="font-size:11.5px;padding:5px 10px;border:1px solid var(--line);color:var(--muted);text-decoration:none">Chat</a></div>
+    </div>`;
+  });
 
   const fila = (f: FilaSeguimiento) => {
     const vencida = f.actividad && f.actividad.fecha < hoy;
@@ -97,10 +146,13 @@ function bloque(d: Seguimiento, tz: string, ahora: Date): string {
     <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px">${etapas}</div>
     <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:16px">${alertas}</div>
     ${d.aviso ? `<p class="text-[11.5px]" style="color:var(--bad);margin:0 0 10px">${esc(d.aviso)}</p>` : ""}
-    ${paraHoy ? `<div class="text-dim" style="font-size:10px;letter-spacing:.16em;text-transform:uppercase;margin-bottom:8px">Mensajes sugeridos para hoy</div>${paraHoy}<div style="height:10px"></div>` : ""}
-    <div class="text-dim" style="font-size:10px;letter-spacing:.16em;text-transform:uppercase;margin-bottom:8px">Oportunidades (${opps.length})</div>
-    ${opps.length ? tabla(opps) : `<p class="text-dim text-[12px]">Sin oportunidades abiertas.</p>`}
-    <details style="margin-top:14px"><summary class="text-dim" style="font-size:10px;letter-spacing:.16em;text-transform:uppercase;cursor:pointer">Prospectos por calificar (${pros.length})</summary>
+    <details open style="margin-bottom:14px"><summary class="text-dim" style="font-size:10px;letter-spacing:.16em;text-transform:uppercase;cursor:pointer">A quién atender hoy (${tarjetasHoy.length})</summary>
+      <div style="margin-top:8px">${tarjetasHoy.length ? tarjetasHoy.join("") : `<p class="text-dim text-[12px]">Nada pendiente para hoy.</p>`}</div></details>
+    ${faltan === null ? "" : `<details ${sinRegistrar.length ? "open" : ""} style="margin-bottom:14px"><summary class="text-dim" style="font-size:10px;letter-spacing:.16em;text-transform:uppercase;cursor:pointer">Contactos de tu WhatsApp sin registrar en Odoo (${sinRegistrar.length})</summary>
+      <div style="margin-top:8px">${sinRegistrar.length ? `<p class="text-dim text-[11.5px]" style="margin:0 0 8px">Les escribiste desde tu app en los últimos 14 días y Odoo no los conoce: sin registro no entran al seguimiento ni al semáforo.</p>` + sinRegistrar.join("") : `<p class="text-dim text-[12px]">Todos los contactos que atendiste desde tu app ya están en Odoo.</p>`}</div></details>`}
+    <details open style="margin-bottom:14px"><summary class="text-dim" style="font-size:10px;letter-spacing:.16em;text-transform:uppercase;cursor:pointer">Oportunidades (${opps.length})</summary>
+      <div style="margin-top:8px">${opps.length ? tabla(opps) : `<p class="text-dim text-[12px]">Sin oportunidades abiertas.</p>`}</div></details>
+    <details><summary class="text-dim" style="font-size:10px;letter-spacing:.16em;text-transform:uppercase;cursor:pointer">Prospectos por calificar (${pros.length})</summary>
       <div style="margin-top:8px">${pros.length ? tabla(pros) : `<p class="text-dim text-[12px]">Sin prospectos.</p>`}</div></details>
   </div>`;
 }

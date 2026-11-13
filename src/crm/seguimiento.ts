@@ -15,6 +15,7 @@ export interface FilaSeguimiento {
   etapa: string | null;
   monto: number;
   semaforo: string | null;
+  codigo: string | null;
   siguienteToque: string | null;
   proximaCita: string | null;
   ultimoContacto: string | null;
@@ -31,6 +32,8 @@ export interface Seguimiento {
   resumen: { etapas: { etapa: string; cuenta: number; monto: number }[]; prospectos: number; oportunidades: number; tocarHoy: number; sinActividad: number; actividadVencida: number };
   filas: FilaSeguimiento[];
   aviso: string | null;
+  /** Teléfonos (E.164) de los que se preguntó y que NO están en Odoo. null = no se pudo saber. */
+  sinRegistro: string[] | null;
 }
 
 const TIMEOUT_MS = 6000;
@@ -58,6 +61,7 @@ export function normalizeSeguimiento(data: unknown): Seguimiento | null {
       etapa: str(raw.etapa, 60),
       monto: num(raw.monto),
       semaforo: str(raw.semaforo, 200),
+      codigo: str(raw.codigo, 60),
       siguienteToque: str(raw.siguiente_toque, 10),
       proximaCita: str(raw.proxima_cita, 30),
       ultimoContacto: str(raw.ultimo_contacto, 30),
@@ -78,13 +82,14 @@ export function normalizeSeguimiento(data: unknown): Seguimiento | null {
     },
     filas,
     aviso: str(d.aviso, 200),
+    sinRegistro: Array.isArray(d.sin_registro) ? d.sin_registro.filter((t: unknown): t is string => typeof t === "string" && /^\+\d{11,13}$/.test(t)) : null,
   };
 }
 
-export async function fetchSeguimiento(env: Env): Promise<{ ok: true; data: Seguimiento } | { ok: false; reason: string }> {
+export async function fetchSeguimiento(env: Env, telefonos: string[] = []): Promise<{ ok: true; data: Seguimiento } | { ok: false; reason: string }> {
   if (!env.CRM_SEGUIMIENTO_URL) return { ok: false, reason: "not_configured" };
   try {
-    const res = await fetch(env.CRM_SEGUIMIENTO_URL, { method: "POST", headers: { "Content-Type": "application/json" }, body: "{}", signal: AbortSignal.timeout(TIMEOUT_MS) });
+    const res = await fetch(env.CRM_SEGUIMIENTO_URL, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ telefonos: telefonos.slice(0, 80) }), signal: AbortSignal.timeout(TIMEOUT_MS) });
     if (!res.ok) return { ok: false, reason: `http_${res.status}` };
     const data = normalizeSeguimiento(await res.json());
     return data ? { ok: true, data } : { ok: false, reason: "respuesta_invalida" };
