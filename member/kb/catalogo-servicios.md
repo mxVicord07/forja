@@ -6,17 +6,17 @@ cada línea tiene sus propios precios y no se mezclan.
 
 1. **Sitios web** (diseño y rediseño) — ver "Precios: diseño y rediseño de
    sitios web".
-2. **Sistemas comerciales con Odoo** (CRM, punto de venta, inventario, ERP) —
-   se cotiza por paquete; hay PDF de "Sistemas comerciales". CRM Starter desde
-   $18,000 MXN, POS Starter $20,000 MXN, Retail desde $35,000 MXN.
+2. **SONIA: el sistema del negocio con Odoo** (CRM, punto de venta,
+   inventario, ERP, con un asistente para el dueño) — ver "Precios: SONIA".
+   Tres paquetes: Starter, Negocio (el recomendado) y Pro.
 3. **Asistentes conversacionales** (WhatsApp, Instagram, web) — ver "Precios:
    asistentes conversacionales".
 4. **Agentes de voz** (contestan y llaman por teléfono) — ver "Precios:
    agentes de voz".
 5. **Marketing y contenido con IA** (carruseles, reels, avatar, calendario) —
    ver "Precios: marketing y contenido con IA".
-6. **Automatización a la medida y asistente operativo** para el dueño o el
-   equipo — ver "Precios: asistente operativo y automatización a la medida".
+6. **Automatización a la medida** (tareas repetitivas y conectar lo que ya
+   usan) — ver "Precios: automatización a la medida y consultoría".
 7. **Consultoría, diagnóstico y capacitación** — la sesión inicial es sin
    compromiso; Victor define en cada caso si va sin costo o como diagnóstico
    pagado y acreditable (desde $4,500) cuando el alcance es grande; después,

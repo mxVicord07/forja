@@ -17,7 +17,7 @@ cuenta queda a nombre del cliente.
   mes gasta del orden de $1,000 MXN en Meta.
 
 ## Inteligencia artificial y minutos
-- Asistentes y asistente operativo: el uso de IA suele ser de $300 a $1,500 MXN
+- Asistentes y el asistente de SONIA: el uso de IA suele ser de $300 a $1,500 MXN
   al mes según el volumen.
 - Agentes de voz: los minutos incluidos están en el plan; los extra se cobran al
   precio por minuto de cada paquete.

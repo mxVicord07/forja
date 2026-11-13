@@ -2,8 +2,8 @@
 
 BIRevX SÍ vende: asistentes virtuales personalizados (WhatsApp, web y otros
 canales), agentes de voz que contestan y llaman por teléfono, marketing y
-contenido con IA (carruseles, reels, avatar de marca), asistentes operativos
-para el dueño o el equipo, automatización de tareas repetitivas, sistemas de
+contenido con IA (carruseles, reels, avatar de marca), SONIA (el sistema del
+negocio con Odoo y un asistente para el dueño), automatización de tareas repetitivas, sistemas de
 atención y seguimiento de clientes, diseño de sitios web, infraestructura
 operativa digital propia (VPS autoalojado), CRM, ERP, dashboards y reportes, y
 acompañamiento en la implementación y el mantenimiento de todos esos flujos.

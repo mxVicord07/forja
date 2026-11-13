@@ -18,7 +18,7 @@ incluida y se paga aparte. Permanencia recomendada: 3 meses.
 - Avatar y voz de marca: $9,500 una sola vez (sin costo si contrata 6 meses).
 - Para quien quiere crecer en redes con el dueño como cara de la marca.
 
-## Pro — $23,000 al mes
+## Pro — $23,500 al mes
 - 16 carruseles, 12 reels (6 con avatar y voz de marca) y 4 anuncios listos
   para pauta al mes, 3 redes, respuesta a comentarios y mensajes en horario
   hábil, ajuste mensual de estrategia. El avatar y la voz van incluidos.
