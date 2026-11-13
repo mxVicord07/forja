@@ -152,6 +152,9 @@ export interface Env {
   // Plantilla aprobada por Meta para recordar fuera de la ventana de 24 h ({{1}} nombre, {{2}} día, {{3}} hora) y su idioma (por omisión es_MX).
   CITA_RECORDATORIO_PLANTILLA?: string;
   CITA_RECORDATORIO_IDIOMA?: string;
+  // Plantilla aprobada (2 variables: nombre y tema) para reactivar leads fríos de WhatsApp fuera de la ventana de 24 h, y su idioma.
+  REENGAGE_PLANTILLA?: string;
+  REENGAGE_PLANTILLA_IDIOMA?: string;
   // Marca del panel por cliente (ver src/admin/brand.ts). Ausentes = marca de BIRevX.
   PANEL_BRAND_LOGO_URL?: string;
   PANEL_BRAND_NAME?: string;

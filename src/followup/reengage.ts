@@ -24,6 +24,32 @@ import { SettingsRepo, SETTING_KEYS } from "../db/settings";
 import { isPro } from "../config";
 import { sendOutbound } from "./send";
 import type { ChannelId } from "../channels/shared";
+import { sendYCloudTemplate } from "../channels/ycloud";
+import { campanasPorPlantillaBloqueadas } from "../campaigns";
+import { ConversationsRepo } from "../db/conversations";
+
+/**
+ * Reactivación por plantilla (I-034): fuera de la ventana de 24 h, WhatsApp solo acepta una plantilla aprobada.
+ * Con REENGAGE_PLANTILLA (2 variables: {{1}} nombre, {{2}} tema, como `retomar_conversacion_v1`) el lead frío de
+ * WhatsApp sí recibe su segundo toque. No aplica en un bot conectado al CRM: ahí el seguimiento lo lleva el CRM
+ * con su guarda de consentimiento.
+ */
+export function plantillaReenganche(env: Env): { name: string; language: string } | null {
+  const name = (env.REENGAGE_PLANTILLA ?? "").trim();
+  if (!/^[a-z0-9_]{1,512}$/.test(name)) return null;
+  if ((env.WA_PROVIDER ?? "").trim().toLowerCase() !== "ycloud" || campanasPorPlantillaBloqueadas(env)) return null;
+  return { name, language: (env.REENGAGE_PLANTILLA_IDIOMA ?? "es_MX").trim() };
+}
+
+/** Tema corto para la plantilla: el primer tema que detectó el Analista, o una frase neutra. Nunca texto del cliente tal cual. */
+export function temaReenganche(topicsRaw: string | null): string {
+  try {
+    const t = JSON.parse(topicsRaw ?? "[]");
+    const primero = Array.isArray(t) ? t.find((x) => typeof x === "string" && x.trim()) : null;
+    if (primero) return String(primero).replace(/\s+/g, " ").trim().slice(0, 60);
+  } catch { /* temas mal formados: frase neutra */ }
+  return "lo que platicamos";
+}
 
 const MIN_COLD_MS = 2 * 24 * 60 * 60 * 1000; // 2 días
 const MAX_COLD_MS = 7 * 24 * 60 * 60 * 1000; // 7 días
@@ -38,6 +64,7 @@ interface CandidateRow {
   channel_user_id: string;
   display_name: string | null;
   sale_opportunity: number | null;
+  topics: string | null;
   kw_hits: number;
   last_user_at: number;
 }
@@ -79,7 +106,7 @@ export async function runReengage(
   const internalChannel = env.INTERNAL_CHANNEL?.trim();
   const rows = await db.all<CandidateRow>(
     `SELECT c.id, c.channel, c.channel_user_id, c.display_name,
-       i.sale_opportunity,
+       i.sale_opportunity, i.topics,
        (SELECT COUNT(*) FROM keyword_hits k WHERE k.conversation_id = c.id) AS kw_hits,
        (SELECT MAX(created_at) FROM messages m WHERE m.conversation_id = c.id AND m.role = 'user') AS last_user_at
      FROM conversations c
@@ -111,7 +138,10 @@ export async function runReengage(
     // canales que la tienen — sin plantilla configurada, no hay forma
     // honesta de entregar. No quemamos el claim: puede reengancharse cuando
     // el dueño conecte una plantilla aprobada.
-    if (WINDOWED.has(cand.channel)) {
+    const plantilla = cand.channel === "whatsapp" ? plantillaReenganche(env) : null;
+    const nombrePila = (cand.display_name ?? "").trim().split(/\s+/)[0] ?? "";
+    // Sin plantilla, o sin nombre para el saludo de la plantilla, no hay forma honesta de entregar.
+    if (WINDOWED.has(cand.channel) && (!plantilla || !nombrePila)) {
       out.skipped++;
       continue;
     }
@@ -123,6 +153,22 @@ export async function runReengage(
     );
     if ((claim.meta.changes ?? 0) === 0) {
       out.skipped++;
+      continue;
+    }
+
+    if (plantilla) {
+      const tema = temaReenganche(cand.topics);
+      const r = await sendYCloudTemplate(env, { to: cand.channel_user_id, name: plantilla.name, language: plantilla.language, bodyParams: [nombrePila, tema] });
+      if (r.ok) {
+        await msgs.append(cand.id, "assistant", `[Reactivación, plantilla ${plantilla.name}] Hola ${nombrePila}: retomamos ${tema}.`);
+        await new ConversationsRepo(db).touchLastMessage(cand.id, now);
+        out.sent++;
+      } else {
+        // El proveedor no la aceptó: se suelta el candado para reintentar otro día.
+        await db.run("DELETE FROM reengage_sends WHERE conversation_id = ?", [cand.id]).catch(() => {});
+        out.errors++;
+        console.warn(`[reengage] plantilla rechazada (${r.reason})`);
+      }
       continue;
     }
 

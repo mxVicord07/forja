@@ -145,3 +145,41 @@ it("sí toca leads fríos con solo keyword_hits (sin sale_opportunity)", async (
   const r = await runReengage(env, { now: NOW });
   expect(r.sent).toBe(1);
 });
+
+describe("reactivación por plantilla de YCloud (I-034)", () => {
+  const conPlantilla = () => ({ ...env, WA_PROVIDER: "ycloud", YCLOUD_API_KEY: "k", YCLOUD_WA_FROM: "+5210000000000", REENGAGE_PLANTILLA: "retomar_conversacion_v1" }) as unknown as Env;
+  beforeEach(async () => { await settings.set(SETTING_KEYS.reengageColdLeads, "1"); });
+
+  it("un lead frío de WhatsApp recibe la plantilla con su nombre y el tema, una sola vez", async () => {
+    const id = await seedHot("5214441112233", "whatsapp");
+    await insights.upsert({ conversationId: id, sentiment: "positive", resolution: "unresolved", botScore: 4, topics: ["precios del asistente"], summary: "x", missedKb: null, saleOpportunity: true });
+    const f = vi.fn(async (_u: any, _i: any) => new Response(JSON.stringify({ id: "m1" }), { status: 200 }));
+    vi.stubGlobal("fetch", f);
+    const r = await runReengage(conPlantilla(), { now: NOW });
+    expect(r.sent).toBe(1);
+    const body = JSON.parse((f.mock.calls[0][1] as any).body);
+    expect(body.template.name).toBe("retomar_conversacion_v1");
+    expect(body.template.components[0].parameters.map((p: any) => p.text)).toEqual(["Lead", "precios del asistente"]);
+    expect(generateTextMock).not.toHaveBeenCalled(); // la plantilla no usa texto generado
+    expect((await runReengage(conPlantilla(), { now: NOW })).sent).toBe(0);
+    vi.unstubAllGlobals();
+  });
+
+  it("sin plantilla configurada WhatsApp se sigue saltando, y con CRM conectado también", async () => {
+    await seedHot("5214441112233", "whatsapp");
+    const f = vi.fn(); vi.stubGlobal("fetch", f);
+    expect((await runReengage({ ...conPlantilla(), REENGAGE_PLANTILLA: "" } as unknown as Env, { now: NOW })).skipped).toBe(1);
+    expect((await runReengage({ ...conPlantilla(), CRM_FICHA_URL: "https://x" } as unknown as Env, { now: NOW })).skipped).toBe(1);
+    expect(f).not.toHaveBeenCalled();
+    vi.unstubAllGlobals();
+  });
+
+  it("si YCloud la rechaza, suelta el candado para reintentar", async () => {
+    await seedHot("5214441112233", "whatsapp");
+    vi.stubGlobal("fetch", vi.fn(async () => new Response("{}", { status: 400 })));
+    expect(await runReengage(conPlantilla(), { now: NOW })).toMatchObject({ sent: 0, errors: 1 });
+    vi.stubGlobal("fetch", vi.fn(async () => new Response(JSON.stringify({ id: "m2" }), { status: 200 })));
+    expect((await runReengage(conPlantilla(), { now: NOW })).sent).toBe(1);
+    vi.unstubAllGlobals();
+  });
+});
