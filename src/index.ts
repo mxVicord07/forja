@@ -1,3 +1,4 @@
+import { seenBefore } from "./db/dedup";
 import { leerFallo, anotarFallo } from "./lib/wa-estado";
 import { Hono } from "hono";
 import { recordAdOrigin } from "./ads/origin";
@@ -204,6 +205,10 @@ app.post("/webhooks/whatsapp", async (c) => {
         return c.text("EVENT_RECEIVED", 200);
       }
       const msg = await parseYCloudEvent(body, c.env, origin);
+      // Candado de duplicados (traído de Forja+): si YCloud reenvía el mismo evento, no se contesta dos veces.
+      if (msg?.providerMessageId && (await seenBefore(new Db(c.env.DB), `yc:${msg.providerMessageId}`))) {
+        return c.text("EVENT_RECEIVED", 200);
+      }
       if (msg) {
         await recordAdOrigin(c.env.DB, `${msg.channel}:${msg.channelUserId}`, msg.channel, msg.adReferral);
         await getAgentStub(c.env, `${msg.channel}:${msg.channelUserId}`).ingest(msg);
@@ -223,6 +228,7 @@ app.post("/webhooks/whatsapp", async (c) => {
       return c.text("bad json", 400);
     }
     for (const msg of await parseWhatsAppEvents(body as any, c.env, origin)) {
+      if (msg.providerMessageId && (await seenBefore(new Db(c.env.DB), `wa:${msg.providerMessageId}`))) continue; // reenvío de Meta
       await recordAdOrigin(c.env.DB, `${msg.channel}:${msg.channelUserId}`, msg.channel, msg.adReferral);
       await getAgentStub(c.env, `${msg.channel}:${msg.channelUserId}`).ingest(msg);
     }

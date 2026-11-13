@@ -6,6 +6,7 @@ import type { DocumentRow } from "../db/documents";
 import { handoffHumanTool } from "./handoffHuman";
 import { pauseBotTool } from "./pauseBot";
 import { snoozeUserTool } from "./snoozeUser";
+import { pauseSuspectedBotTool } from "./pauseSuspectedBot";
 import { captureLeadTool } from "./captureLead";
 import { scheduleAppointmentTool } from "./scheduleAppointment";
 import { catalogQueryTool } from "./catalogQuery";
@@ -38,6 +39,8 @@ export function buildTools(ctx: ToolContext) {
     handoffHuman: handoffHumanTool(ctx.env, ctx.getConversationId),
     pauseBot: pauseBotTool(ctx.env, ctx.getConversationId),
     snoozeUser: snoozeUserTool(ctx.env, ctx.getConversationId),
+    // De Forja+: corta un loop bot a bot (pausa 24 h solo con varias señales juntas).
+    pauseSuspectedBot: pauseSuspectedBotTool(ctx.env, ctx.getConversationId),
     captureLead: captureLeadTool(ctx.env, ctx.getConversationId, ctx.getChannel ?? (() => null)),
     // No es Pro-only a propósito: compartir un PDF de precios es infra básica
     // de ventas, igual que captureLead — no consume tokens de visión ni cuesta

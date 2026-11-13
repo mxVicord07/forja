@@ -47,6 +47,8 @@ const NAV: Section[] = [
       { id: "boveda", label: "Bóveda", href: "/admin/boveda", icon: "vault" },
       { id: "cobros", label: "Cobros", href: "/admin/cobros", icon: "wallet" },
       { id: "campanas", label: "Campañas", href: "/admin/campanas", icon: "megaphone" },
+      { id: "plantillas", label: "Plantillas", href: "/admin/plantillas", icon: "file-text" },
+      { id: "reviews", label: "Reseñas", href: "/admin/reviews", icon: "star" },
     ],
   },
   {

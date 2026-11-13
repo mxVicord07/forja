@@ -14,6 +14,7 @@
  *
  * Claim-before-send en reengage_sends (PRIMARY KEY = candado). Best-effort.
  */
+import { plantillaDe } from "../lib/plantillasRoles";
 import { generateText } from "ai";
 import type { Env } from "../env";
 import { Db } from "../db/client";
@@ -138,7 +139,10 @@ export async function runReengage(
     // canales que la tienen — sin plantilla configurada, no hay forma
     // honesta de entregar. No quemamos el claim: puede reengancharse cuando
     // el dueño conecte una plantilla aprobada.
-    const plantilla = cand.channel === "whatsapp" ? plantillaReenganche(env) : null;
+    // Guardas de siempre (solo YCloud; nunca con CRM conectado) + la plantilla asignada en el panel o por variable.
+    const habilitada = (env.WA_PROVIDER ?? "").trim().toLowerCase() === "ycloud" && !campanasPorPlantillaBloqueadas(env);
+    const asignada = cand.channel === "whatsapp" && habilitada ? await plantillaDe(env, "reenganche") : null;
+    const plantilla = asignada && /^[a-z0-9_]{1,512}$/.test(asignada.name) ? asignada : null;
     const nombrePila = (cand.display_name ?? "").trim().split(/\s+/)[0] ?? "";
     // Sin plantilla, o sin nombre para el saludo de la plantilla, no hay forma honesta de entregar.
     if (WINDOWED.has(cand.channel) && (!plantilla || !nombrePila)) {

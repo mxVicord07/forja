@@ -16,6 +16,7 @@
  * Candado antes de enviar (appointment_id + start): una cita movida recibe su recordatorio nuevo.
  * El cliente pidió la cita por este mismo chat: es un mensaje de servicio sobre algo que solicitó.
  */
+import { plantillaDe } from "../lib/plantillasRoles";
 import type { Env } from "../env";
 import { Db } from "../db/client";
 import { MessagesRepo } from "../db/messages";
@@ -83,8 +84,9 @@ export async function runCitaRecordatorios(env: Env, now: number = Date.now()): 
 
   const tz = calcomTimeZone(env);
   const fmt = (iso: string, o: Intl.DateTimeFormatOptions) => new Intl.DateTimeFormat("es-MX", { timeZone: tz, ...o }).format(new Date(iso));
-  const plantilla = (env.CITA_RECORDATORIO_PLANTILLA ?? "").trim();
-  const idioma = (env.CITA_RECORDATORIO_IDIOMA ?? "es_MX").trim();
+  const asignada = await plantillaDe(env, "recordatorio");
+  const plantilla = asignada?.name ?? "";
+  const idioma = asignada?.language ?? "es_MX";
   const out: ResultadoRecordatorios = { enviados: 0, saltados: 0, fallidos: 0 };
 
   for (const f of filas) {

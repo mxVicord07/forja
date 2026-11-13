@@ -49,6 +49,9 @@ import { renderMejoras } from "./views/mejoras";
 import { runFlywheel, getLessons, saveLessons } from "../flywheel/detect";
 import { applySuggestion, dismissSuggestion } from "../flywheel/apply";
 import { renderLeads, exportLeadsCsv } from "./views/leads";
+import { renderPlantillas } from "./views/plantillas";
+import { renderReviews } from "./views/reviews";
+import { ROLES, asignarPlantilla, type RolPlantilla } from "../lib/plantillasRoles";
 import { redactarBorrador } from "../crm/borradorIa";
 import { renderTickets } from "./views/tickets";
 import { renderCitas } from "./views/citas";
@@ -113,6 +116,8 @@ const PRO_GATE: Array<[string, string]> = [
   ["/admin/costs", "Costos"],
   ["/admin/mejoras", "Mejoras"],
   ["/admin/campanas", "Campañas"],
+  ["/admin/plantillas", "Plantillas"],
+  ["/admin/reviews", "Reseñas"],
   // Boveda y Cobros ya estaban en PRO_ONLY_TABS (config.ts, bloquea el nav)
   // pero faltaban aquí — un bot free podía llegar a /admin/boveda o
   // /admin/cobros por URL directa y ver la pestaña completa (vacía, pero
@@ -533,6 +538,18 @@ adminApp.post("/agente/tools/:name/toggle", async (c) => {
   c.header("HX-Trigger", "canvas-refresh");
   return c.html((await renderNodeModal(c.env, `tool:${name}`, true)) + toastOob("✓ Guardado"));
 });
+
+// Plantillas de WhatsApp: ver las aprobadas y asignar cuál usa cada función. Reseñas: respuestas de la encuesta (de Forja+).
+adminApp.get("/plantillas", async (c) => c.html(await renderPlantillas(c.env, c.req.query())));
+adminApp.post("/plantillas/asignar", async (c) => {
+  const form = await c.req.formData();
+  const rol = String(form.get("rol") ?? "");
+  const nombre = String(form.get("nombre") ?? "").trim();
+  if (!(rol in ROLES) || !/^(-|[a-z0-9_]{1,120})$/.test(nombre)) return c.redirect("/admin/plantillas?err=" + encodeURIComponent("Plantilla o función no válida."));
+  await asignarPlantilla(c.env, rol as RolPlantilla, nombre, String(form.get("idioma") ?? "es_MX"));
+  return c.redirect("/admin/plantillas?ok=1");
+});
+adminApp.get("/reviews", async (c) => c.html(await renderReviews(c.env)));
 
 adminApp.get("/leads", async (c) => c.html(await renderLeads(c.env, { ia: c.req.query("ia") })));
 

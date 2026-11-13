@@ -69,6 +69,11 @@ const TOOL_META: Record<string, ToolMeta> = {
     desc: "Guardrail de abuso: manda a cooldown (default 1h) a quien insulta, spamea, es otro bot o usa al bot como ChatGPT gratis — el bot ignora sus mensajes ese rato.",
     icon: "shield",
   },
+  pauseSuspectedBot: {
+    label: "Frenar bots",
+    desc: "Si del otro lado contesta otro bot (respuestas instantáneas, eco, círculos sin datos reales), pausa esa conversación 24 h para no gastar en un loop. Ante la duda sigue atendiendo.",
+    icon: "shield-alert",
+  },
   captureLead: {
     label: "Capturar lead",
     desc: "Guarda los datos del cliente interesado (nombre, contacto, intención) en la tabla de leads.",
