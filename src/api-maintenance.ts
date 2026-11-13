@@ -211,7 +211,7 @@ async function buildMaintenance(c: Context<{ Bindings: Env }>) {
     superpowers_pro: SUPERPOWERS_PRO,
     // Agenda de citas, SOLO lectura: distingue el "Horario de atención"
     // (informativo) de la agenda real. enabled = el nicho agenda citas por
-    // diseño (ningún pack de nicho lo hace en este fork — ver niches/index.ts);
+    // diseño (los 7 giros de citas portados de Forja+ — ver niches/index.ts);
     // provider = "calcom" si el dueño puso la llave de Cal.com (independiente
     // del nicho en este fork, vía tools/scheduleAppointment.ts).
     scheduling: {

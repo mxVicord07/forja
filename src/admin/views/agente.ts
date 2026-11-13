@@ -104,6 +104,27 @@ const TOOL_META: Record<string, ToolMeta> = {
     desc: "Registra la solicitud del cliente de cancelar su cita y la escala a ti — no la cancela directamente en el calendario.",
     icon: "calendar-x",
   },
+  // Herramientas por giro (BOT_NICHE), portadas de Forja+ v1.0.51.
+  registrarCita: {
+    label: "Registrar cita",
+    desc: "Giros de citas sin agenda conectada: deja la solicitud de cita (servicio, día, hora, con quién) en tu tabla para que tú la confirmes.",
+    icon: "calendar-plus",
+  },
+  crearReservacion: {
+    label: "Registrar reservación",
+    desc: "Restaurante: deja la reservación de mesa (día, hora, personas) en tu tabla para que tú la confirmes.",
+    icon: "calendar-check",
+  },
+  tomarPedido: {
+    label: "Tomar pedido",
+    desc: "Restaurante: registra el pedido para llevar o a domicilio (platillos, dirección, pago) para que tú lo prepares.",
+    icon: "utensils",
+  },
+  registrarPedido: {
+    label: "Registrar pedido",
+    desc: "Tienda, panadería y cafetería: registra el pedido (productos, entrega, fecha, pago) para que tú lo prepares.",
+    icon: "shopping-bag",
+  },
 };
 
 function toolMeta(name: string): ToolMeta {

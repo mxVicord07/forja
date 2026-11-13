@@ -15,6 +15,10 @@ import { rescheduleAppointmentTool } from "./rescheduleAppointment";
 import { cancelAppointmentTool } from "./cancelAppointment";
 import { sendPaymentLinkTool } from "./cobros";
 import { stripeConfigured } from "../integrations/stripe";
+import { getNiche, nicheSchedulesAppointments } from "../niches";
+import { registrarCitaTool } from "./servicios";
+import { crearReservacionTool, tomarPedidoTool } from "./restaurante";
+import { registrarPedidoTool } from "./comercio";
 
 export interface ToolContext {
   env: Env;
@@ -69,6 +73,31 @@ export function buildTools(ctx: ToolContext) {
     // (enabledToolNames) — esto solo decide si la tool EXISTE en principio.
     if (stripeConfigured(ctx.env)) {
       tools.sendPaymentLink = sendPaymentLinkTool(ctx.env, ctx.getConversationId);
+    }
+  }
+
+  // Tools del giro (BOT_NICHE), portadas de Forja+ v1.0.51. Se cargan por
+  // giro, no por nivel: la promoción del Starter se vende justo en estos giros.
+  // Sin BOT_NICHE (bot de BIRevX) no entra ninguna.
+  // - Citas: si el bot ya tiene agenda (Cal.com) se queda con ella; si no,
+  //   registrarCita deja la solicitud como lead. Nunca las dos a la vez.
+  // - Pedidos y reservas: registran el pedido o la reserva como lead con los
+  //   datos del giro en metadata (la versión ligera del paso 11, I-055).
+  if (nicheSchedulesAppointments(ctx.env)) {
+    if (!tools.scheduleAppointment) {
+      tools.registrarCita = registrarCitaTool(ctx.env, ctx.getConversationId);
+    }
+  } else {
+    switch (getNiche(ctx.env).id) {
+      case "restaurante":
+        tools.crearReservacion = crearReservacionTool(ctx.env, ctx.getConversationId);
+        tools.tomarPedido = tomarPedidoTool(ctx.env, ctx.getConversationId);
+        break;
+      case "tienda":
+      case "panaderia":
+      case "cafeteria":
+        tools.registrarPedido = registrarPedidoTool(ctx.env, ctx.getConversationId);
+        break;
     }
   }
 

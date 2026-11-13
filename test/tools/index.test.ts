@@ -65,8 +65,10 @@ describe("buildTools", () => {
     expect(tools.cancelAppointment).toBeUndefined();
   });
 
-  it("el Starter genérico no agrega tools de nicho (aunque BOT_NICHE traiga un giro)", () => {
-    for (const niche of [undefined, "restaurante", "inmobiliaria", "hoteleria"]) {
+  // Los giros de citas y de pedidos ya están portados (ver test/niches.giros.test.ts);
+  // sin BOT_NICHE, o con un giro que todavía no existe en este fork, no entra nada.
+  it("sin giro (o con un giro aún no portado) no agrega tools de nicho", () => {
+    for (const niche of [undefined, "", "generico", "xyz", "inmobiliaria", "hoteleria", "crm"]) {
       const tools = buildTools(makeCtx("pro", niche));
       expect(tools.crearReservacion).toBeUndefined();
       expect(tools.calificarComprador).toBeUndefined();
@@ -74,6 +76,8 @@ describe("buildTools", () => {
       expect(tools.registrarPedido).toBeUndefined();
       expect(tools.registrarProspecto).toBeUndefined();
       expect(tools.reservarHospedaje).toBeUndefined();
+      expect(tools.registrarCita).toBeUndefined();
+      expect(tools.tomarPedido).toBeUndefined();
     }
   });
 
