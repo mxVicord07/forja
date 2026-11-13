@@ -155,6 +155,8 @@ export interface Env {
   PANEL_HOST?: string;
   /** "1" = solo Access; la contraseña compartida deja de servir. */
   ACCESS_ONLY?: string;
+  /** Horas de la ventana de entrada gratis de Meta para leads de anuncio (por omisión 72). Solo informa: el texto libre sigue a 24 h. */
+  WA_ENTRADA_GRATIS_HORAS?: string;
   // Respaldo semanal de la base a R2 (src/crons/respaldoSemanal.ts). "1" lo enciende; requiere el bucket MEDIA.
   FEATURE_RESPALDO_SEMANAL?: string;
   // Agenda básica para un bot que no es Pro (Starter): "1" la enciende. Un solo tipo de cita (CALCOM_EVENT_TYPE_ID). Ver src/config.ts.

@@ -1,3 +1,4 @@
+import { leerFallo, anotarFallo } from "./lib/wa-estado";
 import { Hono } from "hono";
 import { recordAdOrigin } from "./ads/origin";
 import type { Env } from "./env";
@@ -196,6 +197,12 @@ app.post("/webhooks/whatsapp", async (c) => {
       }
       // Un evento = un mensaje (YCloud no batchea). null = recibo de estado o
       // tipo no soportado: 200 igual, o YCloud reintenta.
+      // Estado de entrega: si Meta rechazó un mensaje que YCloud había aceptado, se anota en el hilo.
+      const fallo = leerFallo(body);
+      if (fallo) {
+        await anotarFallo(c.env.DB, fallo);
+        return c.text("EVENT_RECEIVED", 200);
+      }
       const msg = await parseYCloudEvent(body, c.env, origin);
       if (msg) {
         await recordAdOrigin(c.env.DB, `${msg.channel}:${msg.channelUserId}`, msg.channel, msg.adReferral);

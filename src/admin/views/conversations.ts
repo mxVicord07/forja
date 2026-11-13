@@ -19,6 +19,7 @@ import { costOfUsage, type ModelId } from "../../pricing";
 import { channelLabel } from "../../channels/labels";
 import { layout } from "./layout";
 import { fmtDateTime } from "../format";
+import { estadoVentana } from "../../lib/wa-estado";
 
 /** Tiempo relativo corto en español (ej. "hace 5 min", "hace 2 h", "hace 3 d"). */
 function ago(ms: number | null | undefined): string {
@@ -274,6 +275,18 @@ export async function renderThreadLive(env: Env, convId: string): Promise<string
     paused ? "⏸ bot pausado · tú tienes el control" : "🟢 bot activo"
   }</span>`;
 
+  // Ventana de WhatsApp: para saber ANTES de escribir si el texto libre va a pasar.
+  const ev = await estadoVentana(db, conv, env, now).catch(() => null);
+  const hora = (ms: number) => new Intl.DateTimeFormat("es-MX", { timeZone: "America/Mexico_City", day: "numeric", month: "short", hour: "2-digit", minute: "2-digit", hour12: false }).format(new Date(ms));
+  const ventanaPill = !ev
+    ? ""
+    : ev.ventana.state === "closed"
+      ? `<span style="${statusBadge("var(--bad)")}" title="WhatsApp solo deja mandar texto libre dentro de 24 h del último mensaje del cliente">✕ ventana cerrada · usa tu app o una plantilla</span>`
+      : `<span style="${statusBadge(ev.ventana.state === "closing" ? "var(--accent-2)" : "var(--ok)")}" title="Texto libre permitido hasta esta hora">⏱ ventana abierta hasta ${escapeHtml(hora(ev.ventana.until))}</span>`;
+  const gratisPill = ev?.gratisHasta
+    ? `<span style="${statusBadge("var(--accent)")}" title="Llegó por un anuncio: las plantillas no se cobran hasta esta hora (el texto libre sigue a 24 h)">📣 anuncio · plantillas gratis hasta ${escapeHtml(hora(ev.gratisHasta))}</span>`
+    : "";
+
   // "NEUTRAL" NO SE MUESTRA. El analizador clasifica cómo quedó el cliente en
   // cuatro casillas, y "neutral" es la de "no detecté nada": es la enorme
   // mayoría de las conversaciones. Una etiqueta que sale casi siempre y no dice
@@ -317,6 +330,8 @@ export async function renderThreadLive(env: Env, convId: string): Promise<string
     ${bloqueContacto(conv.channel, conv.channel_user_id)}
     <span style="${smallPill("var(--info)")}">${escapeHtml(channelLabel(conv.channel))}</span>
     ${statusPill}
+    ${ventanaPill}
+    ${gratisPill}
     ${sentBadge}
     ${openTicket > 0 ? `<span style="${statusBadge("var(--accent-2)")}">🔔 ticket abierto</span>` : ""}
     ${controls}
@@ -350,6 +365,12 @@ export async function renderThreadLive(env: Env, convId: string): Promise<string
           <div style="background:var(--panel2);border:1px solid var(--line);padding:9px 13px;font-size:12.5px;line-height:1.5;white-space:pre-wrap;color:var(--cream)">${escapeHtml(m.content)}</div>
           <span style="font-size:9.5px;color:var(--dim)">${time}</span>
         </div>`;
+      }
+
+      if (m.role === "note") {
+        const alerta = String(m.content).startsWith("⚠️");
+        return `
+        <div style="align-self:center;max-width:86%;text-align:center;font-size:11.5px;line-height:1.45;padding:6px 12px;border:1px dashed ${alerta ? "var(--bad)" : "var(--linelit)"};color:${alerta ? "var(--bad)" : "var(--dim)"};background:var(--panel)">${escapeHtml(m.content)}<div style="font-size:9.5px;color:var(--dim);margin-top:2px">nota interna · ${time}</div></div>`;
       }
 
       const isOwner = m.role === "owner";
