@@ -21,7 +21,8 @@ export interface Env {
   WA_DAILY_TEMPLATE_CAP?: string; // tope diario de plantillas HSM (default 250 — tier 1 de Meta)
   BUSINESS_NAME: string;
   BOT_LANGUAGE: string;
-  BOT_TIER: "free" | "pro";
+  /** Nivel del bot: "starter" (alias histórico "free") · "negocio" · "pro". Ver config.ts (CAPACIDADES). */
+  BOT_TIER: "free" | "starter" | "negocio" | "pro";
   // Nicho del bot (restaurante, inmobiliaria…). Selecciona el "niche pack" que
   // re-etiqueta el dashboard, aporta el playbook del giro y sus columnas.
   // Ausente/desconocido → pack genérico (comportamiento actual). Ver src/niches/.

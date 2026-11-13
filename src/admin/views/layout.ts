@@ -9,7 +9,7 @@
 // breadcrumb and page title are derived here.
 
 import type { Env } from "../../env";
-import { isPro, PRO_ONLY_TABS, citasPanelEnabled } from "../../config";
+import { isPro, citasPanelEnabled, pestanaBloqueada, nivel, NOMBRE_NIVEL, type Nivel } from "../../config";
 import { getNiche } from "../../niches";
 import type { NichePack } from "../../niches";
 import { BRAND_LOGO_DATA_URI } from "../assets/brand-logo";
@@ -269,12 +269,12 @@ function navItem(item: Item, active: boolean): string {
 
 // Tier free: los tabs Pro se muestran bloqueados (candado + tag PRO) y llevan a
 // la página de upgrade en vez de a la vista real. Se ven, pero invitan a subir.
-function navItemLocked(item: Item): string {
+function navItemLocked(item: Item, requiere: Nivel = "pro"): string {
   const base =
     "display:flex;align-items:center;gap:11px;padding:9px 10px;font-size:13px;color:var(--dim);border-left:2px solid transparent";
-  return `<a href="${UPGRADE_URL}" class="navlink" style="${base}" title="Disponible en Pro">
+  return `<a href="${UPGRADE_URL}" class="navlink" style="${base}" title="Disponible desde ${NOMBRE_NIVEL[requiere]}">
     <i data-lucide="lock" width="15" height="15" style="color:var(--dim)"></i> ${item.label}
-    <span style="margin-left:auto;font-size:8.5px;letter-spacing:.14em;color:var(--accent2);border:1px solid var(--line);padding:1px 5px">PRO</span>
+    <span style="margin-left:auto;font-size:8.5px;letter-spacing:.14em;color:var(--accent2);border:1px solid var(--line);padding:1px 5px">${NOMBRE_NIVEL[requiere].toUpperCase()}</span>
   </a>`;
 }
 
@@ -290,8 +290,7 @@ const escAttr = (s: string) =>
 
 const DEFAULT_BRAND: PanelBrand = { logo: BRAND_LOGO_DATA_URI, name: "BIRevX", byline: "by BIRevX" };
 
-function sidebar(activeTab: string, pro: boolean, niche: NichePack | null, showCitas = false, brand: PanelBrand = DEFAULT_BRAND): string {
-  const locked = (id: string) => !pro && (PRO_ONLY_TABS as readonly string[]).includes(id);
+function sidebar(activeTab: string, bloqueo: (id: string) => Nivel | null, etiquetaNivel: string, niche: NichePack | null, showCitas = false, brand: PanelBrand = DEFAULT_BRAND): string {
   const sections = NAV.map((sec) => {
     const hasActive = sec.items.some((i) => i.id === activeTab);
     const labelColor = hasActive ? "var(--accent)" : "var(--dim)";
@@ -299,7 +298,8 @@ function sidebar(activeTab: string, pro: boolean, niche: NichePack | null, showC
       .filter((i) => i.id !== "citas" || showCitas)
       .map((raw) => {
         const i = applyNiche(raw, niche);
-        return locked(i.id) ? navItemLocked(i) : navItem(i, i.id === activeTab);
+        const falta = bloqueo(i.id);
+        return falta ? navItemLocked(i, falta) : navItem(i, i.id === activeTab);
       })
       .join("");
     return `<div class="sb-sec" style="color:${labelColor}">${sec.label}</div>${items}`;
@@ -311,7 +311,7 @@ function sidebar(activeTab: string, pro: boolean, niche: NichePack | null, showC
         <img src="${escAttr(brand.logo)}" alt="${escAttr(brand.name)}" width="34" height="34" style="flex:none;border-radius:8px;object-fit:contain">
         <div style="line-height:1.05">
           <div style="font-family:'Space Grotesk';font-weight:700;font-size:15px;letter-spacing:-.02em">Forja</div>
-          <div style="font-size:9px;letter-spacing:.18em;color:var(--dim);text-transform:uppercase">${escAttr(brand.byline)} · ${pro ? "Pro" : "Free"}</div>
+          <div style="font-size:9px;letter-spacing:.18em;color:var(--dim);text-transform:uppercase">${escAttr(brand.byline)} · ${escAttr(etiquetaNivel)}</div>
         </div>
       </div>
     </div>
@@ -349,7 +349,7 @@ export function layout(opts: { title: string; activeTab: string; body: string; e
 </head>
 <body>
   <div class="shell">
-    ${sidebar(opts.activeTab, pro, niche, opts.env ? citasPanelEnabled(opts.env) : false, opts.env ? panelBrand(opts.env) : DEFAULT_BRAND)}
+    ${sidebar(opts.activeTab, (id) => (opts.env ? pestanaBloqueada(opts.env, id) : null), opts.env ? NOMBRE_NIVEL[nivel(opts.env)] : "Pro", niche, opts.env ? citasPanelEnabled(opts.env) : false, opts.env ? panelBrand(opts.env) : DEFAULT_BRAND)}
     <div style="display:flex;flex-direction:column;min-width:0">
       <header style="position:sticky;top:0;z-index:30;background:rgba(255,255,255,.85);backdrop-filter:blur(8px);border-bottom:1px solid var(--line);padding:14px 26px;display:flex;align-items:center;gap:20px">
         <div style="min-width:0">

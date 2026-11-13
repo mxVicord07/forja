@@ -12,26 +12,26 @@ import { Db } from "./db/client";
 import { SettingsRepo, SETTING_KEYS } from "./db/settings";
 
 const TTL_MS = 30_000;
-let cache: { value: "pro" | "free" | null; at: number } = { value: null, at: 0 };
+let cache: { value: "pro" | "negocio" | "free" | null; at: number } = { value: null, at: 0 };
 
 // BOT_TIER del wrangler.toml, capturado UNA vez por isolate ANTES de que
 // applyTier lo mute. Sin esto, un fallo de D1 tras un override haría que la
 // "base" se leyera del env ya mutado (un free podría quedar pro por accidente).
-let staticBase: "pro" | "free" | null = null;
+let staticBase: "pro" | "negocio" | "free" | null = null;
 
 /** Deja el cache como si nunca se hubiera leído (tests / POST /api/tier). */
-export function bustTierCache(next?: "pro" | "free" | null): void {
+export function bustTierCache(next?: "pro" | "negocio" | "free" | null): void {
   cache = next ? { value: next, at: Date.now() } : { value: null, at: 0 };
   staticBase = null;
 }
 
-export async function effectiveTier(env: Env): Promise<"pro" | "free"> {
-  if (staticBase === null) staticBase = env.BOT_TIER === "pro" ? "pro" : "free";
+export async function effectiveTier(env: Env): Promise<"pro" | "negocio" | "free"> {
+  if (staticBase === null) staticBase = env.BOT_TIER === "pro" ? "pro" : env.BOT_TIER === "negocio" ? "negocio" : "free";
   const now = Date.now();
   if (now - cache.at > TTL_MS) {
     try {
       const raw = await new SettingsRepo(new Db(env.DB)).get(SETTING_KEYS.tierOverride);
-      cache = { value: raw === "pro" || raw === "free" ? raw : null, at: now };
+      cache = { value: raw === "pro" || raw === "free" || raw === "negocio" ? raw : raw === "starter" ? "free" : null, at: now };
     } catch {
       // D1 no disponible → fail-open a la base ESTÁTICA (no al env mutado);
       // reintenta al expirar el TTL.

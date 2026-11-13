@@ -18,7 +18,7 @@
 import type { Env } from "../env";
 import { Db } from "../db/client";
 import { SettingsRepo, SETTING_KEYS } from "../db/settings";
-import { isPro } from "../config";
+import { tiene } from "../config";
 import { buildReport, reportSnapshot, type ReportSnapshot } from "./report/build";
 
 export { collectDailyStats, type ReportStats } from "./report/collect";
@@ -37,7 +37,7 @@ export interface DailyReportResult {
  */
 export async function sendDailyReport(env: Env, now: number = Date.now()): Promise<DailyReportResult> {
   // F2 (13-nov-2026): el Starter (no Pro) recibe el reporte SEMANAL, los lunes, con los últimos 7 días.
-  const semanal = !isPro(env);
+  const semanal = !tiene(env, "reporteDiario"); // Negocio y Pro: diario; Starter: semanal
   if (semanal) {
     const dia = new Intl.DateTimeFormat("en-US", { timeZone: env.CALCOM_TIMEZONE || "America/Mexico_City", weekday: "short" }).format(new Date(now));
     if (dia !== "Mon") return { sent: false, reason: "weekly_not_today" };

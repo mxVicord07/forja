@@ -13,7 +13,7 @@ describe("dashboard tier gating (nav)", () => {
     expect(html).not.toContain('href="/admin/insights"');
     expect(html).toContain('href="/admin/upgrade"');
     expect(html).toContain("PRO"); // badge en el item bloqueado
-    expect(html).toContain("by BIRevX · Free");
+    expect(html).toContain("by BIRevX · Starter"); // «free» se muestra con su nombre de paquete (F3)
   });
 
   it("free: Bóveda, Cobros y Reportes también salen bloqueados", () => {

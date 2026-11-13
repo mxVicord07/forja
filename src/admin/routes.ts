@@ -21,7 +21,7 @@ import { probeMessagesEndpoint } from "../http/egress";
 import type { Env } from "../env";
 import { adminAuth, ADMIN_USERNAME } from "./auth";
 import { layout, renderUpgrade } from "./views/layout";
-import { isPro, citasPanelEnabled } from "../config";
+import { isPro, citasPanelEnabled, pestanaBloqueada, NOMBRE_NIVEL } from "../config";
 import { renderOverview } from "./views/overview";
 import { renderStats } from "./views/stats";
 import { renderCosts } from "./views/costs";
@@ -128,11 +128,12 @@ const PRO_GATE: Array<[string, string]> = [
   ["/admin/report", "Reportes"],
 ];
 adminApp.use("*", async (c, next) => {
-  if (isPro(c.env)) return next();
   const path = c.req.path;
   const hit = PRO_GATE.find(([pre]) => path === pre || path.startsWith(pre + "/"));
-  if (hit) return c.html(renderUpgrade(c.env, hit[1]));
-  return next();
+  if (!hit) return next();
+  // Nivel mínimo por pestaña (F3): el Negocio ya ve Reportes y Plantillas; lo demás sigue siendo Pro.
+  const falta = pestanaBloqueada(c.env, hit[0].replace("/admin/", ""));
+  return falta ? c.html(renderUpgrade(c.env, `${hit[1]} (desde ${NOMBRE_NIVEL[falta]})`)) : next();
 });
 
 // Página de upgrade (item bloqueado del nav apunta aquí).
