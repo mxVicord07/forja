@@ -73,6 +73,10 @@ CALCOM_BOOKING_URL = "https://cal.com/birevx/ideas-exchange"
 COPILOTO_TELEGRAM_BOT = "birevx_copiloto_bot"
 FEATURE_BORRADOR_IA = "1"
 DUENO_NOMBRE = "Víctor"
+# Paso 8 · Cloudflare Access (no son secretos). Para volver a solo contraseña, borra estas tres líneas.
+ACCESS_TEAM_DOMAIN = "misty-recipe-df8c.cloudflareaccess.com"
+ACCESS_AUD = "5693d9057b47e87439ebeb8deac68b18b20d967b0e4d7a6f42961df279f968e9"
+PANEL_HOST = "panel.birevx.com"
 
 # Optional egress (ticket 7E5F40): Worker→Anthropic/Zernio 400 vacío.
 #   AGENT_LOCATION_HINT = "wnam"   # pin DOs near US (only on FIRST create)
