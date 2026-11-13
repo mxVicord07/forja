@@ -153,6 +153,24 @@ describe("inbox — owner reply (takeover)", () => {
     expect(await convs.isPaused(conv.id)).toBe(false);
   });
 
+  it("WhatsApp con la ventana de 24 h cerrada: no envía, no guarda y ofrece abrir la app del dueño", async () => {
+    const conv = await convs.getOrCreate("whatsapp", "524441796793", "Victor");
+    await db.run("INSERT INTO messages (id, conversation_id, role, content, created_at) VALUES (?, ?, 'user', 'hola', ?)", [crypto.randomUUID(), conv.id, Date.now() - 10 * 86_400_000]);
+    const res = await adminApp.request(
+      `/conversations/${encodeURIComponent(conv.id)}/reply`,
+      { method: "POST", headers: FORM, body: new URLSearchParams({ text: "Hola Victor" }) },
+      env,
+    );
+    const html = await res.text();
+    expect(html).toContain("No se envió");
+    expect(html).toContain("24 h");
+    expect(html).toContain("https://wa.me/524441796793?text=Hola%20Victor");
+    expect(res.headers.get("X-Sent")).toBeNull();
+    expect(sendReplyMock).not.toHaveBeenCalled();
+    const history = await msgs.lastN(conv.id, 10);
+    expect(history.every((m) => m.role !== "owner")).toBe(true);
+  });
+
   it("rejects an empty message without calling the adapter", async () => {
     const conv = await convs.getOrCreate("telegram", "u5");
     const res = await adminApp.request(

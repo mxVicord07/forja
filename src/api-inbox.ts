@@ -155,7 +155,7 @@ async function zernioPlatforms(db: Db, channelUserIds: string[]): Promise<Map<st
 }
 
 /** `window` de UNA conversación: null si su canal no tiene ventana. */
-async function windowFor(
+export async function windowFor(
   db: Db,
   conv: { id: string; channel: string; channel_user_id: string },
   now: number,

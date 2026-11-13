@@ -67,7 +67,8 @@ export async function verificarAccess(
     const segs = Math.floor(now / 1000);
     if (typeof pay.exp !== "number" || pay.exp < segs - 30) return { ok: false, motivo: "vencido" };
     if (typeof pay.nbf === "number" && pay.nbf > segs + 30) return { ok: false, motivo: "aun_no" };
-    const keys = await llaves(cfg.teamDomain, now, opts.fetcher ?? fetch);
+    // OJO: `fetch` suelto (sin ligar) truena en Workers con «Illegal invocation»; por eso se envuelve.
+    const keys = await llaves(cfg.teamDomain, now, opts.fetcher ?? ((u: RequestInfo | URL, i?: RequestInit) => fetch(u, i)));
     const jwk = keys.find((k) => k.kid === head.kid) ?? (keys.length === 1 ? keys[0] : undefined);
     if (!jwk) return { ok: false, motivo: "llave_desconocida" };
     const key = await crypto.subtle.importKey("jwk", jwk, { name: "RSASSA-PKCS1-v1_5", hash: "SHA-256" }, false, ["verify"]);

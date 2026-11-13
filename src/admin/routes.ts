@@ -57,6 +57,7 @@ import { renderConexiones } from "./views/conexiones";
 import { renderCampanas } from "./views/campanas";
 import { sendCampaign, createHandoffTemplate, contentApprovalStatus } from "../campaigns";
 import { Db } from "../db/client";
+import { windowFor } from "../api-inbox";
 import { LeadsRepo, type Lead } from "../db/leads";
 import { TicketsRepo } from "../db/tickets";
 import { AppointmentsRepo, type Appointment } from "../db/appointments";
@@ -857,6 +858,23 @@ adminApp.post("/conversations/:id/reply", async (c) => {
   const form = await c.req.formData().catch(() => null);
   const text = String(form?.get("text") ?? "").trim();
   if (!text) return c.html(`<span class="text-stone-400">Escribe un mensaje primero.</span>`);
+
+  // Ventana de 24 h de WhatsApp cerrada: Meta lo rechazaría DESPUÉS de que YCloud lo aceptara
+  // (error 131047) y el panel diría «Enviado» sin entrega (caso real, 13-nov-2026). Se avisa antes
+  // y se ofrece escribir desde la app del dueño (coexistencia), donde la ventana no aplica.
+  const convRow = await new ConversationsRepo(new Db(c.env.DB)).getById(id);
+  if (convRow) {
+    const win = await windowFor(new Db(c.env.DB), convRow, Date.now()).catch(() => null);
+    if (win?.state === "closed") {
+      const tel = String(convRow.channel_user_id).replace(/\D/g, "");
+      const ultimo = await new Db(c.env.DB).first<{ t: number | null }>("SELECT MAX(created_at) AS t FROM messages WHERE conversation_id = ? AND role = 'user'", [id]);
+      const cuando = ultimo?.t ? new Intl.DateTimeFormat("es-MX", { timeZone: "America/Mexico_City", day: "numeric", month: "short" }).format(new Date(ultimo.t)) : "hace más de 24 h";
+      const abrir = /^\d{8,15}$/.test(tel)
+        ? ` <a href="https://wa.me/${tel}?text=${encodeURIComponent(text)}" target="_blank" rel="noopener noreferrer" style="text-decoration:underline">Abrir mi WhatsApp con este texto</a>`
+        : "";
+      return c.html(`<span class="text-red-600">✗ No se envió: el cliente escribió por última vez el ${escapeHtml(cuando)} y WhatsApp solo deja mandar texto libre dentro de 24 h. Escríbele desde tu app o usa una plantilla.</span>${abrir}`);
+    }
+  }
 
   const sent = await sendChannelMessage(c.env, id, text);
   if (!sent.ok) {

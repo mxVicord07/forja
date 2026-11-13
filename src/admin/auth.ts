@@ -45,6 +45,7 @@ export function adminAuth(env: Env): MiddlewareHandler {
         c.header("X-Panel-Usuario", r.email);
         return next();
       }
+      if (r.motivo !== "sin_token") console.warn(`[access] token de Access rechazado: ${r.motivo}`);
       if (soloAccess) {
         return c.text(`Entra al panel con tu correo en https://${panelHost || url.hostname}/admin (motivo: ${r.motivo}).`, 403);
       }
