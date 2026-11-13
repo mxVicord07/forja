@@ -18,8 +18,8 @@ export const clinica: NichePack = {
     lost: "Cancelada",
   },
   columns: [
-    { key: "motivo", label: "Motivo" },
-    { key: "area", label: "Área / médico" },
+    { key: "servicio", label: "Motivo" },
+    { key: "profesional", label: "Área / médico" },
     { key: "fecha", label: "Fecha" },
     { key: "hora", label: "Hora" },
   ],

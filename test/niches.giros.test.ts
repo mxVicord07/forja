@@ -74,6 +74,30 @@ describe("registro de giros", () => {
   });
 });
 
+// Llaves de metadata que escribe cada tool del giro: toda columna del panel
+// tiene que leer una de estas o saldría vacía (pasaba en Forja+ con spa,
+// clínica y cafetería).
+const LLAVES_POR_TOOL = {
+  registrarCita: ["servicio", "profesional", "fecha", "hora"],
+  crearReservacion: ["tipo", "fecha", "hora", "personas"],
+  tomarPedido: ["tipo", "platillos", "direccion", "pago"],
+  registrarPedido: ["productos", "entrega", "fecha", "pago"],
+};
+
+describe("columnas del panel contra lo que guardan las tools", () => {
+  it("cada columna de cada giro lee una llave que su tool sí escribe", () => {
+    const toolDe = (id: string) =>
+      CITAS.includes(id) ? "registrarCita" : id === "restaurante" ? "crearReservacion" : "registrarPedido";
+    for (const id of [...CITAS, ...PEDIDOS]) {
+      const llaves =
+        id === "restaurante"
+          ? [...LLAVES_POR_TOOL.crearReservacion, ...LLAVES_POR_TOOL.tomarPedido]
+          : LLAVES_POR_TOOL[toolDe(id) as keyof typeof LLAVES_POR_TOOL];
+      for (const c of getNiche(ctx("pro", id).env).columns) expect(llaves, `${id}.${c.key}`).toContain(c.key);
+    }
+  });
+});
+
 describe("tools por giro", () => {
   it("bot de BIRevX (Pro, sin BOT_NICHE): mismas tools de siempre", () => {
     expect(names(ctx("pro"))).toEqual([

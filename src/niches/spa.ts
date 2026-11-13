@@ -18,7 +18,7 @@ export const spa: NichePack = {
     lost: "Cancelada",
   },
   columns: [
-    { key: "ritual", label: "Ritual" },
+    { key: "servicio", label: "Ritual" },
     { key: "profesional", label: "Terapeuta" },
     { key: "fecha", label: "Fecha" },
     { key: "hora", label: "Hora" },

@@ -19,8 +19,8 @@ export const cafeteria: NichePack = {
   },
   columns: [
     { key: "productos", label: "Pedido" },
-    { key: "entrega", label: "Recoge / mesa" },
-    { key: "hora", label: "Hora" },
+    { key: "entrega", label: "Entrega" },
+    { key: "fecha", label: "Para cuándo" },
   ],
   defaultTone: "cálido y con buena vibra — como el barista que ya conoce tu pedido de siempre",
   kbDocs: ["menu-y-precios", "cafe-de-especialidad", "horarios-y-ubicacion", "para-llevar-y-mesas", "promociones-y-faq"],
