@@ -299,7 +299,7 @@ export interface GuardResult {
 export async function guardReply(env: Env, opts: GuardOptions): Promise<GuardResult> {
   const original = opts.replyText;
 
-  if (!isPro(env)) return { finalText: original, action: "skipped-free" };
+  // F2 (13-nov-2026): la verificación anti-invento corre en TODOS los niveles (el catálogo la promete desde el Starter).
 
   const settings = new SettingsRepo(new Db(env.DB));
   if ((await settings.get(SETTING_KEYS.blindajeEnabled)) === "off") {

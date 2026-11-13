@@ -10,7 +10,7 @@
 import type { Env } from "../../env";
 import { layout } from "./layout";
 import { listContentTemplates, parseYcSid, campanasPorPlantillaBloqueadas, type ContentTemplate } from "../../campaigns";
-import { ROLES, plantillaDe, type RolPlantilla } from "../../lib/plantillasRoles";
+import { ROLES, PISTA, esAvisoInterno, plantillaDe, type RolPlantilla } from "../../lib/plantillasRoles";
 
 const esc = (s: string) => s.replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]!));
 
@@ -62,8 +62,9 @@ export async function renderPlantillas(env: Env, q: Record<string, string | unde
   const filas = plantillas.length
     ? plantillas.map((t) => {
         const ni = nombreIdioma(t);
+        const interna = esAvisoInterno(ni.name, t.body, env.DUENO_NOMBRE);
         const botones = (Object.keys(ROLES) as RolPlantilla[])
-          .filter((rol) => t.variables.length === ROLES[rol].variables)
+          .filter((rol) => !interna && t.variables.length === ROLES[rol].variables && PISTA[rol].test(ni.name))
           .map((rol) => {
             const enUso = asig.get(rol)?.name === ni.name && asig.get(rol)?.language === ni.language;
             return enUso
@@ -77,7 +78,7 @@ export async function renderPlantillas(env: Env, q: Record<string, string | unde
             <div class="text-cream text-[12.5px]"><span class="font-mono">${esc(t.name)}</span> <span class="text-dim">· ${esc(ni.language)} · ${t.variables.length} variable(s)</span></div>
             <div class="text-muted text-[12px]" style="margin-top:4px;line-height:1.5;white-space:pre-wrap">${esc(t.body.slice(0, 280))}${t.body.length > 280 ? "…" : ""}</div>
           </div>
-          <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center">${botones || `<span class="text-dim" style="font-size:11px">Para campañas</span>`}</div>
+          <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center">${botones || `<span class="text-dim" style="font-size:11px">${interna ? "Aviso interno para ti" : "Para campañas"}</span>`}</div>
         </div>`;
       }).join("")
     : `<div class="text-dim text-[12px]" style="padding:16px">${prov ? "No hay plantillas aprobadas en la cuenta, o no se pudieron leer." : "WhatsApp no está conectado."}</div>`;

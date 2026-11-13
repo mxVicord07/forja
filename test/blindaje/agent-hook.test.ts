@@ -177,12 +177,13 @@ describe("SupportAgent.processBuffer — hook del Blindaje", () => {
     expect(ticketCreateSpy).not.toHaveBeenCalled();
   });
 
-  it("tier FREE → ni una llamada al verificador, la respuesta sale directa", async () => {
+  it("tier FREE (Starter) también pasa por el verificador cuando la respuesta trae datos (F2)", async () => {
+    generateTextMock.mockResolvedValue({ text: '{"supported": true}' });
     const agent = makeAgent("free");
 
     await runTurn(agent, "El corte cuesta $9999.");
 
-    expect(generateTextMock).not.toHaveBeenCalled();
+    expect(generateTextMock).toHaveBeenCalled();
     expect(sendReplyMock.mock.calls[0][0].chunks[0]).toBe("El corte cuesta $9999.");
   });
 

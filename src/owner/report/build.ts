@@ -41,8 +41,8 @@ function dateLabel(now: number): string {
   }
 }
 
-export async function buildReport(env: Env, now: number): Promise<BuiltReport> {
-  const ctx = await collectReportContext(env, now);
+export async function buildReport(env: Env, now: number, dias = 1): Promise<BuiltReport> {
+  const ctx = await collectReportContext(env, now, dias);
   const empty = ctx.stats.customerMessages === 0 && ctx.stats.newLeads === 0;
 
   const settings = new SettingsRepo(new Db(env.DB));
@@ -53,12 +53,13 @@ export async function buildReport(env: Env, now: number): Promise<BuiltReport> {
   ]);
 
   const insights = empty
-    ? { summary: "Día tranquilo — hoy no hubo mensajes de clientes.", insights: [], actions: [] }
+    ? { summary: dias > 1 ? "Semana tranquila — no hubo mensajes de clientes." : "Día tranquilo — hoy no hubo mensajes de clientes.", insights: [], actions: [] }
     : await generateReportInsights(env, ctx);
 
   const model: ReportModel = {
     businessName: env.BUSINESS_NAME,
-    dateLabel: dateLabel(now),
+    dateLabel: dias > 1 ? `Semana al ${dateLabel(now)}` : dateLabel(now),
+    semanal: dias > 1,
     accent: (accent && accent.trim()) || DEFAULT_ACCENT,
     logoUrl: (logo && logo.trim()) || null,
     panelUrl: `${await selfOrigin(env)}/admin/report`,
@@ -66,7 +67,7 @@ export async function buildReport(env: Env, now: number): Promise<BuiltReport> {
     insights,
   };
 
-  const title = `Tu resumen de hoy — ${env.BUSINESS_NAME}`;
+  const title = dias > 1 ? `Tu resumen de la semana — ${env.BUSINESS_NAME}` : `Tu resumen de hoy — ${env.BUSINESS_NAME}`;
   return {
     title,
     subject: `📊 ${title}`,

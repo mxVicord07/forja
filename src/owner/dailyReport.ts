@@ -27,7 +27,7 @@ const MIN_GAP_MS = 20 * 60 * 60 * 1000; // no reenviar si ya se mandó hace meno
 
 export interface DailyReportResult {
   sent: boolean;
-  reason?: "not_pro" | "disabled" | "throttled" | "no_channel";
+  reason?: "not_pro" | "disabled" | "weekly_not_today" | "throttled" | "no_channel";
   snapshot?: ReportSnapshot;
 }
 
@@ -36,7 +36,12 @@ export interface DailyReportResult {
  * queda en logs, nunca tumba los demás trabajos nocturnos que corren junto.
  */
 export async function sendDailyReport(env: Env, now: number = Date.now()): Promise<DailyReportResult> {
-  if (!isPro(env)) return { sent: false, reason: "not_pro" };
+  // F2 (13-nov-2026): el Starter (no Pro) recibe el reporte SEMANAL, los lunes, con los últimos 7 días.
+  const semanal = !isPro(env);
+  if (semanal) {
+    const dia = new Intl.DateTimeFormat("en-US", { timeZone: env.CALCOM_TIMEZONE || "America/Mexico_City", weekday: "short" }).format(new Date(now));
+    if (dia !== "Mon") return { sent: false, reason: "weekly_not_today" };
+  }
 
   const settings = new SettingsRepo(new Db(env.DB));
   if ((await settings.get(SETTING_KEYS.dailyReport)) !== "1") {
@@ -53,7 +58,7 @@ export async function sendDailyReport(env: Env, now: number = Date.now()): Promi
     return { sent: false, reason: "no_channel" };
   }
 
-  const report = await buildReport(env, now);
+  const report = await buildReport(env, now, semanal ? 7 : 1);
 
   try {
     await fetch(`https://api.telegram.org/bot${env.TELEGRAM_BOT_TOKEN}/sendMessage`, {

@@ -11,6 +11,8 @@ beforeEach(async () => {
   env = { DB: await mf.getD1Database("DB"), DASHBOARD_PASSWORD: "pw", BOT_TIER: "pro", BUSINESS_NAME: "T", BOT_LANGUAGE: "es", WA_PROVIDER: "ycloud", YCLOUD_API_KEY: "k", REENGAGE_PLANTILLA: "vieja_v1" };
   vi.stubGlobal("fetch", vi.fn(async () => new Response(JSON.stringify({ items: [
     { name: "retomar_conversacion_v1", language: "es_MX", status: "APPROVED", category: "MARKETING", components: [{ type: "BODY", text: "Hola {{1}}, ¿retomamos lo de {{2}}?" }] },
+    { name: "aviso_propuesta_aceptada_v1", language: "es_MX", status: "APPROVED", category: "UTILITY", components: [{ type: "BODY", text: "Hola Víctor, {{1}} aceptó la propuesta {{2}} por {{3}}." }] },
+    { name: "pago_enlace_v1", language: "es_MX", status: "APPROVED", category: "UTILITY", components: [{ type: "BODY", text: "Hola {{1}}, la factura {{2}} por {{3}}." }] },
     { name: "cita_recordatorio_v1", language: "es_MX", status: "APPROVED", category: "UTILITY", components: [{ type: "BODY", text: "Hola {{1}}, te esperamos el {{2}} a las {{3}}." }] },
   ] }), { status: 200 })));
 });
@@ -23,6 +25,9 @@ describe("Plantillas", () => {
     expect(html).toContain("Usar para reactivar leads fríos");
     expect(html).toContain("Usar para recordatorio de cita");
     expect(html).toContain("vieja_v1"); // la de la variable de entorno se ve como asignada
+    // Solo se sugiere donde el nombre corresponde; los avisos internos nunca.
+    expect((html.match(/Usar para recordatorio de cita/g) ?? []).length).toBe(1);
+    expect(html).toContain("Aviso interno para ti");
   });
   it("asignar en el panel gana sobre la variable; «Quitar» la apaga; valores raros se rechazan", async () => {
     expect((await plantillaDe(env, "reenganche"))?.origen).toBe("variable");

@@ -23,6 +23,8 @@ const SENT_COLORS = { contentos: "#3f8f5b", neutrales: "#c9bda6", frustrados: "#
 export interface ReportModel {
   businessName: string;
   dateLabel: string;
+  /** Reporte semanal del Starter (F2): cambia «Para mañana» por «Para esta semana». */
+  semanal?: boolean;
   accent: string;
   logoUrl: string | null;
   panelUrl: string;
@@ -212,7 +214,7 @@ export function renderReportText(model: ReportModel): string {
     `${s.customerMessages} mensajes · ${s.newConversations} clientes · ${s.newLeads} leads · ${s.hotLeads} ventas calientes`,
   ];
   if (model.insights.insights.length) out.push(``, "Lo que veo:", ...model.insights.insights.map((x) => "• " + x));
-  if (model.insights.actions.length) out.push(``, "Para mañana:", ...model.insights.actions.map((x) => "→ " + x));
+  if (model.insights.actions.length) out.push(``, model.semanal ? "Para esta semana:" : "Para mañana:", ...model.insights.actions.map((x) => "→ " + x));
   out.push(``, `Reporte completo: ${model.panelUrl}`);
   return out.join("\n");
 }

@@ -11,6 +11,19 @@ import { SettingsRepo } from "../db/settings";
 
 export type RolPlantilla = "reenganche" | "recordatorio";
 
+/** Pista por nombre: solo se sugiere una plantilla para la función que su nombre indica. */
+export const PISTA: Record<RolPlantilla, RegExp> = {
+  reenganche: /(retomar|reactiv|reenganch|seguimiento|cierre|frio|frío)/i,
+  recordatorio: /(recordatorio|cita|reminder)/i,
+};
+
+/** Avisos internos para el dueño (p. ej. «Hola Víctor, …»): nunca se ofrecen para clientes. */
+export function esAvisoInterno(nombre: string, cuerpo: string, dueno?: string): boolean {
+  if (/^aviso_/i.test(nombre)) return true;
+  const d = (dueno ?? "").trim();
+  return Boolean(d) && new RegExp(`^\\s*hola\\s+${d.normalize("NFD").replace(/[\u0300-\u036f]/g, "")}\\b`, "i").test(cuerpo.normalize("NFD").replace(/[\u0300-\u036f]/g, ""));
+}
+
 export const ROLES: Record<RolPlantilla, { titulo: string; uso: string; variables: number; ejemplo: string }> = {
   reenganche: {
     titulo: "Reactivar leads fríos",

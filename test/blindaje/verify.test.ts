@@ -484,7 +484,8 @@ describe("guardReply — veredictos", () => {
     expect(r.finalText).toBe(original);
   });
 
-  it("tier FREE → no verifica nada (ni una llamada al modelo)", async () => {
+  it("tier FREE (Starter) también verifica: el anti-invento corre en todos los niveles (F2)", async () => {
+    generateTextMock.mockResolvedValue({ text: "mmm no estoy seguro" });
     const freeEnv = { ...env, BOT_TIER: "free" } as Env;
     const original = "El corte cuesta $9999 y es gratis los lunes.";
 
@@ -495,9 +496,8 @@ describe("guardReply — veredictos", () => {
       conversationId: convId,
     });
 
-    expect(r.action).toBe("skipped-free");
-    expect(r.finalText).toBe(original);
-    expect(generateTextMock).not.toHaveBeenCalled();
+    expect(r.action).not.toBe("skipped-free");
+    expect(generateTextMock).toHaveBeenCalled();
   });
 
   it("interruptor blindaje_enabled=off → no verifica nada", async () => {

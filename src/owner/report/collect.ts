@@ -74,13 +74,15 @@ export async function collectDailyStats(env: Env, now: number): Promise<ReportSt
   return baseStats(new Db(env.DB), now - DAY_MS, now);
 }
 
-export async function collectReportContext(env: Env, now: number): Promise<ReportContext> {
+export async function collectReportContext(env: Env, now: number, dias = 1): Promise<ReportContext> {
   const db = new Db(env.DB);
-  const since = now - DAY_MS;
+  // `dias` = 1 para el reporte diario (Pro); 7 para el semanal del Starter (F2, 13-nov-2026).
+  const periodo = Math.max(1, dias) * DAY_MS;
+  const since = now - periodo;
 
   const [stats, prev] = await Promise.all([
     baseStats(db, since, now),
-    baseStats(db, now - 2 * DAY_MS, since),
+    baseStats(db, now - 2 * periodo, since),
   ]);
 
   // Análisis de hoy: sentimiento, resolución, rating, temas, preguntas sin responder.

@@ -87,12 +87,17 @@ describe("collectDailyStats", () => {
 });
 
 describe("sendDailyReport", () => {
-  it("tier free → no manda nada", async () => {
+  it("tier free (Starter): solo los lunes, y entonces manda el resumen de la semana (F2)", async () => {
     await settings.set(SETTING_KEYS.dailyReport, "1");
-    const r = await sendDailyReport({ ...env, BOT_TIER: "free" } as Env, NOW);
+    const martes = Date.parse("2026-11-17T15:00:00Z");
+    const r = await sendDailyReport({ ...env, BOT_TIER: "free" } as Env, martes);
     expect(r.sent).toBe(false);
-    expect(r.reason).toBe("not_pro");
+    expect(r.reason).toBe("weekly_not_today");
     expect(fetchMock).not.toHaveBeenCalled();
+    const lunes = Date.parse("2026-11-16T15:00:00Z");
+    const s = await sendDailyReport({ ...env, BOT_TIER: "free" } as Env, lunes);
+    if (s.sent) expect(JSON.stringify(fetchMock.mock.calls)).toContain("Semana al");
+    else expect(s.reason).not.toBe("weekly_not_today");
   });
 
   it("toggle apagado (default) → no manda nada", async () => {
