@@ -584,12 +584,18 @@ adminApp.post("/campanas/send", async (c) => {
     const tpl = (await listContentTemplates(c.env).catch(() => [])).find((t) => t.sid === templateSid);
     templateBody = tpl?.body || undefined;
   }
-  const result = await sendCampaign(c.env, {
-    segmentId,
-    campaignKey,
-    freeformText: freeformText || undefined,
-    template: templateSid ? { sid: templateSid, variables, body: templateBody } : undefined,
-  });
+  let result;
+  try {
+    result = await sendCampaign(c.env, {
+      segmentId,
+      campaignKey,
+      freeformText: freeformText || undefined,
+      template: templateSid ? { sid: templateSid, variables, body: templateBody } : undefined,
+    });
+  } catch (e: any) {
+    // P. ej. un bot conectado al CRM: las plantillas masivas no salen desde aquí (se saltarían el consentimiento).
+    return c.redirect("/admin/campanas?err=" + encodeURIComponent(String(e?.message ?? e).slice(0, 300)));
+  }
   const q = new URLSearchParams({
     ok: "1",
     ff: String(result.sentFreeform),

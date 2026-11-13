@@ -24,7 +24,8 @@ export interface FilaSeguimiento {
   conversacion: string | null;
   url: string | null;
   waPropio: string | null;
-  sugerido: { texto: string; waUrl: string | null; permitido: boolean; motivo: string | null } | null;
+  /** `plantilla`: texto del semáforo (plantilla aprobada). `borrador`: texto para que el dueño lo edite y lo mande él desde su app. */
+  sugerido: { tipo: "plantilla" | "borrador"; texto: string; waUrl: string | null; permitido: boolean; motivo: string | null } | null;
 }
 
 export interface Seguimiento {
@@ -51,7 +52,7 @@ export function normalizeSeguimiento(data: unknown): Seguimiento | null {
   for (const raw of d.filas) {
     if (!raw || typeof raw !== "object" || !Number.isFinite(Number(raw.id))) continue;
     const s = raw.sugerido && typeof raw.sugerido === "object" && str(raw.sugerido.texto, 1200)
-      ? { texto: str(raw.sugerido.texto, 1200)!, waUrl: raw.sugerido.permitido === true ? wa(raw.sugerido.wa_url) : null, permitido: raw.sugerido.permitido === true, motivo: str(raw.sugerido.motivo, 160) }
+      ? { tipo: raw.sugerido.tipo === "borrador" ? ("borrador" as const) : ("plantilla" as const), texto: str(raw.sugerido.texto, 1200)!, waUrl: raw.sugerido.permitido === true ? wa(raw.sugerido.wa_url) : null, permitido: raw.sugerido.permitido === true, motivo: str(raw.sugerido.motivo, 160) }
       : null;
     filas.push({
       id: Number(raw.id),

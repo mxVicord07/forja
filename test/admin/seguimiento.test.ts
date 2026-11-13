@@ -100,12 +100,13 @@ describe("paraHoy y contactos sin registrar", () => {
       f(2),
       f(3, { actividad: { fecha: "2026-11-01", resumen: "vencida" } }),
       f(4, { actividad: { fecha: "2026-10-20", resumen: "más vieja" } }),
-      f(5, { sugerido: { texto: "Hola", waUrl: null, permitido: true, motivo: null } }),
+      f(5, { sugerido: { tipo: "plantilla", texto: "Hola", waUrl: null, permitido: true, motivo: null } }),
+      f(9, { sugerido: { tipo: "borrador", texto: "Hola", waUrl: null, permitido: true, motivo: null }, actividad: { fecha: "2026-11-05", resumen: "x" } }),
       f(6, { codigo: "esperar:pausa" }),
       f(7, { codigo: "no_tocar:baja", actividad: { fecha: "2026-10-01", resumen: "x" } }),
       f(8, { tipo: "prospecto" }),
     ];
-    expect(paraHoy(filas, "2026-11-12").map((x: any) => x.id)).toEqual([5, 4, 3, 2]);
+    expect(paraHoy(filas, "2026-11-12").map((x: any) => x.id)).toEqual([5, 4, 3, 9, 2]); // el borrador no adelanta a nadie: ordena su actividad vencida
     expect(paraHoy(Array.from({ length: 30 }, (_, i) => f(100 + i)), "2026-11-12")).toHaveLength(10);
   });
 
@@ -135,5 +136,16 @@ describe("paraHoy y contactos sin registrar", () => {
     stub(respuesta());
     const html = await renderSeguimientoBlock(env(), new Date("2026-11-12T15:00:00Z"));
     expect(html).not.toContain("sin registrar en Odoo");
+  });
+});
+
+describe("borrador propio en la tarjeta", () => {
+  it("muestra el texto, la etiqueta de borrador y el enlace con el mensaje puesto", async () => {
+    stub(respuesta({ filas: [{ id: 1, tipo: "oportunidad", titulo: "SALVAJES: sitio web", quien: "Sandra", etapa: "Calificados", codigo: "victor:calificado", actividad: null,
+      wa_propio: "https://wa.me/524441112233", sugerido: { tipo: "borrador", texto: "Hola Sandra, soy Víctor de BIRevX.", wa_url: "https://wa.me/524441112233?text=Hola%20Sandra", permitido: true } }] }));
+    const html = await renderSeguimientoBlock(env(), new Date("2026-11-12T15:00:00Z"));
+    expect(html).toContain("Abrir WhatsApp con el borrador");
+    expect(html).toContain("Borrador para que lo edites y lo mandes tú");
+    expect(html).toContain("wa.me/524441112233?text=Hola%20Sandra");
   });
 });

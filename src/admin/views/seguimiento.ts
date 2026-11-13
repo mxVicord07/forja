@@ -23,7 +23,7 @@ export function paraHoy(filas: FilaSeguimiento[], hoy: string): FilaSeguimiento[
   const rango = (f: FilaSeguimiento): number | null => {
     const cod = f.codigo ?? "";
     if (cod.startsWith("no_tocar:") || cod.startsWith("esperar:")) return null;
-    if (f.sugerido) return 0;
+    if (f.sugerido?.tipo === "plantilla") return 0;
     if (f.actividad && f.actividad.fecha < hoy) return 1;
     if (f.tipo === "oportunidad" && !f.actividad) return 2;
     return null;
@@ -76,7 +76,7 @@ function bloque(d: Seguimiento, tz: string, ahora: Date, faltan: ContactoCoexist
     const vencida = f.actividad && f.actividad.fecha < hoy;
     const accion = s
       ? s.permitido && s.waUrl
-        ? boton(s.waUrl, "Enviar desde mi WhatsApp", true)
+        ? boton(s.waUrl, s.tipo === "borrador" ? "Abrir WhatsApp con el borrador" : "Enviar desde mi WhatsApp", true)
         : `<span class="text-[11.5px]" style="color:var(--bad)">${esc(s.motivo ?? "Sin permiso para escribirle por WhatsApp")}</span>`
       : f.waPropio ? boton(f.waPropio, "Abrir mi WhatsApp", true) : "";
     const chat = f.conversacion ? `<a href="/admin/conversations?c=${encodeURIComponent(f.conversacion)}" style="font-size:11.5px;padding:5px 10px;border:1px solid var(--line);color:var(--muted);text-decoration:none">Chat</a>` : "";
@@ -91,7 +91,7 @@ function bloque(d: Seguimiento, tz: string, ahora: Date, faltan: ContactoCoexist
       </div>
       ${f.semaforo ? `<div class="text-muted text-[12px]" style="margin-top:6px">${esc(f.semaforo)}</div>` : ""}
       ${retomar}
-      ${s ? `<div class="text-cream text-[12.5px]" style="margin-top:8px;padding:8px 10px;background:var(--panel2);white-space:pre-wrap;line-height:1.5">${esc(s.texto)}</div>` : ""}
+      ${s ? `<div class="text-dim" style="font-size:9.5px;letter-spacing:.12em;text-transform:uppercase;margin-top:8px">${s.tipo === "borrador" ? "Borrador para que lo edites y lo mandes tú" : "Mensaje sugerido por el semáforo"}</div><div class="text-cream text-[12.5px]" style="margin-top:4px;padding:8px 10px;background:var(--panel2);white-space:pre-wrap;line-height:1.5">${esc(s.texto)}</div>` : ""}
     </div>`;
   });
 

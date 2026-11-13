@@ -16,6 +16,57 @@ import { MessagesRepo } from "./db/messages";
 import { segmentMembers } from "./segments";
 import { pickAdapter } from "./replies/sender";
 import type { ChannelId } from "./channels/shared";
+import { resolveWaProvider } from "./replies/sender";
+import { sendYCloudTemplate } from "./channels/ycloud";
+
+// ── Plantillas por YCloud (I-034) ─────────────────────────────────────────
+// Forma verificada contra la API real de YCloud el 12-nov-2026:
+//   GET https://api.ycloud.com/v2/whatsapp/templates → { offset, limit, length, items: [{ name, language, status, category, components: [{ type, text }] }] }
+// El «sid» de una plantilla de YCloud es `yc:<nombre>:<idioma>`; así el resto de Forja (Campañas) la trata igual que una de Twilio.
+const YCLOUD_TEMPLATES_URL = "https://api.ycloud.com/v2/whatsapp/templates?page=1&limit=100";
+export const YC_PREFIX = "yc:";
+
+export function parseYcSid(sid: string): { name: string; language: string } | null {
+  const m = /^yc:([a-z0-9_]{1,512}):([A-Za-z_]{2,10})$/.exec(sid);
+  return m ? { name: m[1], language: m[2] } : null;
+}
+
+/** Variables {{1}}, {{2}}… del cuerpo, en orden numérico y sin repetir. */
+export function templateVariables(body: string): string[] {
+  const nums = [...body.matchAll(/\{\{\s*(\d+)\s*\}\}/g)].map((m) => Number(m[1]));
+  return [...new Set(nums)].sort((a, b) => a - b).map(String);
+}
+
+/** Plantillas APROBADAS de la cuenta de YCloud. Nunca lanza: sin llave o con error devuelve []. */
+export async function listYCloudTemplates(env: Env): Promise<ContentTemplate[]> {
+  if (!env.YCLOUD_API_KEY) return [];
+  try {
+    const res = await fetch(YCLOUD_TEMPLATES_URL, { headers: { "X-API-Key": env.YCLOUD_API_KEY } });
+    if (!res.ok) {
+      console.error("[campaigns] YCloud templates error:", res.status);
+      return [];
+    }
+    const data = (await res.json()) as { items?: any[] };
+    return (data.items ?? [])
+      .filter((t) => t && t.status === "APPROVED" && typeof t.name === "string" && typeof t.language === "string")
+      .map((t) => {
+        const body: string = (Array.isArray(t.components) ? t.components : []).find((c: any) => c?.type === "BODY")?.text ?? "";
+        return { sid: `${YC_PREFIX}${t.name}:${t.language}`, name: `${t.name} (${String(t.category ?? "").toLowerCase() || "sin categoría"})`, body, variables: templateVariables(body), variableExamples: {} };
+      })
+      .filter((t) => parseYcSid(t.sid) !== null);
+  } catch (e) {
+    console.error("[campaigns] YCloud templates falló:", e);
+    return [];
+  }
+}
+
+/**
+ * ¿El bot está conectado a un CRM que lleva el consentimiento de WhatsApp? Ahí las plantillas masivas salen por el
+ * CRM, con su guarda de consentimiento; una campaña desde Forja se la saltaría, así que se bloquea.
+ */
+export function campanasPorPlantillaBloqueadas(env: Env): boolean {
+  return Boolean(env.CRM_FICHA_URL || env.CRM_AGENDA_URL || env.CRM_SEGUIMIENTO_URL);
+}
 
 export interface ContentTemplate {
   sid: string;
@@ -30,6 +81,8 @@ export interface ContentTemplate {
 
 /** Plantillas HSM de la cuenta (Twilio Content API). */
 export async function listContentTemplates(env: Env): Promise<ContentTemplate[]> {
+  // Con YCloud como proveedor de WhatsApp, las plantillas son las de la cuenta de YCloud.
+  if (resolveWaProvider(env) === "ycloud") return listYCloudTemplates(env);
   const sid = env.TWILIO_ACCOUNT_SID;
   const tok = env.TWILIO_AUTH_TOKEN;
   if (!sid || !tok) return [];
@@ -102,6 +155,10 @@ export async function sendCampaign(
   const now = opts.now ?? Date.now();
   const db = new Db(env.DB);
   const msgs = new MessagesRepo(db);
+  // Un bot conectado al CRM no manda plantillas masivas desde aquí: se saltaría la guarda de consentimiento del CRM.
+  if (opts.template && campanasPorPlantillaBloqueadas(env)) {
+    throw new Error("En este bot las plantillas salen por el CRM, que revisa el consentimiento de cada contacto. Manda la campaña solo con texto libre (a quienes escribieron en las últimas 24 h) o usa el seguimiento del CRM.");
+  }
   const members = await segmentMembers(db, opts.segmentId, now);
 
   const cap = dailyTemplateCap(env);
@@ -202,6 +259,14 @@ export async function sendTwilioTemplate(
   contentSid: string,
   variables?: Record<string, string>,
 ): Promise<void> {
+  // Plantilla de YCloud (`yc:<nombre>:<idioma>`): mismo punto de entrada, otro proveedor. Variables en orden numérico.
+  const yc = parseYcSid(contentSid);
+  if (yc) {
+    const params = Object.keys(variables ?? {}).sort((a, b) => Number(a) - Number(b)).map((k) => String(variables![k] ?? ""));
+    const r = await sendYCloudTemplate(env, { to: toNumber, name: yc.name, language: yc.language, bodyParams: params });
+    if (!r.ok) throw new Error(`YCloud rechazó la plantilla (${r.reason})`);
+    return;
+  }
   const sid = env.TWILIO_ACCOUNT_SID;
   const tok = env.TWILIO_AUTH_TOKEN;
   const from = env.TWILIO_WA_FROM;
