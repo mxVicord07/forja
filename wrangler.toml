@@ -5,6 +5,10 @@ name = "birevx-support-bot"
 main = "src/index.ts"
 compatibility_date = "2026-05-01"
 compatibility_flags = ["nodejs_compat"]
+# Paso 8 (acceso por persona): el panel vive en su dominio protegido por Cloudflare Access.
+# workers.dev sigue activo a propósito: por ahí entran los webhooks (YCloud, Telegram) y el chat web.
+workers_dev = true
+routes = [{ pattern = "panel.birevx.com", custom_domain = true }]
 
 [ai]
 binding = "AI"
