@@ -1,4 +1,7 @@
-# ¿Qué cubre la mensualidad de un asistente?
+# ¿Qué cubre la mensualidad del asistente de WhatsApp (Forja)?
+
+Solo para el asistente de WhatsApp. Para SONIA (el sistema del negocio con
+Odoo) usa "SONIA: qué cubre la mensualidad": son cosas distintas.
 
 La mensualidad mantiene vivo al asistente: hospedaje y mantenimiento de la
 plataforma, monitoreo para que no se caiga, actualizaciones, el uso normal de la
