@@ -49,6 +49,7 @@ import { renderMejoras } from "./views/mejoras";
 import { runFlywheel, getLessons, saveLessons } from "../flywheel/detect";
 import { applySuggestion, dismissSuggestion } from "../flywheel/apply";
 import { renderLeads, exportLeadsCsv } from "./views/leads";
+import { redactarBorrador } from "../crm/borradorIa";
 import { renderTickets } from "./views/tickets";
 import { renderCitas } from "./views/citas";
 import { renderConfig } from "./views/config";
@@ -532,7 +533,17 @@ adminApp.post("/agente/tools/:name/toggle", async (c) => {
   return c.html((await renderNodeModal(c.env, `tool:${name}`, true)) + toastOob("✓ Guardado"));
 });
 
-adminApp.get("/leads", async (c) => c.html(await renderLeads(c.env)));
+adminApp.get("/leads", async (c) => c.html(await renderLeads(c.env, { ia: c.req.query("ia") })));
+
+// Borrador con IA para una tarjeta de «A quién atender hoy»: lee el contexto en Odoo y el chat, redacta y guarda con su huella. Nunca envía nada.
+adminApp.post("/leads/odoo/:id/borrador-ia", async (c) => {
+  const id = Number(c.req.param("id"));
+  if (!Number.isInteger(id) || id <= 0) return c.redirect("/admin/leads?ia=id_invalido");
+  const form = await c.req.formData();
+  const wa = String(form.get("wa") ?? "");
+  const r = await redactarBorrador(c.env, id, /^https:\/\/wa\.me\/\d{8,15}$/.test(wa) ? wa : null, { tz: calcomTimeZone(c.env) });
+  return c.redirect(r.ok ? `/admin/leads#hoy-${id}` : `/admin/leads?ia=${r.motivo}#hoy-${id}`);
+});
 
 // Panel de citas (solo lectura). Sin FEATURE_CITAS_PANEL="1" la ruta no existe.
 adminApp.get("/citas", async (c) => {

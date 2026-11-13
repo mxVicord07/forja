@@ -22,6 +22,8 @@ export interface FilaSeguimiento {
   canal: string | null;
   actividad: { fecha: string; resumen: string | null } | null;
   conversacion: string | null;
+  /** Fecha de edición de la oportunidad en Odoo: parte de la huella del borrador con IA. */
+  huellaOdoo: string | null;
   url: string | null;
   waPropio: string | null;
   /** `plantilla`: texto del semáforo (plantilla aprobada). `borrador`: texto para que el dueño lo edite y lo mande él desde su app. */
@@ -69,6 +71,7 @@ export function normalizeSeguimiento(data: unknown): Seguimiento | null {
       canal: str(raw.canal, 30),
       actividad: raw.actividad && str(raw.actividad.fecha, 10) ? { fecha: str(raw.actividad.fecha, 10)!, resumen: str(raw.actividad.resumen, 140) } : null,
       conversacion: str(raw.conversacion, 80),
+      huellaOdoo: str(raw.huella_odoo, 40),
       url: http(raw.url),
       waPropio: wa(raw.wa_propio),
       sugerido: s,

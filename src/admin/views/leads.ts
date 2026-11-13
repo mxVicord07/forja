@@ -18,7 +18,7 @@ interface Col {
   cell: (l: Lead, meta: Record<string, string>) => string;
 }
 
-export async function renderLeads(env: Env): Promise<string> {
+export async function renderLeads(env: Env, opts: { ia?: string } = {}): Promise<string> {
   const niche = getNiche(env);
   const leads = new LeadsRepo(new Db(env.DB));
   const list = await leads.list(100);
@@ -100,7 +100,7 @@ export async function renderLeads(env: Env): Promise<string> {
     .map((c) => `<span>${esc(c.h)}</span>`)
     .join("");
 
-  const seguimiento = await renderSeguimientoBlock(env).catch(() => "");
+  const seguimiento = await renderSeguimientoBlock(env, new Date(), opts.ia).catch(() => "");
   const body = `${seguimiento}
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">
       <h2 class="font-display font-semibold text-[15px] text-cream">${seguimiento ? "Capturados por el asistente" : esc(niche.recordPlural)}</h2>

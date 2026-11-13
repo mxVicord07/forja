@@ -67,6 +67,8 @@ CALCOM_LOCATION = '{"type":"integration","integration":"office365-video"}'
 CALCOM_BOOKING_URL = "https://cal.com/birevx/ideas-exchange"
 # Bot interno del dueño: Leads ofrece «Registrar con el Copiloto» para los contactos atendidos desde la app que aún no están en Odoo.
 COPILOTO_TELEGRAM_BOT = "birevx_copiloto_bot"
+FEATURE_BORRADOR_IA = "1"
+DUENO_NOMBRE = "Víctor"
 
 # Optional egress (ticket 7E5F40): Worker→Anthropic/Zernio 400 vacío.
 #   AGENT_LOCATION_HINT = "wnam"   # pin DOs near US (only on FIRST create)

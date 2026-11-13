@@ -8,6 +8,15 @@ import { fetchSeguimiento, type FilaSeguimiento, type Seguimiento } from "../../
 import { calcomTimeZone } from "../../integrations/calcom";
 import { Db } from "../../db/client";
 import { contactosCoexistencia, type ContactoCoexistencia } from "../../crm/coexistencia";
+import { borradorIaActivo, borradoresVigentes, type BorradorGuardado } from "../../crm/borradorIa";
+
+const AVISO_IA: Record<string, string> = {
+  sin_contexto: "No se pudo leer el contexto de Odoo para redactar el borrador. Intenta de nuevo en un momento.",
+  no_escribir: "Con su historial, el asistente no recomienda escribirle ahora (pidió no ser contactado o hay que esperar).",
+  llm_failed: "El modelo de IA no respondió. Intenta de nuevo en un momento.",
+  apagado: "El borrador con IA está apagado en este bot.",
+  id_invalido: "Oportunidad no válida.",
+};
 
 const esc = (s: string) =>
   s.replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]!));
@@ -36,7 +45,7 @@ export function paraHoy(filas: FilaSeguimiento[], hoy: string): FilaSeguimiento[
     .map((x) => x.f);
 }
 
-export async function renderSeguimientoBlock(env: Env, ahora: Date = new Date()): Promise<string> {
+export async function renderSeguimientoBlock(env: Env, ahora: Date = new Date(), avisoIa?: string): Promise<string> {
   if (!env.CRM_SEGUIMIENTO_URL) return "";
   // Contactos que el dueño atendió desde su app (coexistencia): se pregunta a Odoo cuáles no conoce.
   const coex = env.DB ? await contactosCoexistencia(new Db(env.DB), ahora.getTime()).catch(() => []) : [];
@@ -46,10 +55,16 @@ export async function renderSeguimientoBlock(env: Env, ahora: Date = new Date())
       <span class="text-[12px]" style="color:var(--bad)">No se pudo leer el seguimiento de Odoo (${esc(r.reason)}). Los datos de abajo son solo los del asistente.</span></div>`;
   }
   const faltan = r.data.sinRegistro ? coex.filter((c) => r.data.sinRegistro!.includes(c.telefono)) : null;
-  return bloque(r.data, calcomTimeZone(env), ahora, faltan, (env.COPILOTO_TELEGRAM_BOT ?? "").replace(/[^A-Za-z0-9_]/g, ""));
+  const tz = calcomTimeZone(env);
+  const iaActiva = borradorIaActivo(env);
+  const hoyTz = new Intl.DateTimeFormat("en-CA", { timeZone: tz, year: "numeric", month: "2-digit", day: "2-digit" }).format(ahora);
+  const vigentes = iaActiva ? await borradoresVigentes(new Db(env.DB), paraHoy(r.data.filas, hoyTz), ahora.getTime()).catch(() => new Map<number, BorradorGuardado>()) : new Map<number, BorradorGuardado>();
+  const ia = { activa: iaActiva, vigentes, aviso: avisoIa && AVISO_IA[avisoIa] ? AVISO_IA[avisoIa] : null };
+  return bloque(r.data, tz, ahora, faltan, (env.COPILOTO_TELEGRAM_BOT ?? "").replace(/[^A-Za-z0-9_]/g, ""), ia);
 }
 
-function bloque(d: Seguimiento, tz: string, ahora: Date, faltan: ContactoCoexistencia[] | null, botCopiloto: string): string {
+function bloque(d: Seguimiento, tz: string, ahora: Date, faltan: ContactoCoexistencia[] | null, botCopiloto: string,
+  ia: { activa: boolean; vigentes: Map<number, BorradorGuardado>; aviso: string | null } = { activa: false, vigentes: new Map(), aviso: null }): string {
   const hoy = new Intl.DateTimeFormat("en-CA", { timeZone: tz, year: "numeric", month: "2-digit", day: "2-digit" }).format(ahora);
   const hora = new Intl.DateTimeFormat("es-MX", { timeZone: tz, hour: "2-digit", minute: "2-digit", hour12: false }).format(ahora);
   const fechaCorta = (iso: string | null) => {
@@ -71,27 +86,34 @@ function bloque(d: Seguimiento, tz: string, ahora: Date, faltan: ContactoCoexist
   const boton = (href: string, texto: string, primario = false) =>
     `<a href="${esc(href)}" target="_blank" rel="noopener noreferrer" style="font-size:11.5px;padding:5px 10px;border:1px solid ${primario ? "var(--accent)" : "var(--line)"};background:${primario ? "var(--accent)" : "transparent"};color:${primario ? "#ffffff" : "var(--muted)"};text-decoration:none;white-space:nowrap">${texto}</a>`;
 
+  const fechaHora = (ms: number) => new Intl.DateTimeFormat("es-MX", { timeZone: tz, day: "numeric", month: "short", hour: "2-digit", minute: "2-digit", hour12: false }).format(new Date(ms));
   const tarjetasHoy = paraHoy(d.filas, hoy).map((f) => {
-    const s = f.sugerido;
+    // Si hay un borrador con IA vigente (nada cambió en Odoo ni en el chat), sustituye al texto fijo. Nunca donde falta permiso.
+    const puede = Boolean(f.waPropio) && (!f.sugerido || f.sugerido.permitido);
+    const g = puede ? ia.vigentes.get(f.id) : undefined;
+    const s = g ? { tipo: "ia" as const, texto: g.texto, waUrl: `${f.waPropio}?text=${encodeURIComponent(g.texto)}`, permitido: true, motivo: null } : f.sugerido;
+    const redactar = ia.activa && puede
+      ? `<form method="post" action="/admin/leads/odoo/${f.id}/borrador-ia" style="display:inline;margin:0"><input type="hidden" name="wa" value="${esc(f.waPropio ?? "")}"><button type="submit" style="font-size:11.5px;padding:5px 10px;border:1px solid var(--accent);background:transparent;color:var(--accent);cursor:pointer;white-space:nowrap">${g ? "✨ Redactar de nuevo" : "✨ Redactar con su historial"}</button></form>`
+      : "";
     const vencida = f.actividad && f.actividad.fecha < hoy;
     const accion = s
       ? s.permitido && s.waUrl
-        ? boton(s.waUrl, s.tipo === "borrador" ? "Abrir WhatsApp con el borrador" : "Enviar desde mi WhatsApp", true)
+        ? boton(s.waUrl, s.tipo === "plantilla" ? "Enviar desde mi WhatsApp" : "Abrir WhatsApp con el borrador", true)
         : `<span class="text-[11.5px]" style="color:var(--bad)">${esc(s.motivo ?? "Sin permiso para escribirle por WhatsApp")}</span>`
       : f.waPropio ? boton(f.waPropio, "Abrir mi WhatsApp", true) : "";
     const chat = f.conversacion ? `<a href="/admin/conversations?c=${encodeURIComponent(f.conversacion)}" style="font-size:11.5px;padding:5px 10px;border:1px solid var(--line);color:var(--muted);text-decoration:none">Chat</a>` : "";
     const retomar = f.actividad
       ? `<div class="text-[12px]" style="margin-top:4px;color:${vencida ? "var(--bad)" : "var(--muted)"}">Punto a retomar (${esc(fechaCorta(f.actividad.fecha))}): ${esc(f.actividad.resumen ?? "actividad sin descripción")}</div>`
       : `<div class="text-[12px]" style="margin-top:4px;color:var(--bad)">Sin siguiente paso en Odoo</div>`;
-    return `<div class="border border-line" style="padding:12px 14px;margin-bottom:8px">
+    return `<div id="hoy-${f.id}" class="border border-line" style="padding:12px 14px;margin-bottom:8px">
       <div style="display:flex;justify-content:space-between;gap:12px;align-items:flex-start;flex-wrap:wrap">
         <div style="min-width:0"><div class="text-cream text-[13px] font-semibold">${esc(f.quien || f.titulo)} <span class="text-dim" style="font-weight:400">· ${esc(f.etapa ?? "Prospecto")}${f.monto ? " · " + pesos(f.monto) : ""}</span></div>
           <div class="text-dim text-[11.5px]">${esc(f.titulo)}</div></div>
-        <div style="display:flex;gap:6px;flex-wrap:wrap">${accion}${chat}${f.url ? boton(f.url, "Odoo") : ""}</div>
+        <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center">${accion}${redactar}${chat}${f.url ? boton(f.url, "Odoo") : ""}</div>
       </div>
       ${f.semaforo ? `<div class="text-muted text-[12px]" style="margin-top:6px">${esc(f.semaforo)}</div>` : ""}
       ${retomar}
-      ${s ? `<div class="text-dim" style="font-size:9.5px;letter-spacing:.12em;text-transform:uppercase;margin-top:8px">${s.tipo === "borrador" ? "Borrador para que lo edites y lo mandes tú" : "Mensaje sugerido por el semáforo"}</div><div class="text-cream text-[12.5px]" style="margin-top:4px;padding:8px 10px;background:var(--panel2);white-space:pre-wrap;line-height:1.5">${esc(s.texto)}</div>` : ""}
+      ${s ? `<div class="text-dim" style="font-size:9.5px;letter-spacing:.12em;text-transform:uppercase;margin-top:8px">${s.tipo === "ia" ? `Borrador con su historial (IA, ${esc(fechaHora(g!.creado))}) · revísalo antes de mandarlo` : s.tipo === "borrador" ? "Borrador para que lo edites y lo mandes tú" : "Mensaje sugerido por el semáforo"}</div><div class="text-cream text-[12.5px]" style="margin-top:4px;padding:8px 10px;background:var(--panel2);white-space:pre-wrap;line-height:1.5">${esc(s.texto)}</div>` : ""}
     </div>`;
   });
 
@@ -147,7 +169,7 @@ function bloque(d: Seguimiento, tz: string, ahora: Date, faltan: ContactoCoexist
     <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:16px">${alertas}</div>
     ${d.aviso ? `<p class="text-[11.5px]" style="color:var(--bad);margin:0 0 10px">${esc(d.aviso)}</p>` : ""}
     <details open style="margin-bottom:14px"><summary class="text-dim" style="font-size:10px;letter-spacing:.16em;text-transform:uppercase;cursor:pointer">A quién atender hoy (${tarjetasHoy.length})</summary>
-      <div style="margin-top:8px">${tarjetasHoy.length ? tarjetasHoy.join("") : `<p class="text-dim text-[12px]">Nada pendiente para hoy.</p>`}</div></details>
+      <div style="margin-top:8px">${ia.aviso ? `<p class="text-[11.5px]" style="color:var(--bad);margin:0 0 8px">${esc(ia.aviso)}</p>` : ""}${tarjetasHoy.length ? tarjetasHoy.join("") : `<p class="text-dim text-[12px]">Nada pendiente para hoy.</p>`}</div></details>
     ${faltan === null ? "" : `<details ${sinRegistrar.length ? "open" : ""} style="margin-bottom:14px"><summary class="text-dim" style="font-size:10px;letter-spacing:.16em;text-transform:uppercase;cursor:pointer">Contactos de tu WhatsApp sin registrar en Odoo (${sinRegistrar.length})</summary>
       <div style="margin-top:8px">${sinRegistrar.length ? `<p class="text-dim text-[11.5px]" style="margin:0 0 8px">Les escribiste desde tu app en los últimos 14 días y Odoo no los conoce: sin registro no entran al seguimiento ni al semáforo.</p>` + sinRegistrar.join("") : `<p class="text-dim text-[12px]">Todos los contactos que atendiste desde tu app ya están en Odoo.</p>`}</div></details>`}
     <details open style="margin-bottom:14px"><summary class="text-dim" style="font-size:10px;letter-spacing:.16em;text-transform:uppercase;cursor:pointer">Oportunidades (${opps.length})</summary>
