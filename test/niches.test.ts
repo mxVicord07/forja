@@ -8,7 +8,7 @@ const envWith = (niche?: string) => ({ BOT_NICHE: niche, BOT_NAME: "Bot", BUSINE
 
 describe("getNiche", () => {
   it("nicho ausente o desconocido → genérico (comportamiento del Starter)", () => {
-    for (const v of [undefined, "", "xyz", "restaurante"]) {
+    for (const v of [undefined, "", "xyz", "inmobiliaria"]) {
       const n = getNiche(envWith(v));
       expect(n.id).toBe("generico");
       expect(n.navLabel).toBe("Leads");
